@@ -6,7 +6,10 @@ authors = ["Parker J. Rule <parker.rule@tufts.edu>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-SQLAlchemy = "^1.4.40"
+SQLAlchemy = {extras = ["postgres"], version = "^1.4.40"}
+pydantic = "^1.9.2"
+GeoAlchemy2 = "^0.12.3"
+psycopg2-binary = "^2.9.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
