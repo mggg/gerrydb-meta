@@ -24,6 +24,33 @@ metadata_obj = MetaData(schema="cherrydb")
 Base = declarative_base(metadata=metadata_obj)
 
 
+class GeoUnit(str, Enum):
+    """Mapping level of a geography."""
+
+    block = "block"
+    bg = "bg"  # block group
+    tract = "tract"
+    cousub = "cousub"
+    county = "county"
+    vtd = "vtd" 
+    ward = "ward"
+    precinct = "precinct"
+
+
+class GovLevel(str, Enum):
+    STATE_HOUSE = "state_house"
+    STATE_SENATE = "state_senate"
+    US_HOUSE = "us_house"
+    OTHER = "other"
+
+
+class GeoAttrType(str, Enum):
+    FLOAT = "float"
+    INT = "int"
+    BOOL = "bool"
+    STR = "str"
+
+
 class User(Base):
     __tablename__ = "user"
 
@@ -70,12 +97,6 @@ class GeoNode(Base):
     geometry = Column(Geometry, nullable=False)
 
 
-class GovLevel(str, Enum):
-    STATE_HOUSE = "state_house"
-    STATE_SENATE = "state_senate"
-    US_HOUSE = "us_house"
-    OTHER = "other"
-
 
 class Ensemble(Base):
     __tablename__ = "ensemble"
@@ -119,13 +140,6 @@ class DualGraph(Base):
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(Integer, ForeignKey("user.user_id"), nullable=False)
-
-
-class GeoAttrType(str, Enum):
-    FLOAT = "float"
-    INT = "int"
-    BOOL = "bool"
-    STR = "str"
 
 
 class GeoAttr(Base):
