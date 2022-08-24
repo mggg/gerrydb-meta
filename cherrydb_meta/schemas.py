@@ -5,8 +5,10 @@ from pydantic import BaseModel, constr
 
 DEFAULT_LENGTH = 200
 
+
 class GeoUnit(str, Enum):
     """Mapping level of a geography."""
+
     block = "block"
     bg = "bg"  # block group
     tract = "tract"
