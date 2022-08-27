@@ -1,0 +1,109 @@
+versions:
+  # TODO: add canonical IDs, etc.
+  - version: "2010"
+    source: https://www2.census.gov/geo/tiger/TIGER2010/COUNTY/2010/tl_2010_us_county10.zip
+    canonical_id: GEOID10
+    attrs:
+      - source: STATEFP10
+        target: STATEFP
+        description: Current state FIPS code
+      - source: COUNTYFP10
+        target: COUNTYFP
+        description: Current county FIPS code
+      - source: COUNTYNS10
+        target: COUNTYNS
+        description: Current county GNIS code
+      - source: GEOID10
+        target: GEOID
+        description: County identifier; a concatenation of Current state FIPS code and county
+          FIPS code
+      - source: NAME10
+        target: NAME
+        description: Current county name
+      - source: NAMELSAD10
+        target: NAMELSAD
+        description: Current name and the translated legal/statistical area description
+          for county
+      - source: LSAD10
+        target: LSAD
+        description: Current legal/statistical area description code for county Current
+          FIPS class code
+      - source: CLASSFP10
+        target: CLASSFP
+        description: MAF/TIGER feature class code (G4020)
+      - source: MTFCC10
+        target: MTFCC
+        description: Current combined statistical area code
+      - source: CSAFP10
+        target: CSAFP
+        description: Current metropolitan statistical area/micropolitan statistical area
+          code
+      - source: CBSAFP10
+        target: CBSAFP
+        description: Current metropolitan division code Current functional status
+      - source: METDIVFP10
+        target: METDIVFP
+        description: Current land area
+      - source: FUNCSTAT10
+        target: FUNCSTAT
+        description: Current water area
+      - source: ALAND10
+        target: ALAND
+        description: Current latitude of the internal point
+      - source: AWATER10
+        target: AWATER
+        description: Current longitude of the internal point
+    notes:
+      version suffix stripped from all columns (e.g. GEOID10 -> GEOID).
+
+      Additional technical documentation available from
+      https://www2.census.gov/geo/pdfs/maps-data/data/tiger/tgrshp2015/TGRSHP2015_TechDoc_Ch3.pdf
+    tables:
+      - name: county_geo_2010
+        attrs: "*"
+        notes: All geographic columns from the 2020 U.S. Census national county shapefile.
+  - version: "2020"
+    source: https://www2.census.gov/geo/tiger/TIGER2020/COUNTY/tl_2020_us_county.zip
+    canonical_id: GEOID
+    attrs:
+      - source: STATEFP
+        description: Current state FIPS code
+      - source: COUNTYFP
+        description: Current county FIPS code
+      - source: COUNTYNS
+        description: Current county GNIS code
+      - source: GEOID
+        description: County identifier; a concatenation of Current state FIPS code and county
+          FIPS code
+      - source: NAME
+        description: Current county name
+      - source: NAMELSAD
+        description: Current name and the translated legal/statistical area description
+          for county
+      - source: LSAD
+        description: Current legal/statistical area description code for county Current
+          FIPS class code
+      - source: CLASSFP
+        description: MAF/TIGER feature class code (G4020)
+      - source: MTFCC
+        description: Current combined statistical area code
+      - source: CSAFP
+        description: Current metropolitan statistical area/micropolitan statistical area
+          code
+      - source: CBSAFP
+        description: Current metropolitan division code Current functional status
+      - source: METDIVFP
+        description: Current land area
+      - source: FUNCSTAT
+        description: Current water area
+      - source: ALAND
+        description: Current latitude of the internal point
+      - source: AWATER
+        description: Current longitude of the internal point
+    tables:
+      - name: county_geo_2020
+        attrs: "*"
+        notes: All geographic columns from the 2020 U.S. Census national county shapefile.
+    notes:
+      Additional technical documentation available from
+      https://www2.census.gov/geo/pdfs/maps-data/data/tiger/tgrshp2015/TGRSHP2015_TechDoc_Ch3.pdf

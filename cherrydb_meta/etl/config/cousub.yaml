@@ -1,0 +1,108 @@
+versions:
+  # TODO: add canonical IDs, etc.
+  - version: 2010
+    source: TODO
+    attrs:
+      # TODO: verify that this is the full set.
+      - source: STATEFP10
+        target: STATEFP
+        description: Current state FIPS code
+      - source: COUNTYFP10
+        target: COUNTYFP
+        description: Current county FIPS code
+      - source: COUSUBFP10
+        target: COUSUBFP
+        description: Current county subdivision FIPS code
+      - source: COUSUBNS10
+        target: COUSUBNS
+        description: Current county subdivision GNIS code
+      - source: NAME10
+        target: NAME
+        description: County subdivision identifier; a concatenation of current state FIPS
+          code, county FIPS code, and county subdivision FIPS code.
+      - source: NAMELSAD10
+        target: NAMELSAD
+        description: Current county subdivision name
+      - source: LSAD10
+        target: LSAD
+        description: Current name and the translated legal/statistical area description
+          code for county subdivision
+      - source: CLASSFP10
+        target: CLASSFP
+        description: Current legal/statistical area description code for county subdivision
+      - source: MTFCC10
+        target: MTFCC
+        description: Current FIPS class code
+      - source: CNECTAFP10
+        target: CNECTAFP
+        description: MAF/TIGER feature class code (G4040)
+      - source: NECTAFP10
+        target: NECTAFP
+        description: Current combined New England city and town area code Current New England
+          city and town area code
+      - source: NCTADVFP10
+        target: NCTADVFP
+        description: Current New England city and town area division code Current functional
+          status
+      - source: FUNCSTAT10
+        target: FUNCSTAT
+        description: Current land area
+      - source: ALAND10
+        target: ALAND
+        description: Current water area
+      - source: AWATER10
+        target: AWATER
+        description: Current latitude of the internal point
+      - source: INTPTLAT10
+        target: INTPTLAT
+        description: Current longitude of the internal point
+    notes:
+      Additional technical documentation available from
+      https://www2.census.gov/geo/pdfs/maps-data/data/tiger/tgrshp2015/TGRSHP2015_TechDoc_Ch3.pdf
+    tables:
+      cousub_geo_2010: *
+  - version: 2020
+    source: TODO
+    attrs:
+      # TODO: verify that this is the full set.
+      - source: STATEFP
+        description: Current state FIPS code
+      - source: COUNTYFP
+        description: Current county FIPS code
+      - source: COUSUBFP
+        description: Current county subdivision FIPS code
+      - source: COUSUBNS
+        description: Current county subdivision GNIS code
+      - source: NAME
+        description: County subdivision identifier; a concatenation of current state FIPS
+          code, county FIPS code, and county subdivision FIPS code.
+      - source: NAMELSAD
+        description: Current county subdivision name
+      - source: LSAD
+        description: Current name and the translated legal/statistical area description
+          code for county subdivision
+      - source: CLASSFP
+        description: Current legal/statistical area description code for county subdivision
+      - source: MTFCC
+        description: Current FIPS class code
+      - source: CNECTAFP
+        description: MAF/TIGER feature class code (G4040)
+      - source: NECTAFP
+        description: Current combined New England city and town area code Current New England
+          city and town area code
+      - source: NCTADVFP
+        description: Current New England city and town area division code Current functional
+          status
+      - source: FUNCSTAT
+        description: Current land area
+      - source: ALAND
+        description: Current water area
+      - source: AWATER
+        description: Current latitude of the internal point
+      - source: INTPTLAT
+        description: Current longitude of the internal point
+    tables:
+      cousub_geo_2020: *
+  notes:
+    Additional technical documentation available from
+    https://www2.census.gov/geo/pdfs/maps-data/data/tiger/tgrshp2015/TGRSHP2015_TechDoc_Ch3.pdf
