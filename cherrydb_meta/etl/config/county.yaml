@@ -2,7 +2,11 @@ versions:
   # TODO: add canonical IDs, etc.
   - version: "2010"
     source: https://www2.census.gov/geo/tiger/TIGER2010/COUNTY/2010/tl_2010_us_county10.zip
-    canonical_id: GEOID10
+    special:
+      canonical_id: GEOID
+      name: NAMELSAD
+      state_fips: STATEFP
+      county_fips: COUNTYFP
     attrs:
       - source: STATEFP10
         target: STATEFP
@@ -64,7 +68,11 @@ versions:
         notes: All geographic columns from the 2020 U.S. Census national county shapefile.
   - version: "2020"
     source: https://www2.census.gov/geo/tiger/TIGER2020/COUNTY/tl_2020_us_county.zip
-    canonical_id: GEOID
+    special:
+      canonical_id: GEOID
+      name: NAMELSAD
+      state_fips: STATEFP
+      county_fips: COUNTYFP
     attrs:
       - source: STATEFP
         description: Current state FIPS code

@@ -24,7 +24,7 @@ API_KEY_CHARS = string.ascii_letters + string.digits
 
 def _generate_api_key() -> tuple[str, bytes]:
     """Generates a random API key (64 characters, a-zA-Z0-9).
-    
+
     Returns:
         A 2-tuple containing:
             (1) The raw key.
@@ -65,7 +65,7 @@ class CherryAdmin:
 
     def key_create(self, user: User) -> ApiKey:
         """Creates a new API key for an existing user.
-        
+
         Returns:
             The raw API key.
         """
