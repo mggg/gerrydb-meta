@@ -1,0 +1,6 @@
+encryptionsalt: v1:lkez2icmufQ=:v1:Blp8HkzU/VvRijJq:eo/YQ5ZW0Qt9dIEtuy/GhtkWDGXFYA==
+config:
+  aws:region: us-east-1
+  cherrydb:containerPort: "80"
+  cherrydb:cpu: "512"
+  cherrydb:memory: "128"

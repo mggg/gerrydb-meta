@@ -1,0 +1,6 @@
+name: cherrydb
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: Infrastructure for MGGG's redistricting analytics platform
