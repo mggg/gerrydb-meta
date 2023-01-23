@@ -3,10 +3,8 @@ import logging
 import os
 import random
 import string
-import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
-from distutils.util import check_environ
 from hashlib import sha512
 
 import click
@@ -19,11 +17,11 @@ from cherrydb_meta.models import ApiKey, User
 log = logging.getLogger()
 Session = sessionmaker(create_engine(os.getenv("CHERRY_DATABASE_URI")))
 
-API_KEY_CHARS = string.ascii_letters + string.digits
+API_KEY_CHARS = string.ascii_lowercase + string.digits
 
 
 def _generate_api_key() -> tuple[str, bytes]:
-    """Generates a random API key (64 characters, a-zA-Z0-9).
+    """Generates a random API key (64 characters, a-z0-9).
 
     Returns:
         A 2-tuple containing:

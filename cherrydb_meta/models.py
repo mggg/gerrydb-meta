@@ -2,114 +2,34 @@
 from enum import Enum
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy_json import mutable_json_type
 
-DEFAULT_LENGTH = 256
 
 metadata_obj = MetaData(schema="cherrydb")
 Base = declarative_base(metadata=metadata_obj)
+NestedJSON = mutable_json_type(dbtype=JSONB, nested=True)
 
 
-class GeoUnit(str, Enum):
-    """Mapping level of a geography."""
-
-    BLOCK = "block"
-    BG = "bg"  # block group
-    TRACT = "tract"
-    COUSUB = "cousub"
-    COUNTY = "county"
-    VTD = "vtd"
-    PLACE = "place"
-    WARD = "ward"
-    PRECINCT = "precinct"
-    OTHER_CENSUS = "other_census"
-    OTHER_NON_CENSUS = "other_non_census"
-
-
-class PlanLevel(str, Enum):
-    STATE_HOUSE = "state_house"
-    STATE_SENATE = "state_senate"
-    US_HOUSE = "us_house"
-    # TODO: we might add more specific levels for school districts,
-    # city wards, etc. as the need arises.
-    OTHER = "other"
-
-
-class ElectedOffice(str, Enum):
-    GOVERNOR = "governor"
-    PRESIDENT = "president"
-    US_HOUSE = "us_house"
-    STATE_HOUSE = "state_house"
-    STATE_SENATE = "state_senate"
-    ATTORNEY_GENERAL = "attorney_general"
-    SECRETARY_OF_STATE = "secretary_of_state"
-    COMPTROLLER = "comptroller"
-    OTHER = "other"
-
-
-class IncumbentStatus(str, Enum):
-    # Based off the `CAND_ICI` column in the FEC candidate master file.
-    # see https://www.fec.gov/campaign-finance-data/candidate-master-file-description/
-    CHALLENGER = "challenger"
-    INCUMBENT = "incumbent"
-    OPEN = "open"
-
-
-class AliasKind(str, Enum):
-    FIPS = "fips"
-    POSTAL = "postal"
-    ASSOCIATED_PRESS = "associated_press"
-    CUSTOM = "custom"
-
-
-class ElectionKind(str, Enum):
-    PRIMARY = "primary"
-    GENERAL = "general"
-    SPECIAL = "special"
-
-
-class LocationKind(str, Enum):
-    COUNTRY = "country"
-    STATE = "state"
-    TERRITORY = "territory"
-    FEDERAL_DISTRICT = "federal_district"
-    COUNTY = "county"
-    MUNI = "muni"
-    OTHER = "other"
-
-
-class GeoAttrType(str, Enum):
+class ColumnType(str, Enum):
     FLOAT = "float"
     INT = "int"
     BOOL = "bool"
     STR = "str"
-
-
-class GraphAdjacency(str, Enum):
-    ROOK = "ROOK"
-    QUEEN = "QUEEN"
-
-
-class CensusRace(str, Enum):
-    # https://www.census.gov/quickfacts/fact/note/US/RHI625221
-    WHITE = "white"
-    BLACK = "black"
-    AMIN = "amin"
-    NHPI = "nhpi"
-    OTHER = "other"
-
+    
 
 class User(Base):
     __tablename__ = "user"
 
     user_id = Column(Integer, primary_key=True)
-    name = Column(String(DEFAULT_LENGTH), nullable=False)
-    email = Column(String(254), nullable=False, unique=True)
+    name = Column(Text, nullable=False)
+    email = Column(String(254), nullable=False, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     api_keys = relationship("ApiKey", back_populates="user")
@@ -136,351 +56,232 @@ class ObjectMeta(Base):
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(Integer, ForeignKey("user.user_id"), nullable=False)
+    
+    user = relationship("User")
 
 
-class Location(Base):
-    __tablename__ = "location"
-    __table_args__ = (CheckConstraint("parent_id <> loc_id"),)
+class Namespace(Base):
+    __tablename__ = "namespace"
 
-    loc_id = Column(Integer, primary_key=True)
-    name = Column(String(DEFAULT_LENGTH), nullable=False, unique=True)
-    kind = Column(SqlEnum(LocationKind), nullable=False)
-    parent_id = Column(Integer, ForeignKey("location.loc_id"))
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    parent = relationship("Location")
-    meta = relationship("ObjectMeta")
-    aliases = relationship("LocationAlias")
-
-    def __str__(self):
-        return f"Location(loc_id={self.loc_id}, name={self.name}, kind={self.kind})"
-
-
-class LocationAlias(Base):
-    __tablename__ = "location_alias"
-
-    alias_id = Column(Integer, primary_key=True)
-    loc_id = Column(Integer, ForeignKey("location.loc_id"), nullable=False)
-    name = Column(String(DEFAULT_LENGTH), nullable=False, unique=True)
-    kind = Column(SqlEnum(AliasKind), nullable=False)
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    loc = relationship("Location", back_populates="aliases")
-    meta = relationship("ObjectMeta")
-
-
-class GeoUniverse(Base):
-    __tablename__ = "geo_universe"
-
-    universe_id = Column(Integer, primary_key=True)
-    name = Column(String(DEFAULT_LENGTH), nullable=False, unique=True)
+    namespace_id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False, unique=True)
     description = Column(Text)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
-    meta = relationship("ObjectMeta")
+    meta = relationship("ObjectMeta", lazy="joined")
+    
 
-
-class Geography(Base):
-    __tablename__ = "geography"
+class Location(Base):
+    __tablename__ = "location"
     __table_args__ = (
-        UniqueConstraint(
-            "loc_id",
-            "universe_id",
-            "unit",
-            "version",
-        ),
+        CheckConstraint("parent_id <> loc_id"),
     )
 
-    geo_id = Column(Integer, primary_key=True)
-    loc_id = Column(Integer, ForeignKey("location.loc_id"), nullable=False)
-    universe_id = Column(
-        Integer, ForeignKey("geo_universe.universe_id"), nullable=False
+    loc_id = Column(Integer, primary_key=True)
+    canonical_ref_id = Column(
+        Integer,
+        ForeignKey("location_ref.ref_id"),
+        unique=True,
+        index=True,
+        nullable=False
     )
-    unit = Column(SqlEnum(GeoUnit), nullable=False)
-    version = Column(String(DEFAULT_LENGTH), nullable=False)
+    parent_id = Column(Integer, ForeignKey("location.loc_id"))
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+    name = Column(Text, nullable=False)
+
+    parent = relationship("Location", lazy="joined")
+    meta = relationship("ObjectMeta", lazy="joined")
+    canonical_ref = relationship(
+        "LocationRef",
+        lazy="joined",
+        primaryjoin="Location.canonical_ref_id==LocationRef.ref_id"
+    )
+    #refs = relationship("LocationRef")
+
+    def __str__(self):
+        return f"Location(loc_id={self.loc_id}, name={self.name})"
+
+
+class LocationRef(Base):
+    __tablename__ = "location_ref"
+
+    ref_id = Column(Integer, primary_key=True)
+    loc_id = Column(Integer, ForeignKey("location.loc_id"))
+    path = Column(Text, unique=True, index=True, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    # loc = relationship("Location", back_populates="refs", foreign_keys="location.canonical_ref_id")
+    meta = relationship("ObjectMeta", lazy="joined")
+
+
+class GeoSet(Base):
+    __tablename__ = "geo_set"
+    __table_args__ = (UniqueConstraint("name", "namespace_id"),)
+
+    set_id = Column(Integer, primary_key=True)
+    loc_id = Column(Integer, ForeignKey("location.loc_id"), nullable=False)
+    name = Column(Text, nullable=False)
+    namespace_id = Column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
+    )
     srid = Column(Integer)
     description = Column(Text)
     source_url = Column(String(2048))
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
-    meta = relationship("ObjectMeta")
+    meta = relationship("ObjectMeta", lazy="joined")
 
 
-class GeoNode(Base):
-    __tablename__ = "geo_node"
+class Geography(Base):
+    __tablename__ = "geography"
 
-    node_id = Column(Integer, primary_key=True)
-    canonical_id = Column(String(DEFAULT_LENGTH), nullable=False)
+    geo_id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
     geometry = Column(Geometry, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+    
+    meta = relationship("ObjectMeta")
 
 
 class GeoMember(Base):
     __tablename__ = "geo_member"
 
-    geo_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
-    node_id = Column(Integer, ForeignKey("geo_node.node_id"), primary_key=True)
+    geo_id = Column(Integer, ForeignKey("geo_set.set_id"), primary_key=True)
+    node_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+    
+    meta = relationship("ObjectMeta")
 
 
-class GeoNodeHierarchy(Base):
-    __tablename__ = "geo_node_hierarchy"
+class GeoHierarchy(Base):
+    __tablename__ = "geo_hierarchy"
     __table_args__ = (CheckConstraint("parent_id <> child_id"),)
 
-    parent_id = Column(Integer, ForeignKey("geo_node.node_id"), primary_key=True)
-    child_id = Column(Integer, ForeignKey("geo_node.node_id"), primary_key=True)
-
-
-class Ensemble(Base):
-    __tablename__ = "ensemble"
-    __table_args__ = (UniqueConstraint("graph_id", "name"),)
-
-    ensemble_id = Column(Integer, primary_key=True)
-    graph_id = Column(Integer, ForeignKey("dual_graph.graph_id"), nullable=False)
-    path = Column(String(4096), nullable=False, unique=True)
-    level = Column(SqlEnum(PlanLevel), nullable=False)
-    num_districts = Column(Integer, nullable=False)
-    params = Column(postgresql.JSONB)
-    count = Column(Integer, nullable=False)
-    count_accepted = Column(Integer, nullable=False)
-
-    name = Column(String(DEFAULT_LENGTH), nullable=False)
+    parent_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
+    child_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
+    
     meta = relationship("ObjectMeta")
 
 
-class Plan(Base):
-    __tablename__ = "plan"
-    __table_args__ = (UniqueConstraint("geo_id", "name"),)
+class DataColumn(Base):
+    __tablename__ = "column"
+    __table_args__ = (UniqueConstraint("namespace_id", "name"),)
 
-    plan_id = Column(Integer, primary_key=True)
-    geo_id = Column(Integer, ForeignKey("geography.geo_id"), nullable=False)
-    level = Column(SqlEnum(PlanLevel), nullable=False)
-    num_districts = Column(Integer, nullable=False)
-    assignment = Column(postgresql.ARRAY(Integer, dimensions=1, zero_indexes=True))
-
-    name = Column(String(DEFAULT_LENGTH), nullable=False)
+    col_id = Column(Integer, primary_key=True)
+    namespace_id = Column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
+    )
+    name = Column(Text, nullable=False)
     description = Column(Text)
-    source_url = Column(String(2048))  # e.g. from Districtr
-    districtr_id = Column(Integer)
-    daves_id = Column(Integer)
+    type = Column(SqlEnum(ColumnType), nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
-    meta = relationship("ObjectMeta")
+    meta = relationship("ObjectMeta", lazy="joined")
 
 
-class DualGraph(Base):
-    __tablename__ = "dual_graph"
-    __table_args__ = (UniqueConstraint("geo_id", "variant"),)
-
-    graph_id = Column(Integer, primary_key=True)
-    geo_id = Column(Integer, ForeignKey("geography.geo_id"), nullable=False)
-    variant = Column(String(DEFAULT_LENGTH), default="default", nullable=False)
-    adjacency = Column(
-        SqlEnum(GraphAdjacency), default=GraphAdjacency.ROOK, nullable=False
-    )
-    node_ids = Column(postgresql.ARRAY(Integer, dimensions=1, zero_indexes=True))
-    edges = Column(postgresql.ARRAY(Integer, dimensions=2, zero_indexes=True))
-    geodesic_areas = Column(
-        postgresql.ARRAY(postgresql.DOUBLE_PRECISION, dimensions=1, zero_indexes=True)
-    )
-    geodesic_lengths = Column(
-        postgresql.ARRAY(postgresql.DOUBLE_PRECISION, dimensions=1, zero_indexes=True)
-    )
-
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    meta = relationship("ObjectMeta")
-
-
-class Official(Base):
-    __tablename__ = "official"
-
-    official_id = Column(Integer, primary_key=True)
-    short_name = Column(String(DEFAULT_LENGTH), nullable=False)
-    legal_name = Column(String(DEFAULT_LENGTH))
-    races = Column(
-        postgresql.ARRAY(SqlEnum(CensusRace), dimensions=1, zero_indexes=True)
-    )
-    hispanic = Column(Boolean)
-    wikipedia_url = Column(String(2048))
-    ballotpedia_url = Column(String(2048))
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    meta = relationship("ObjectMeta")
-
-
-class Election(Base):
-    __tablename__ = "election"
-
-    election_id = Column(Integer, primary_key=True)
-    kind = Column(SqlEnum(ElectionKind), nullable=False)
-    date = Column(Date, nullable=False)
-    plan_id = Column(Integer, ForeignKey("plan.plan_id"))
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    meta = relationship("ObjectMeta")
-    candidates = relationship("ElectionCandidacy")
-
-
-class Party(Base):
-    __tablename__ = "party"
-
-    party_id = Column(Integer, primary_key=True)
-    name = Column(String(DEFAULT_LENGTH), unique=True)
-    fec_code = Column(String(3), unique=True)
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    meta = relationship("ObjectMeta")
-
-
-class ElectionCandidacy(Base):
-    __tablename__ = "election_candidacy"
-    __table_args__ = (UniqueConstraint("election_id", "official_id", "party_id"),)
-
-    candidacy_id = Column(Integer, primary_key=True)
-    election_id = Column(Integer, ForeignKey("election.election_id"), nullable=False)
-    official_id = Column(Integer, ForeignKey("official.official_id"))
-    party_id = Column(Integer, ForeignKey("party.party_id"), nullable=False)
-    district = Column(Integer)
-    incumbent_status = Column(SqlEnum(IncumbentStatus))
-    fec_candidate_id = Column(String(9))
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    official = relationship("Official")
-    election = relationship("Election", back_populates="candidates")
-    party = relationship("Party")
-    meta = relationship("ObjectMeta")
-
-
-class ElectionCandidacyVotes(Base):
-    __tablename__ = "election_candidacy_votes"
-
-    candidacy_id = Column(
-        Integer, ForeignKey("election_candidacy.candidacy_id"), primary_key=True
-    )
-    geo_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
-    votes_attr_id = Column(Integer, ForeignKey("geo_attr.attr_id"))
-
-    candidacy = relationship("ElectionCandidacy")
-    geo = relationship("Geography")
-    votes_attr = relationship("GeoAttr")
-
-
-class GeoAttr(Base):
-    __tablename__ = "geo_attr"
-    __table_args__ = (UniqueConstraint("name", "universe_id"),)
-
-    attr_id = Column(Integer, primary_key=True)
-    universe_id = Column(
-        Integer, ForeignKey("geo_universe.universe_id"), nullable=False
-    )
-    name = Column(String(DEFAULT_LENGTH), nullable=False)
-    description = Column(Text)
-    type = Column(SqlEnum(GeoAttrType), nullable=False)
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    meta = relationship("ObjectMeta")
-
-
-class GeoAttrAlias(Base):
-    __tablename__ = "geo_attr_alias"
-    __table_args__ = (UniqueConstraint("name", "universe_id"),)
-
-    alias_id = Column(Integer, primary_key=True)
-    attr_id = Column(Integer, ForeignKey("geo_attr.attr_id"), nullable=False)
-    universe_id = Column(
-        Integer, ForeignKey("geo_universe.universe_id"), nullable=False
-    )
-    name = Column(String(DEFAULT_LENGTH), nullable=False)
-    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-
-    meta = relationship("ObjectMeta")
-
-
-class GeoAttrSumRelation(Base):
-    __tablename__ = "geo_attr_sum_relation"
+class ColumnRelation(Base):
+    __tablename__ = "column_relation"
+    __table_args__ = (UniqueConstraint("namespace_id", "name"),)
 
     relation_id = Column(Integer, primary_key=True)
-    sum_attr_id = Column(Integer, ForeignKey("geo_attr.attr_id"), nullable=False)
+    namespace_id = Column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
+    )
+    name = Column(Text, nullable=False)
+    expr = Column(NestedJSON, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
-    meta = relationship("ObjectMeta")
+    meta = relationship("ObjectMeta", lazy="joined")
 
 
-class GeoAttrSummand(Base):
-    __tablename__ = "geo_attr_summand"
+class ColumnRelationMember(Base):
+    __tablename__ = "column_relation_member"
 
     relation_id = Column(
-        Integer, ForeignKey("geo_attr_sum_relation.relation_id"), primary_key=True
+        Integer, ForeignKey("column_relation.relation_id"), primary_key=True
     )
-    summand_id = Column(Integer, ForeignKey("geo_attr.attr_id"), primary_key=True)
+    member_id = Column(Integer, ForeignKey("column.col_id"), primary_key=True)
 
 
-class GeoAttrTable(Base):
-    __tablename__ = "geo_attr_table"
-    __table_args__ = (UniqueConstraint("name", "universe_id"),)
+class ColumnSet(Base):
+    __tablename__ = "column_set"
+    __table_args__ = (UniqueConstraint("name", "namespace_id"),)
 
-    table_id = Column(Integer, primary_key=True)
-    name = Column(String(DEFAULT_LENGTH), nullable=False)
-    universe_id = Column(
-        Integer, ForeignKey("geo_universe.universe_id"), nullable=False
+    set_id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+    namespace_id = Column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
     )
     description = Column(Text)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
+    meta = relationship("ObjectMeta", lazy="joined")
+
+
+class ColumnSetMember(Base):
+    __tablename__ = "column_set_member"
+
+    set_id = Column(Integer, ForeignKey("column_set.set_id"), primary_key=True)
+    col_id = Column(Integer, ForeignKey("column.col_id"), primary_key=True)
+
+
+class ColumnValueFloat(Base):
+    __tablename__ = "column_value_float"
+
+    node_id = Column(
+        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
+    )
+    attr_id = Column(
+        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
+    )
+    val = Column(postgresql.DOUBLE_PRECISION, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
     meta = relationship("ObjectMeta")
 
 
-class GeoAttrTableColumn(Base):
-    __tablename__ = "geo_attr_table_column"
-
-    table_id = Column(Integer, ForeignKey("geo_attr_table.table_id"), primary_key=True)
-    col_id = Column(Integer, ForeignKey("geo_attr.attr_id"), primary_key=True)
-
-
-class GeoAttrFloat(Base):
-    __tablename__ = "geo_attr_float"
+class ColumnValueInt(Base):
+    __tablename__ = "column_value_int"
 
     node_id = Column(
-        Integer, ForeignKey("geo_node.node_id"), nullable=False, primary_key=True
+        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
     )
     attr_id = Column(
-        Integer, ForeignKey("geo_attr.attr_id"), nullable=False, primary_key=True
-    )
-    val = Column(postgresql.DOUBLE_PRECISION, nullable=False)
-
-
-class GeoAttrInt(Base):
-    __tablename__ = "geo_attr_int"
-
-    node_id = Column(
-        Integer, ForeignKey("geo_node.node_id"), nullable=False, primary_key=True
-    )
-    attr_id = Column(
-        Integer, ForeignKey("geo_attr.attr_id"), nullable=False, primary_key=True
+        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
     )
     val = Column(Integer, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    meta = relationship("ObjectMeta")
 
 
-class GeoAttrBool(Base):
-    __tablename__ = "geo_attr_bool"
+class ColumnValueBool(Base):
+    __tablename__ = "column_value_bool"
 
     node_id = Column(
-        Integer, ForeignKey("geo_node.node_id"), nullable=False, primary_key=True
+        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
     )
     attr_id = Column(
-        Integer, ForeignKey("geo_attr.attr_id"), nullable=False, primary_key=True
+        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
     )
     val = Column(Boolean, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    meta = relationship("ObjectMeta")
 
 
-class GeoAttrStr(Base):
-    __tablename__ = "geo_attr_str"
+
+class ColumnValueStr(Base):
+    __tablename__ = "column_value_str"
 
     node_id = Column(
-        Integer, ForeignKey("geo_node.node_id"), nullable=False, primary_key=True
+        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
     )
     attr_id = Column(
-        Integer, ForeignKey("geo_attr.attr_id"), nullable=False, primary_key=True
+        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
     )
     val = Column(String(65535), nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    meta = relationship("ObjectMeta")
