@@ -9,12 +9,14 @@ API_PREFIX = "/api/v1"
 
 app = FastAPI(title="cherrydb-meta", openapi_url=f"{API_PREFIX}/openapi.json")
 
+
 @app.exception_handler(CreateValueError)
 def create_error(request: Request, exc: CreateValueError):
     """Handles object creation failures."""
     return JSONResponse(
         status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-        content={"detail": f"Object creation failed. Reason: {exc}"}
+        content={"detail": f"Object creation failed. Reason: {exc}"},
     )
+
 
 app.include_router(api_router, prefix=API_PREFIX)

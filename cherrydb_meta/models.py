@@ -22,7 +22,7 @@ class ColumnType(str, Enum):
     INT = "int"
     BOOL = "bool"
     STR = "str"
-    
+
 
 class User(Base):
     __tablename__ = "user"
@@ -56,7 +56,7 @@ class ObjectMeta(Base):
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(Integer, ForeignKey("user.user_id"), nullable=False)
-    
+
     user = relationship("User")
 
 
@@ -69,13 +69,11 @@ class Namespace(Base):
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     meta = relationship("ObjectMeta", lazy="joined")
-    
+
 
 class Location(Base):
     __tablename__ = "location"
-    __table_args__ = (
-        CheckConstraint("parent_id <> loc_id"),
-    )
+    __table_args__ = (CheckConstraint("parent_id <> loc_id"),)
 
     loc_id = Column(Integer, primary_key=True)
     canonical_ref_id = Column(
@@ -83,20 +81,22 @@ class Location(Base):
         ForeignKey("location_ref.ref_id"),
         unique=True,
         index=True,
-        nullable=False
+        nullable=False,
     )
     parent_id = Column(Integer, ForeignKey("location.loc_id"))
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
     name = Column(Text, nullable=False)
 
-    parent = relationship("Location", lazy="joined")
+    parent = relationship("Location")
     meta = relationship("ObjectMeta", lazy="joined")
     canonical_ref = relationship(
         "LocationRef",
         lazy="joined",
-        primaryjoin="Location.canonical_ref_id==LocationRef.ref_id"
+        primaryjoin="Location.canonical_ref_id==LocationRef.ref_id",
     )
-    #refs = relationship("LocationRef")
+    refs = relationship(
+        "LocationRef", primaryjoin="Location.loc_id==LocationRef.loc_id"
+    )
 
     def __str__(self):
         return f"Location(loc_id={self.loc_id}, name={self.name})"
@@ -110,8 +110,12 @@ class LocationRef(Base):
     path = Column(Text, unique=True, index=True, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
-    # loc = relationship("Location", back_populates="refs", foreign_keys="location.canonical_ref_id")
-    meta = relationship("ObjectMeta", lazy="joined")
+    loc = relationship(
+        "Location",
+        lazy="joined",
+        primaryjoin="Location.canonical_ref_id==LocationRef.ref_id",
+        overlaps="canonical_ref",
+    )
 
 
 class GeoSet(Base):
@@ -121,9 +125,7 @@ class GeoSet(Base):
     set_id = Column(Integer, primary_key=True)
     loc_id = Column(Integer, ForeignKey("location.loc_id"), nullable=False)
     name = Column(Text, nullable=False)
-    namespace_id = Column(
-        Integer, ForeignKey("namespace.namespace_id"), nullable=False
-    )
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
     srid = Column(Integer)
     description = Column(Text)
     source_url = Column(String(2048))
@@ -139,7 +141,7 @@ class Geography(Base):
     name = Column(Text, nullable=False)
     geometry = Column(Geometry, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-    
+
     meta = relationship("ObjectMeta")
 
 
@@ -149,7 +151,7 @@ class GeoMember(Base):
     geo_id = Column(Integer, ForeignKey("geo_set.set_id"), primary_key=True)
     node_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-    
+
     meta = relationship("ObjectMeta")
 
 
@@ -160,7 +162,7 @@ class GeoHierarchy(Base):
     parent_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
     child_id = Column(Integer, ForeignKey("geography.geo_id"), primary_key=True)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
-    
+
     meta = relationship("ObjectMeta")
 
 
@@ -169,9 +171,7 @@ class DataColumn(Base):
     __table_args__ = (UniqueConstraint("namespace_id", "name"),)
 
     col_id = Column(Integer, primary_key=True)
-    namespace_id = Column(
-        Integer, ForeignKey("namespace.namespace_id"), nullable=False
-    )
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
     name = Column(Text, nullable=False)
     description = Column(Text)
     type = Column(SqlEnum(ColumnType), nullable=False)
@@ -185,9 +185,7 @@ class ColumnRelation(Base):
     __table_args__ = (UniqueConstraint("namespace_id", "name"),)
 
     relation_id = Column(Integer, primary_key=True)
-    namespace_id = Column(
-        Integer, ForeignKey("namespace.namespace_id"), nullable=False
-    )
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
     name = Column(Text, nullable=False)
     expr = Column(NestedJSON, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
@@ -210,9 +208,7 @@ class ColumnSet(Base):
 
     set_id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
-    namespace_id = Column(
-        Integer, ForeignKey("namespace.namespace_id"), nullable=False
-    )
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
     description = Column(Text)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
@@ -269,7 +265,6 @@ class ColumnValueBool(Base):
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     meta = relationship("ObjectMeta")
-
 
 
 class ColumnValueStr(Base):

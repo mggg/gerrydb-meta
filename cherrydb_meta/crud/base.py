@@ -16,6 +16,7 @@ from cherrydb_meta.models import Base
 ModelType = TypeVar("ModelType", bound=Base)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 
+
 class CRBase(Generic[ModelType, CreateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         """
@@ -28,9 +29,7 @@ class CRBase(Generic[ModelType, CreateSchemaType]):
     def get(self, db: Session, id: Any) -> Optional[ModelType]:
         return db.query(self.model).filter(self.model.id == id).first()
 
-    def all(
-        self, db: Session
-    ) -> List[ModelType]:
+    def all(self, db: Session) -> List[ModelType]:
         return db.query(self.model).all()
 
     def create(self, db: Session, *, obj_in: CreateSchemaType) -> ModelType:
@@ -40,8 +39,7 @@ class CRBase(Generic[ModelType, CreateSchemaType]):
         db.commit()
         db.refresh(db_obj)
         return db_obj
-    
-    
+
 
 class ReadOnlyBase(Generic[ModelType]):
     def __init__(self, model: Type[ModelType]):
@@ -55,7 +53,5 @@ class ReadOnlyBase(Generic[ModelType]):
     def get(self, db: Session, id: Any) -> Optional[ModelType]:
         return db.query(self.model).filter(self.model.id == id).first()
 
-    def all(
-        self, db: Session
-    ) -> List[ModelType]:
+    def all(self, db: Session) -> List[ModelType]:
         return db.query(self.model).all()

@@ -8,6 +8,10 @@ services:
       POSTGRES_PASSWORD: dev
     volumes:
       - db:/var/lib/postgresql
+  redis:
+    image: redis
+    ports:
+      - "63790:6379"
 volumes:
   db:
  
