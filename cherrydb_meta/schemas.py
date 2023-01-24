@@ -52,7 +52,7 @@ class LocationCreate(LocationBase):
     aliases: list[LocationRef] | None
 
 
-class LocationPatch(LocationBase):
+class LocationPatch(BaseModel):
     """Location metadata received on PATCH."""
 
     aliases: list[LocationRef]

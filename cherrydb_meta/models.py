@@ -4,18 +4,13 @@ from enum import Enum
 from geoalchemy2 import Geometry
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy import ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import ForeignKey, Integer, MetaData, String, Text, UniqueConstraint, LargeBinary, JSON, REAL
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy_json import mutable_json_type
-
 
 metadata_obj = MetaData(schema="cherrydb")
 Base = declarative_base(metadata=metadata_obj)
-NestedJSON = mutable_json_type(dbtype=JSONB, nested=True)
-
 
 class ColumnType(str, Enum):
     FLOAT = "float"
@@ -41,7 +36,7 @@ class User(Base):
 class ApiKey(Base):
     __tablename__ = "api_key"
 
-    key_hash = Column(postgresql.BYTEA, primary_key=True)
+    key_hash = Column(LargeBinary, primary_key=True)
     user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     active = Column(Boolean, default=True)
@@ -113,8 +108,8 @@ class LocationRef(Base):
     loc = relationship(
         "Location",
         lazy="joined",
-        primaryjoin="Location.canonical_ref_id==LocationRef.ref_id",
-        overlaps="canonical_ref",
+        primaryjoin="Location.loc_id==LocationRef.loc_id",
+        overlaps="refs",
     )
 
 
@@ -187,7 +182,7 @@ class ColumnRelation(Base):
     relation_id = Column(Integer, primary_key=True)
     namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
     name = Column(Text, nullable=False)
-    expr = Column(NestedJSON, nullable=False)
+    expr = Column(JSON, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     meta = relationship("ObjectMeta", lazy="joined")

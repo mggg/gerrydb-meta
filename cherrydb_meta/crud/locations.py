@@ -1,5 +1,6 @@
 """CRUD operations and transformations for location metadata."""
 import logging
+from typing import Collection
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 from cherrydb_meta.crud.base import CRBase
@@ -23,7 +24,8 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
         obj_meta: models.ObjectMeta,
     ) -> models.Location:
         """Creates a new location with a canonical reference."""
-        with db.begin(nested=True):
+        db.commit()
+        with db.begin():
             # Look up the reference to a possible parent location.
             if obj_in.parent_path is not None:
                 parent_ref = (
@@ -83,28 +85,10 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
 
             # Create additional aliases (non-canonical references) to the location.
             if obj_in.aliases:
-                for alias_path in obj_in.aliases:
-                    canonical_ref = models.LocationRef(
-                        path=normalize_path(alias_path),
-                        loc_id=loc.loc_id,
-                        meta_id=obj_meta.meta_id,
-                    )
-                    db.add(canonical_ref)
+                self._add_aliases(
+                    db=db, alias_paths=obj_in.aliases, loc=loc, obj_meta=obj_meta
+                )
 
-                try:
-                    db.flush()
-                except exc.SQLAlchemyError:
-                    # TODO: Make this more specific--the primary goal is to capture the case
-                    # where the reference already exists.
-                    log.exception(
-                        "Failed to create aliases to new location.",
-                        obj_in.canonical_path,
-                    )
-                    raise CreateValueError(
-                        f"Failed to create aliases to new location."
-                        "(One or more aliases may already exist.)"
-                    )
-        db.commit()
         return loc
 
     def get_by_ref(self, db: Session, *, path: str) -> models.Location | None:
@@ -114,7 +98,64 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
             .filter(models.LocationRef.path == normalize_path(path))
             .first()
         )
-        return None if ref is None or not ref.loc else ref.loc[0]
+        return None if ref is None else ref.loc
+
+    def patch(
+        self,
+        db: Session,
+        *,
+        obj: models.Location,
+        obj_meta: models.ObjectMeta,
+        patch: schemas.LocationPatch,
+    ) -> models.Location | None:
+        """Patches a location (adds new aliases)."""
+        refs = (
+            db.query(models.LocationRef)
+            .filter(models.LocationRef.loc_id == obj.loc_id)
+            .all()
+        )
+        new_aliases = set(normalize_path(path) for path in patch.aliases) - set(
+            ref.path for ref in refs
+        )
+        if not new_aliases:
+            return obj
+
+        db.commit()
+        with db.begin():
+            self._add_aliases(
+                db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta
+            )
+        return obj
+
+    def _add_aliases(
+        self,
+        *,
+        db: Session,
+        alias_paths: Collection[str],
+        loc: models.Location,
+        obj_meta: models.ObjectMeta,
+    ) -> None:
+        """Adds aliases to a location."""
+        for alias_path in alias_paths:
+            alias_ref = models.LocationRef(
+                path=normalize_path(alias_path),
+                loc_id=loc.loc_id,
+                meta_id=obj_meta.meta_id,
+            )
+            db.add(alias_ref)
+
+            try:
+                db.flush()
+            except exc.SQLAlchemyError:
+                # TODO: Make this more specific--the primary goal is to capture the case
+                # where the reference already exists.
+                log.exception(
+                    "Failed to create aliases for new location.", loc.canonical_path,
+                )
+                raise CreateValueError(
+                    f"Failed to create aliases for new location."
+                    "(One or more aliases may already exist.)"
+                )
 
 
 location = CRLocation(models.Location)

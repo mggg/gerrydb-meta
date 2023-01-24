@@ -1,7 +1,6 @@
 """Database and authorization dependencies for CherryDB endpoints."""
 from fastapi import Depends, Header, HTTPException
 import re
-import redis
 from sqlalchemy.orm import Session
 from typing import Generator
 from cherrydb_meta import crud, models
@@ -18,10 +17,6 @@ def get_db() -> Generator:
         yield db
     finally:
         db.close()
-
-
-def get_cache() -> Generator[redis.Redis, None, None]:
-    yield redis_init()
 
 
 def get_user(

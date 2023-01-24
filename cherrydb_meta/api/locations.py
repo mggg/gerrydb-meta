@@ -10,19 +10,13 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[schemas.Location])
-def read_locations(
-    *,
-    db: Session = Depends(get_db),
-) -> list[models.Location]:
+def read_locations(*, db: Session = Depends(get_db),) -> list[models.Location]:
     return crud.location.all(db=db)
 
 
 @router.get("/{path:path}", name="path-convertor", response_model=schemas.Location)
 def read_location(
-    *,
-    request: Request,
-    db: Session = Depends(get_db),
-    path: str,
+    *, path: str, request: Request, db: Session = Depends(get_db),
 ) -> models.Location:
     loc = crud.location.get_by_ref(db=db, path=path)
     if loc is None:
@@ -40,11 +34,27 @@ def read_location(
     return loc
 
 
+@router.patch("/{path:path}", name="path-convertor", response_model=schemas.Location)
+def patch_location_aliases(
+    *,
+    path: str,
+    loc_patch: schemas.LocationPatch,
+    db: Session = Depends(get_db),
+    obj_meta: models.ObjectMeta = Depends(get_obj_meta),
+) -> models.Location:
+    loc = crud.location.get_by_ref(db=db, path=path)
+    if loc is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="No location found."
+        )
+    return crud.location.patch(db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch)
+
+
 @router.post("/", response_model=schemas.Location)
 def create_location(
     *,
+    loc_in: schemas.LocationCreate,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-    loc_in: schemas.LocationCreate,
 ) -> models.Location:
     return crud.location.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
