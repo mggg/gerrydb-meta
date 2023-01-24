@@ -1,6 +1,8 @@
 """User-facing schemas for CherryDB objects."""
 from datetime import datetime
+
 from pydantic import BaseModel, constr
+
 from cherrydb_meta import models
 
 UserEmail = constr(max_length=254)

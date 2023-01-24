@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from cherrydb_meta.models import Base
 
-
 ModelType = TypeVar("ModelType", bound=Base)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 

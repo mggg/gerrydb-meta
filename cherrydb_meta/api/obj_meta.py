@@ -1,7 +1,9 @@
 """Endpoints for generic object metadata."""
 from http import HTTPStatus
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from cherrydb_meta import crud, schemas
 from cherrydb_meta.api.deps import get_db, get_user
 
@@ -10,7 +12,10 @@ router = APIRouter()
 
 @router.post("/{id}")
 def get_obj_meta(
-    *, id: int, db: Session = Depends(get_db), _user: Session = Depends(get_user),
+    *,
+    id: int,
+    db: Session = Depends(get_db),
+    _user: Session = Depends(get_user),
 ) -> schemas.ObjectMeta:
     obj_meta = crud.obj_meta.get(db=db, id=id)
     if obj_meta is None:

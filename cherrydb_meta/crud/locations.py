@@ -1,11 +1,13 @@
 """CRUD operations and transformations for location metadata."""
 import logging
 from typing import Collection
+
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
+
+from cherrydb_meta import models, schemas
 from cherrydb_meta.crud.base import CRBase
 from cherrydb_meta.exceptions import CreateValueError
-from cherrydb_meta import models, schemas
 
 log = logging.getLogger()
 
@@ -150,7 +152,8 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
                 # TODO: Make this more specific--the primary goal is to capture the case
                 # where the reference already exists.
                 log.exception(
-                    "Failed to create aliases for new location.", loc.canonical_path,
+                    "Failed to create aliases for new location.",
+                    loc.canonical_path,
                 )
                 raise CreateValueError(
                     f"Failed to create aliases for new location."

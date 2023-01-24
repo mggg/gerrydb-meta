@@ -2,15 +2,24 @@
 from enum import Enum
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime
+from sqlalchemy import JSON, REAL, Boolean, CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy import ForeignKey, Integer, MetaData, String, Text, UniqueConstraint, LargeBinary, JSON, REAL
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import (
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    MetaData,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
 metadata_obj = MetaData(schema="cherrydb")
 Base = declarative_base(metadata=metadata_obj)
+
 
 class ColumnType(str, Enum):
     FLOAT = "float"

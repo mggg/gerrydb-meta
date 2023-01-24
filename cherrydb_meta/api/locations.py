@@ -1,8 +1,10 @@
 """Endpoints for location metadata."""
 from http import HTTPStatus
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+
 from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.api.deps import get_db, get_obj_meta
 
@@ -10,13 +12,19 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[schemas.Location])
-def read_locations(*, db: Session = Depends(get_db),) -> list[models.Location]:
+def read_locations(
+    *,
+    db: Session = Depends(get_db),
+) -> list[models.Location]:
     return crud.location.all(db=db)
 
 
 @router.get("/{path:path}", name="path-convertor", response_model=schemas.Location)
 def read_location(
-    *, path: str, request: Request, db: Session = Depends(get_db),
+    *,
+    path: str,
+    request: Request,
+    db: Session = Depends(get_db),
 ) -> models.Location:
     loc = crud.location.get_by_ref(db=db, path=path)
     if loc is None:

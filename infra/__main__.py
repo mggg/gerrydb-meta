@@ -1,6 +1,6 @@
-from pulumi import Config, Output, export
 import pulumi_aws as aws
 import pulumi_awsx as awsx
+from pulumi import Config, Output, export
 
 config = Config()
 container_port = config.get_int("containerPort", 80)

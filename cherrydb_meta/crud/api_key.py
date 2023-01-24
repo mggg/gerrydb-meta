@@ -1,7 +1,8 @@
 """CRUD operations and transformations for location metadata."""
 from sqlalchemy.orm import Session
-from cherrydb_meta.crud.base import ReadOnlyBase
+
 from cherrydb_meta import models
+from cherrydb_meta.crud.base import ReadOnlyBase
 
 
 class ReadOnlyApiKey(ReadOnlyBase[models.ApiKey]):
