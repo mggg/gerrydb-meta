@@ -48,7 +48,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
                 parent_id = None
 
             # Create a path to the location.
-            canonical_path = (normalize_path(obj_in.canonical_path),)
+            canonical_path = normalize_path(obj_in.canonical_path)
             canonical_ref = models.LocalityRef(
                 path=canonical_path, meta_id=obj_meta.meta_id
             )
@@ -122,10 +122,10 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
             return obj
 
         db.flush()
-        with db.begin():
-            self._add_aliases(
-                db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta
-            )
+        self._add_aliases(
+            db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta
+        )
+        db.refresh(obj)
         return obj
 
     def _add_aliases(
@@ -155,7 +155,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
                     loc.canonical_path,
                 )
                 raise CreateValueError(
-                    f"Failed to create aliases for new location."
+                    "Failed to create aliases for new location."
                     "(One or more aliases may already exist.)"
                 )
 

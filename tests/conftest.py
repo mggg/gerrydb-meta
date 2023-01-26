@@ -2,7 +2,7 @@
 import os
 
 import pytest
-from sqlalchemy import create_engine, schema
+from sqlalchemy import create_engine, text
 from sqlalchemy.event import listen
 from sqlalchemy.orm import sessionmaker
 
@@ -25,17 +25,23 @@ def db_engine():
 def db_schema(db_engine):
     """SQLAlchemy ORM session maker with CherryDB schema initialized."""
     with db_engine.connect() as conn:
-        conn.execute("DROP SCHEMA IF EXISTS cherrydb CASCADE")
-        conn.execute("CREATE SCHEMA cherrydb")
+        init_transaction = conn.begin()
+        conn.execute(text("DROP SCHEMA IF EXISTS cherrydb CASCADE"))
+        conn.execute(text("CREATE SCHEMA cherrydb"))
+        init_transaction.commit()
+        
         models.Base.metadata.create_all(db_engine)
         yield sessionmaker(db_engine)
-        conn.execute("DROP SCHEMA cherrydb CASCADE")
+        
+        cleanup_transaction = conn.begin()
+        conn.execute(text("DROP SCHEMA cherrydb CASCADE"))
+        cleanup_transaction.commit()
 
 
 @pytest.fixture
 def db(db_schema):
     """SQLAlchemy ORM session (rolls back on cleanup)."""
-    session = db_schema()
+    session = db_schema(future=True)
     yield session
     session.rollback()
     session.close()

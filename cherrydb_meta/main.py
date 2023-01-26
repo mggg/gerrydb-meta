@@ -16,7 +16,7 @@ app = FastAPI(title="cherrydb-meta", openapi_url=f"{API_PREFIX}/openapi.json")
 def create_error(request: Request, exc: CreateValueError):
     """Handles object creation failures."""
     return JSONResponse(
-        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         content={"detail": f"Object creation failed. Reason: {exc}"},
     )
 
