@@ -75,49 +75,49 @@ class Namespace(Base):
     meta = relationship("ObjectMeta", lazy="joined")
 
 
-class Location(Base):
-    __tablename__ = "location"
+class Locality(Base):
+    __tablename__ = "locality"
     __table_args__ = (CheckConstraint("parent_id <> loc_id"),)
 
     loc_id = Column(Integer, primary_key=True)
     canonical_ref_id = Column(
         Integer,
-        ForeignKey("location_ref.ref_id"),
+        ForeignKey("locality_ref.ref_id"),
         unique=True,
         index=True,
         nullable=False,
     )
-    parent_id = Column(Integer, ForeignKey("location.loc_id"))
+    parent_id = Column(Integer, ForeignKey("locality.loc_id"))
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
     name = Column(Text, nullable=False)
 
-    parent = relationship("Location")
+    parent = relationship("Locality", remote_side=[loc_id])
     meta = relationship("ObjectMeta", lazy="joined")
     canonical_ref = relationship(
-        "LocationRef",
+        "LocalityRef",
         lazy="joined",
-        primaryjoin="Location.canonical_ref_id==LocationRef.ref_id",
+        primaryjoin="Locality.canonical_ref_id==LocalityRef.ref_id",
     )
     refs = relationship(
-        "LocationRef", primaryjoin="Location.loc_id==LocationRef.loc_id"
+        "LocalityRef", primaryjoin="Locality.loc_id==LocalityRef.loc_id"
     )
 
     def __str__(self):
-        return f"Location(loc_id={self.loc_id}, name={self.name})"
+        return f"Locality(loc_id={self.loc_id}, name={self.name})"
 
 
-class LocationRef(Base):
-    __tablename__ = "location_ref"
+class LocalityRef(Base):
+    __tablename__ = "locality_ref"
 
     ref_id = Column(Integer, primary_key=True)
-    loc_id = Column(Integer, ForeignKey("location.loc_id"))
+    loc_id = Column(Integer, ForeignKey("locality.loc_id"))
     path = Column(Text, unique=True, index=True, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     loc = relationship(
-        "Location",
+        "Locality",
         lazy="joined",
-        primaryjoin="Location.loc_id==LocationRef.loc_id",
+        primaryjoin="Locality.loc_id==LocalityRef.loc_id",
         overlaps="refs",
     )
 
@@ -127,7 +127,7 @@ class GeoSet(Base):
     __table_args__ = (UniqueConstraint("name", "namespace_id"),)
 
     set_id = Column(Integer, primary_key=True)
-    loc_id = Column(Integer, ForeignKey("location.loc_id"), nullable=False)
+    loc_id = Column(Integer, ForeignKey("locality.loc_id"), nullable=False)
     name = Column(Text, nullable=False)
     namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
     srid = Column(Integer)

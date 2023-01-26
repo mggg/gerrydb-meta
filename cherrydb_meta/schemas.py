@@ -7,7 +7,7 @@ from cherrydb_meta import models
 
 UserEmail = constr(max_length=254)
 
-LocationRef = constr(regex=r"[a-z0-9][a-z0-9-_/]*")
+LocalityRef = constr(regex=r"[a-z0-9][a-z0-9-_/]*")
 
 
 class ObjectMetaBase(BaseModel):
@@ -40,37 +40,37 @@ class ObjectMeta(ObjectMetaBase):
         )
 
 
-class LocationBase(BaseModel):
-    """Base model for location metadata."""
+class LocalityBase(BaseModel):
+    """Base model for locality metadata."""
 
-    canonical_path: LocationRef
-    parent_path: LocationRef | None
+    canonical_path: LocalityRef
+    parent_path: LocalityRef | None
     name: str
 
 
-class LocationCreate(LocationBase):
-    """Location metadata received on creation."""
+class LocalityCreate(LocalityBase):
+    """Locality metadata received on creation."""
 
-    aliases: list[LocationRef] | None
-
-
-class LocationPatch(BaseModel):
-    """Location metadata received on PATCH."""
-
-    aliases: list[LocationRef]
+    aliases: list[LocalityRef] | None
 
 
-class Location(LocationBase):
-    """A location returned by the database."""
+class LocalityPatch(BaseModel):
+    """Locality metadata received on PATCH."""
 
-    aliases: list[LocationRef]
+    aliases: list[LocalityRef]
+
+
+class Locality(LocalityBase):
+    """A locality returned by the database."""
+
+    aliases: list[LocalityRef]
     meta: ObjectMeta
 
     class Config:
         orm_mode = True
 
     @classmethod
-    def from_orm(cls, obj: models.Location):
+    def from_orm(cls, obj: models.Locality):
         canonical_path = obj.canonical_ref.path
         return cls(
             canonical_path=canonical_path,

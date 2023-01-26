@@ -1,4 +1,4 @@
-"""Endpoints for location metadata."""
+"""Endpoints for locality metadata."""
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -11,25 +11,25 @@ from cherrydb_meta.api.deps import get_db, get_obj_meta
 router = APIRouter()
 
 
-@router.get("/", response_model=list[schemas.Location])
-def read_locations(
+@router.get("/", response_model=list[schemas.Locality])
+def read_localities(
     *,
     db: Session = Depends(get_db),
-) -> list[models.Location]:
-    return crud.location.all(db=db)
+) -> list[models.Locality]:
+    return crud.locality.all(db=db)
 
 
-@router.get("/{path:path}", name="path-convertor", response_model=schemas.Location)
-def read_location(
+@router.get("/{path:path}", name="path-convertor", response_model=schemas.Locality)
+def read_locality(
     *,
     path: str,
     request: Request,
     db: Session = Depends(get_db),
-) -> models.Location:
-    loc = crud.location.get_by_ref(db=db, path=path)
+) -> models.Locality:
+    loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="No location found."
+            status_code=HTTPStatus.NOT_FOUND, detail="No locality found."
         )
 
     # Redirect to the canonical resource if an alias is used.
@@ -42,27 +42,27 @@ def read_location(
     return loc
 
 
-@router.patch("/{path:path}", name="path-convertor", response_model=schemas.Location)
-def patch_location_aliases(
+@router.patch("/{path:path}", name="path-convertor", response_model=schemas.Locality)
+def patch_locality_aliases(
     *,
     path: str,
-    loc_patch: schemas.LocationPatch,
+    loc_patch: schemas.LocalityPatch,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-) -> models.Location:
-    loc = crud.location.get_by_ref(db=db, path=path)
+) -> models.Locality:
+    loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="No location found."
+            status_code=HTTPStatus.NOT_FOUND, detail="No locality found."
         )
-    return crud.location.patch(db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch)
+    return crud.locality.patch(db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch)
 
 
-@router.post("/", response_model=schemas.Location)
-def create_location(
+@router.post("/", response_model=schemas.Locality,  status_code=HTTPStatus.CREATED)
+def create_locality(
     *,
-    loc_in: schemas.LocationCreate,
+    loc_in: schemas.LocalityCreate,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-) -> models.Location:
-    return crud.location.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
+) -> models.Locality:
+    return crud.locality.create(db=db, obj_in=loc_in, obj_meta=obj_meta)

@@ -10,7 +10,7 @@ from cherrydb_meta.api.deps import get_db, get_user
 router = APIRouter()
 
 
-@router.post("/{id}")
+@router.get("/{id}")
 def get_obj_meta(
     *,
     id: int,

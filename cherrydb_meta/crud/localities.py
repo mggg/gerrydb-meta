@@ -17,21 +17,20 @@ def normalize_path(path: str) -> str:
     return "/".join(seg for seg in path.lower().split("/") if seg)
 
 
-class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
+class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
     def create(
         self,
         db: Session,
         *,
-        obj_in: schemas.LocationCreate,
+        obj_in: schemas.LocalityCreate,
         obj_meta: models.ObjectMeta,
-    ) -> models.Location:
+    ) -> models.Locality:
         """Creates a new location with a canonical reference."""
-        db.commit()
-        with db.begin():
+        with db.begin(nested=True):
             # Look up the reference to a possible parent location.
             if obj_in.parent_path is not None:
                 parent_ref = (
-                    db.query(models.LocationRef)
+                    db.query(models.LocalityRef)
                     .filter_by(path=obj_in.parent_path)
                     .first()
                 )
@@ -50,7 +49,7 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
 
             # Create a path to the location.
             canonical_path = (normalize_path(obj_in.canonical_path),)
-            canonical_ref = models.LocationRef(
+            canonical_ref = models.LocalityRef(
                 path=canonical_path, meta_id=obj_meta.meta_id
             )
             db.add(canonical_ref)
@@ -69,7 +68,7 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
                 )
 
             # Create the location itself.
-            loc = models.Location(
+            loc = models.Locality(
                 canonical_ref_id=canonical_ref.ref_id,
                 parent_id=parent_id,
                 meta_id=obj_meta.meta_id,
@@ -93,11 +92,11 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
 
         return loc
 
-    def get_by_ref(self, db: Session, *, path: str) -> models.Location | None:
+    def get_by_ref(self, db: Session, *, path: str) -> models.Locality | None:
         """Retrieves a location by reference path."""
         ref = (
-            db.query(models.LocationRef)
-            .filter(models.LocationRef.path == normalize_path(path))
+            db.query(models.LocalityRef)
+            .filter(models.LocalityRef.path == normalize_path(path))
             .first()
         )
         return None if ref is None else ref.loc
@@ -106,14 +105,14 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
         self,
         db: Session,
         *,
-        obj: models.Location,
+        obj: models.Locality,
         obj_meta: models.ObjectMeta,
-        patch: schemas.LocationPatch,
-    ) -> models.Location | None:
+        patch: schemas.LocalityPatch,
+    ) -> models.Locality | None:
         """Patches a location (adds new aliases)."""
         refs = (
-            db.query(models.LocationRef)
-            .filter(models.LocationRef.loc_id == obj.loc_id)
+            db.query(models.LocalityRef)
+            .filter(models.LocalityRef.loc_id == obj.loc_id)
             .all()
         )
         new_aliases = set(normalize_path(path) for path in patch.aliases) - set(
@@ -122,7 +121,7 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
         if not new_aliases:
             return obj
 
-        db.commit()
+        db.flush()
         with db.begin():
             self._add_aliases(
                 db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta
@@ -134,12 +133,12 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
         *,
         db: Session,
         alias_paths: Collection[str],
-        loc: models.Location,
+        loc: models.Locality,
         obj_meta: models.ObjectMeta,
     ) -> None:
         """Adds aliases to a location."""
         for alias_path in alias_paths:
-            alias_ref = models.LocationRef(
+            alias_ref = models.LocalityRef(
                 path=normalize_path(alias_path),
                 loc_id=loc.loc_id,
                 meta_id=obj_meta.meta_id,
@@ -161,4 +160,4 @@ class CRLocation(CRBase[models.Location, schemas.LocationCreate]):
                 )
 
 
-location = CRLocation(models.Location)
+locality = CRLocality(models.Locality)

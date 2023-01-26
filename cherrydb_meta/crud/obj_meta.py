@@ -14,7 +14,7 @@ class CRObjectMeta(CRBase[models.ObjectMeta, schemas.ObjectMetaCreate]):
             created_by=user.user_id,
         )
         db.add(obj_meta)
-        db.commit()
+        db.flush()
         return obj_meta
 
     def get(self, db: Session, id: int) -> models.ObjectMeta:

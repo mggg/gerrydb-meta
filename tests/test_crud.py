@@ -1,8 +1,27 @@
-"""Tests for CherryDB crud operations."""
-from cherrydb_meta import crud, schemas
+"""Tests for CherryDB CRUD operations."""
+import pytest
+from cherrydb_meta import crud, models, schemas
 
 
-def test_crud_create_read_object_meta(db_with_user):
+@pytest.fixture
+def db_with_user(db):
+    """SQLAlchemy ORM session with a fake `User` model."""
+    user = models.User(email="test@example.com", name="Test User")
+    db.add(user)
+    db.flush()
+    yield db, user
+
+
+@pytest.fixture
+def db_with_meta(db_with_user):
+    db, user = db_with_user
+    meta = models.ObjectMeta(notes="test", created_by=user.user_id)
+    db.add(meta)
+    db.flush()
+    yield db, meta
+
+
+def test_crud_object_meta_create_read(db_with_user):
     db, user = db_with_user
     meta_create = crud.obj_meta.create(
         db=db,
@@ -13,11 +32,11 @@ def test_crud_create_read_object_meta(db_with_user):
     assert meta_get.notes == meta_create.notes
 
 
-def test_crud_create_location_no_parent_no_aliases(db_with_meta):
+def test_crud_locality_create_read_no_parent_no_aliases(db_with_meta):
     db, meta = db_with_meta
-    crud.location.create(
+    crud.locality.create(
         db=db,
-        obj_in=schemas.LocationCreate(
+        obj_in=schemas.LocalityCreate(
             canonical_path="atlantis",
             parent_path=None,
             name="Lost City of Atlantis",
@@ -25,3 +44,4 @@ def test_crud_create_location_no_parent_no_aliases(db_with_meta):
         ),
         obj_meta=meta,
     )
+    

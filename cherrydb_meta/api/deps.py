@@ -8,7 +8,7 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
-from cherrydb_meta.db import Session, redis_init
+from cherrydb_meta.db import Session
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
