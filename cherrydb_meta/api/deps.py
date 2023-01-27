@@ -15,10 +15,9 @@ API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 def get_db() -> Generator:
     try:
-        db = Session()
+        db = Session(future=True)
         yield db
         db.commit()
-        db.close()
     finally:
         db.close()
 
