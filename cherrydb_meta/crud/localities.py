@@ -122,9 +122,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
             return obj
 
         db.flush()
-        self._add_aliases(
-            db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta
-        )
+        self._add_aliases(db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta)
         db.refresh(obj)
         return obj
 

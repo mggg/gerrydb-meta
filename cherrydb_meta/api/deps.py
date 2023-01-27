@@ -72,7 +72,8 @@ def get_obj_meta(
     obj_meta = crud.obj_meta.get(db=db, id=meta_id)
     if obj_meta is None:
         raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Unknown object metadata ID."
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail="Unknown object metadata ID.",
         )
     if obj_meta.created_by != user.user_id:
         raise HTTPException(

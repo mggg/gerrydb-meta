@@ -19,8 +19,8 @@ def db_engine():
     )
     yield engine
     engine.dispose()
- 
-    
+
+
 @pytest.fixture(scope="session")
 def db_schema(db_engine):
     """SQLAlchemy ORM session maker with CherryDB schema initialized."""
@@ -29,10 +29,10 @@ def db_schema(db_engine):
         conn.execute(text("DROP SCHEMA IF EXISTS cherrydb CASCADE"))
         conn.execute(text("CREATE SCHEMA cherrydb"))
         init_transaction.commit()
-        
+
         models.Base.metadata.create_all(db_engine)
         yield sessionmaker(db_engine)
-        
+
         cleanup_transaction = conn.begin()
         conn.execute(text("DROP SCHEMA cherrydb CASCADE"))
         cleanup_transaction.commit()

@@ -58,7 +58,7 @@ def patch_locality_aliases(
     return crud.locality.patch(db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch)
 
 
-@router.post("/", response_model=schemas.Locality,  status_code=HTTPStatus.CREATED)
+@router.post("/", response_model=schemas.Locality, status_code=HTTPStatus.CREATED)
 def create_locality(
     *,
     loc_in: schemas.LocalityCreate,
