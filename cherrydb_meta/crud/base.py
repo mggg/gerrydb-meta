@@ -16,12 +16,20 @@ ModelType = TypeVar("ModelType", bound=Base)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 
 
+def normalize_path(path: str) -> str:
+    """Normalizes a path (removes leading, trailing, and duplicate slashes)."""
+    return "/".join(seg for seg in path.lower().split("/") if seg)
+
+
 class CRBase(Generic[ModelType, CreateSchemaType]):
+    model: Type[ModelType]
+
     def __init__(self, model: Type[ModelType]):
         """
-        CR object with default methods to Create and Read.
-        **Parameters**
-        * `model`: A SQLAlchemy model class
+        CR object with default methods to create and read.
+
+        Args:
+            model: A SQLAlchemy model class.
         """
         self.model = model
 

@@ -6,15 +6,10 @@ from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.crud.base import CRBase
+from cherrydb_meta.crud.base import CRBase, normalize_path
 from cherrydb_meta.exceptions import CreateValueError
 
 log = logging.getLogger()
-
-
-def normalize_path(path: str) -> str:
-    """Normalizes a path (removes leading, trailing, and duplicate slashes)."""
-    return "/".join(seg for seg in path.lower().split("/") if seg)
 
 
 class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
@@ -110,13 +105,8 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         patch: schemas.LocalityPatch,
     ) -> models.Locality | None:
         """Patches a location (adds new aliases)."""
-        refs = (
-            db.query(models.LocalityRef)
-            .filter(models.LocalityRef.loc_id == obj.loc_id)
-            .all()
-        )
         new_aliases = set(normalize_path(path) for path in patch.aliases) - set(
-            ref.path for ref in refs
+            ref.path for ref in obj.refs
         )
         if not new_aliases:
             return obj

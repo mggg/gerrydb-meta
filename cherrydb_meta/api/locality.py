@@ -6,12 +6,21 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
-from cherrydb_meta.api.deps import get_db, get_obj_meta
+from cherrydb_meta.api.deps import (
+    get_db,
+    get_obj_meta,
+    can_read_localities,
+    can_write_localities,
+)
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[schemas.Locality])
+@router.get(
+    "/",
+    response_model=list[schemas.Locality],
+    dependencies=[Depends(can_read_localities)],
+)
 def read_localities(
     *,
     db: Session = Depends(get_db),
@@ -19,7 +28,12 @@ def read_localities(
     return crud.locality.all(db=db)
 
 
-@router.get("/{path:path}", name="path-convertor", response_model=schemas.Locality)
+@router.get(
+    "/{path:path}",
+    name="path-convertor",
+    response_model=schemas.Locality,
+    dependencies=[Depends(can_read_localities)],
+)
 def read_locality(
     *,
     path: str,
@@ -42,7 +56,12 @@ def read_locality(
     return loc
 
 
-@router.patch("/{path:path}", name="path-convertor", response_model=schemas.Locality)
+@router.patch(
+    "/{path:path}",
+    name="path-convertor",
+    response_model=schemas.Locality,
+    dependencies=[Depends(can_write_localities)],
+)
 def patch_locality_aliases(
     *,
     path: str,
@@ -58,7 +77,12 @@ def patch_locality_aliases(
     return crud.locality.patch(db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch)
 
 
-@router.post("/", response_model=schemas.Locality, status_code=HTTPStatus.CREATED)
+@router.post(
+    "/",
+    response_model=schemas.Locality,
+    status_code=HTTPStatus.CREATED,
+    dependencies=[Depends(can_write_localities)],
+)
 def create_locality(
     *,
     loc_in: schemas.LocalityCreate,

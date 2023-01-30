@@ -1,8 +1,6 @@
 """SQL table definitions for CherryDB."""
-from enum import Enum
-
 from geoalchemy2 import Geometry
-from sqlalchemy import JSON, REAL, Boolean, CheckConstraint, Column, DateTime
+from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
     ForeignKey,
@@ -16,16 +14,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
+from cherrydb_meta.enums import ColumnType, ScopeType, NamespaceGroup
 
 metadata_obj = MetaData(schema="cherrydb")
 Base = declarative_base(metadata=metadata_obj)
-
-
-class ColumnType(str, Enum):
-    FLOAT = "float"
-    INT = "int"
-    BOOL = "bool"
-    STR = "str"
 
 
 class User(Base):
@@ -36,10 +28,72 @@ class User(Base):
     email = Column(String(254), nullable=False, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    scopes = relationship("UserScope", lazy="joined")
+    groups = relationship("UserGroupMember", lazy="joined")
     api_keys = relationship("ApiKey", back_populates="user")
 
     def __str__(self):
         return f"User(email={self.email}, name={self.name})"
+
+
+class UserGroup(Base):
+    __tablename__ = "user_group"
+
+    group_id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    scopes = relationship("UserGroupScope", lazy="joined")
+    users = relationship("UserGroupMember", lazy="joined")
+    meta = relationship("ObjectMeta")
+
+    def __str__(self):
+        return f"UserGroup(name={self.name})"
+
+
+class UserGroupMember(Base):
+    __tablename__ = "user_group_member"
+
+    user_id = Column(Integer, ForeignKey("user.user_id"), primary_key=True)
+    group_id = Column(Integer, ForeignKey("user_group.group_id"), primary_key=True)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    user = relationship("User", lazy="joined")
+    group = relationship("UserGroup", lazy="joined")
+    meta = relationship("ObjectMeta")
+
+
+class UserScope(Base):
+    __tablename__ = "user_scope"
+    __table_args__ = (UniqueConstraint("user_id", "scope", "scope", "namespace_id"),)
+
+    user_perm_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("user.user_id"), nullable=False)
+    scope = Column(ScopeType, nullable=False)
+    namespace_group = Column(NamespaceGroup)
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"))
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    user = relationship("User", back_populates="user")
+    namespace = relationship("Namespace")
+    meta = relationship("ObjectMeta")
+
+
+class UserGroupScope(Base):
+    __tablename__ = "user_group_scope"
+    __table_args__ = (UniqueConstraint("group_id", "scope", "scope", "namespace_id"),)
+
+    group_perm_id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("user_group.group_id"), nullable=False)
+    scope = Column(ScopeType, nullable=False)
+    namespace_group = Column(NamespaceGroup)
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"))
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    group = relationship("UserGroup", back_populates="user_group")
+    namespace = relationship("Namespace")
+    meta = relationship("ObjectMeta")
 
 
 class ApiKey(Base):
@@ -68,8 +122,10 @@ class Namespace(Base):
     __tablename__ = "namespace"
 
     namespace_id = Column(Integer, primary_key=True)
+    path = Column(Text, nullable=False, unique=True, index=True)
     name = Column(Text, nullable=False, unique=True)
-    description = Column(Text)
+    description = Column(Text, nullable=False)
+    public = Column(Boolean, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     meta = relationship("ObjectMeta", lazy="joined")
@@ -172,16 +228,40 @@ class GeoHierarchy(Base):
 
 class DataColumn(Base):
     __tablename__ = "column"
-    __table_args__ = (UniqueConstraint("namespace_id", "name"),)
 
     col_id = Column(Integer, primary_key=True)
     namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
-    name = Column(Text, nullable=False)
+    canonical_ref_id = Column(
+        Integer,
+        ForeignKey("column_ref.ref_id"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
     description = Column(Text)
     type = Column(SqlEnum(ColumnType), nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     meta = relationship("ObjectMeta", lazy="joined")
+    namespace = relationship("Namespace", lazy="joined")
+
+
+class ColumnRef(Base):
+    __tablename__ = "column_ref"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    ref_id = Column(Integer, primary_key=True)
+    namespace_id = Column(Integer, ForeignKey("namespace.namespace_id"), nullable=False)
+    col_id = Column(Integer, ForeignKey("column.col_id"))
+    path = Column(Text, index=True, nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    column = relationship(
+        "DataColumn",
+        lazy="joined",
+        primaryjoin="DataColumn.col_id==ColumnRef.col_id",
+        overlaps="refs",
+    )
 
 
 class ColumnRelation(Base):
@@ -281,6 +361,21 @@ class ColumnValueStr(Base):
         Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
     )
     val = Column(String(65535), nullable=False)
+    meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
+
+    meta = relationship("ObjectMeta")
+
+
+class ColumnValueJSON(Base):
+    __tablename__ = "column_value_json"
+
+    node_id = Column(
+        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
+    )
+    attr_id = Column(
+        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
+    )
+    val = Column(postgresql.JSONB, nullable=False)
     meta_id = Column(Integer, ForeignKey("meta.meta_id"), nullable=False)
 
     meta = relationship("ObjectMeta")

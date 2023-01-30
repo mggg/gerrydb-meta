@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
 from cherrydb_meta.db import Session
+from cherrydb_meta.scopes import ScopeManager
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
@@ -81,3 +82,32 @@ def get_obj_meta(
             detail="Cannot use metadata object created by another user.",
         )
     return obj_meta
+
+
+def get_scopes(
+    user: models.User = Depends(get_user),
+) -> ScopeManager:
+    """Returns a user-level scope manager."""
+    return ScopeManager(user=user)
+
+
+def can_read_localities(
+    scopes: ScopeManager = Depends(get_scopes),
+) -> None:
+    """Raises a 403 Forbidden if the user cannot read localities."""
+    if not scopes.can_read_localities():
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="You do not have sufficient permissions to read localities.",
+        )
+
+
+def can_write_localities(
+    scopes: ScopeManager = Depends(get_scopes),
+) -> None:
+    """Raises a 403 Forbidden if the user cannot write localities."""
+    if not scopes.can_write_localities():
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="You do not have sufficient permissions to write localities.",
+        )

@@ -1,16 +1,16 @@
 """Tests for CherryDB CRUD operations on locality metadata."""
 from cherrydb_meta import crud, schemas
-from cherrydb_meta.crud.localities import normalize_path
+from cherrydb_meta.crud.locality import normalize_path
 
 
 def test_normalize_path_flat():
     assert normalize_path("atlantis") == "atlantis"
-    
+
 
 def test_normalize_path_case():
     assert normalize_path("Atlantis") == "atlantis"
-   
-    
+
+
 def test_normalize_extra_slashes():
     assert normalize_path("/greece//atlantis") == "greece/atlantis"
 
@@ -66,7 +66,9 @@ def test_crud_locality_patch(db_with_meta):
         db=db,
         obj=loc,
         obj_meta=meta,
-        patch=schemas.LocalityPatch(aliases=["greece/atlantis"])
+        patch=schemas.LocalityPatch(aliases=["greece/atlantis"]),
     )
-    assert set(ref.path for ref in loc_with_aliases.refs) == {"atlantis", "greece/atlantis"}
-    
+    assert set(ref.path for ref in loc_with_aliases.refs) == {
+        "atlantis",
+        "greece/atlantis",
+    }
