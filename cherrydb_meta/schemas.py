@@ -13,7 +13,7 @@ CherryPath = constr(regex=r"[a-z0-9][a-z0-9-_/]*")
 class ObjectMetaBase(BaseModel):
     """Base model for object metadata."""
 
-    notes: str
+    notes: str | None
 
 
 class ObjectMetaCreate(ObjectMetaBase):
