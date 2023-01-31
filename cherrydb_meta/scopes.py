@@ -1,6 +1,5 @@
 """Scopes (permissions) and role management."""
 from dataclasses import dataclass
-from pydantic import Session
 from cherrydb_meta.enums import ScopeType, NamespaceGroup
 from cherrydb_meta.models import User, Namespace
 

@@ -1,7 +1,7 @@
 """Refresh DB."""
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from cherrydb_meta.admin import CherryAdmin
@@ -13,8 +13,9 @@ EMAIL = "pjrule@me.com"
 if __name__ == "__main__":
     engine = create_engine(os.getenv("CHERRY_DATABASE_URI"))
     with engine.connect() as conn:
-        conn.execute("DROP SCHEMA cherrydb CASCADE")
-        conn.execute("CREATE SCHEMA cherrydb")
+        conn.execute(text("DROP SCHEMA cherrydb CASCADE"))
+        conn.execute(text("CREATE SCHEMA cherrydb"))
+        conn.commit()
     Base.metadata.create_all(engine)
 
     db = sessionmaker(engine)()
