@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
 from cherrydb_meta.db import Session
+from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.scopes import ScopeManager
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
@@ -92,34 +93,26 @@ def get_scopes(
     return ScopeManager(user=user)
 
 
-def can_read_localities(
-    scopes: ScopeManager = Depends(get_scopes),
-) -> None:
-    """Raises a 403 Forbidden if the user cannot read localities."""
-    if not scopes.can_read_localities():
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail="You do not have sufficient permissions to read localities.",
-        )
+def no_perms(msg: str) -> str:
+    """Generates a permissions-related error string."""
+    return f"You do not have sufficient permissions to {msg}."
 
 
-def can_write_localities(
-    scopes: ScopeManager = Depends(get_scopes),
-) -> None:
-    """Raises a 403 Forbidden if the user cannot write localities."""
-    if not scopes.can_write_localities():
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail="You do not have sufficient permissions to write localities.",
-        )
+def global_scope_check(scope: ScopeType, message: str):
+    """Returns a dependency that raises 403 Forbidden if a scope requirement fails."""
+
+    def dependency(scopes: ScopeManager = Depends(get_scopes)):
+        if not scopes.has_global_scope(scope):
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN, detail=no_perms(message)
+            )
+
+    return dependency
 
 
-def can_write_meta(
-    scopes: ScopeManager = Depends(get_scopes),
-) -> None:
-    """Raises a 403 Forbidden if the user cannot write metadata."""
-    if not scopes.can_write_meta():
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail="You do not have sufficient permissions to write metadata.",
-        )
+can_read_localities = global_scope_check(ScopeType.LOCALITY_READ, "read localities")
+can_write_localities = global_scope_check(ScopeType.LOCALITY_WRITE, "write localities")
+can_write_meta = global_scope_check(ScopeType.META_WRITE, "write metadata")
+can_create_namespace = global_scope_check(
+    ScopeType.NAMESPACE_CREATE, "create namespaces"
+)

@@ -10,14 +10,6 @@ from cherrydb_meta.api.deps import get_db, get_obj_meta
 router = APIRouter()
 
 
-@router.get("/", response_model=list[schemas.Column])
-def read_columns(
-    *,
-    db: Session = Depends(get_db),
-) -> list[models.Column]:
-    return crud.column.all(db=db)
-
-
 @router.get("/{namespace}", response_model=list[schemas.Column])
 def read_columns_in_namespace(
     *, db: Session = Depends(get_db), namespace: str

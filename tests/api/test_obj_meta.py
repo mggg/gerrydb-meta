@@ -12,6 +12,9 @@ META_ROOT = f"{API_PREFIX}/meta"
 
 def create_new_user_meta(db: Session) -> models.ObjectMeta:
     """Creates metadata associated with a new user."""
+
+    # TODO: fix this abstraction violation (use `crud` instead)
+    # once users are exposed via API.
     user = models.User(name="other user", email="other@example.com")
     db.add(user)
     db.flush()
