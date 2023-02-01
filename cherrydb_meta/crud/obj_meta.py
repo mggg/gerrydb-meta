@@ -1,4 +1,5 @@
 """CRUD operations and transformations for generic object metadata."""
+from uuid import UUID
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
@@ -17,8 +18,8 @@ class CRObjectMeta(CRBase[models.ObjectMeta, schemas.ObjectMetaCreate]):
         db.flush()
         return obj_meta
 
-    def get(self, db: Session, id: int) -> models.ObjectMeta:
-        return db.query(self.model).filter(self.model.meta_id == id).first()
+    def get(self, db: Session, id: UUID) -> models.ObjectMeta:
+        return db.query(self.model).filter(self.model.uuid == id).first()
 
 
 obj_meta = CRObjectMeta(models.ObjectMeta)

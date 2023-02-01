@@ -21,7 +21,12 @@ class ScopeType(str, Enum):
     NAMESPACE_CREATE = "namespace:create"
     LOCALITY_READ = "locality:read"
     LOCALITY_WRITE = "locality:write"
+    META_READ = "meta:read"
+    META_WRITE = "meta:write"
     ALL = "all"
+    
+    def __str__(self):
+        return self.value
 
 
 class NamespaceGroup(str, Enum):

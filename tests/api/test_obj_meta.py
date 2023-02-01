@@ -2,14 +2,17 @@
 from http import HTTPStatus
 
 from cherrydb_meta import schemas
+from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.main import API_PREFIX
+from .scopes import grant_scope
 
 META_ROOT = f"{API_PREFIX}/meta"
 
 
-def test_api_object_meta_create_read(client_with_user):
-    client, user = client_with_user
+def test_api_object_meta_create_read(db_and_client_with_user_no_scopes):
+    db, client, user = db_and_client_with_user_no_scopes
     notes = "test"
+    grant_scope(db, user, ScopeType.META_WRITE)
 
     # Create new metadata.
     create_response = client.post(f"{META_ROOT}/", json={"notes": notes})
@@ -19,7 +22,15 @@ def test_api_object_meta_create_read(client_with_user):
     assert create_body.created_by == user.email
 
     # Read it back.
-    read_response = client.get(f"{META_ROOT}/{create_body.meta_id}")
+    read_response = client.get(f"{META_ROOT}/{create_body.uuid}")
     assert read_response.status_code == HTTPStatus.OK
     read_body = schemas.ObjectMeta(**read_response.json())
     assert read_body == create_body
+
+
+def test_api_object_meta_create_no_access(db_and_client_with_user_no_scopes):
+    db, client, _ = db_and_client_with_user_no_scopes
+
+    create_response = client.post(f"{META_ROOT}/", json={"notes": ""})
+    assert create_response.status_code == HTTPStatus.FORBIDDEN
+    assert "permissions to write metadata" in create_response.json()["detail"]

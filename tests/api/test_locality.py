@@ -1,14 +1,25 @@
 """Tests for CherryDB REST API locality endpoints."""
+import pytest
 from http import HTTPStatus
 
 from cherrydb_meta import schemas
+from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.main import API_PREFIX
+from .scopes import grant_scope
 
 LOCALITIES_ROOT = f"{API_PREFIX}/localities"
 
+@pytest.fixture
+def client_with_meta_locality(db_and_client_with_meta_no_scopes):
+    """An API client with `LOCATION_READ` and `LOCATION_WRITE` scope (+ metadata)."""
+    db, client, meta = db_and_client_with_meta_no_scopes
+    grant_scope(db, meta, ScopeType.LOCALITY_READ)
+    grant_scope(db, meta, ScopeType.LOCALITY_WRITE)
+    yield client, meta
 
-def test_api_locality_create_read_no_parent_no_aliases(client_with_meta):
-    client, meta = client_with_meta
+
+def test_api_locality_create_read_no_parent_no_aliases(client_with_meta_locality):
+    client, meta = client_with_meta_locality
     name = "Lost City of Atlantis"
     path = "atlantis"
 
@@ -21,7 +32,7 @@ def test_api_locality_create_read_no_parent_no_aliases(client_with_meta):
     assert create_body.name == name
     assert create_body.canonical_path == path
     assert create_body.parent_path is None
-    assert create_body.meta.meta_id == meta.meta_id
+    assert create_body.meta.uuid == str(meta.uuid)
 
     # Read it back.
     read_response = client.get(f"{API_PREFIX}/localities/{path}")
@@ -30,8 +41,8 @@ def test_api_locality_create_read_no_parent_no_aliases(client_with_meta):
     assert read_body == create_body
 
 
-def test_api_locality_create_read_parent_and_aliases(client_with_meta):
-    client, meta = client_with_meta
+def test_api_locality_create_read_parent_and_aliases(client_with_meta_locality):
+    client, meta = client_with_meta_locality
     name = "Lost City of Atlantis"
     path = "greece/atlantis"
     parent_path = "greece"
@@ -59,7 +70,7 @@ def test_api_locality_create_read_parent_and_aliases(client_with_meta):
     assert create_child_body.canonical_path == path
     assert create_child_body.aliases == aliases
     assert create_child_body.parent_path == parent_path
-    assert create_child_body.meta.meta_id == meta.meta_id
+    assert create_child_body.meta.uuid == str(meta.uuid)
 
     # Read back the parent and the child.
     read_response = client.get(f"{LOCALITIES_ROOT}/")
@@ -68,8 +79,8 @@ def test_api_locality_create_read_parent_and_aliases(client_with_meta):
     assert set(loc.canonical_path for loc in read_body) == {path, parent_path}
 
 
-def test_api_locality_create_read_with_redirects(client_with_meta):
-    client, _ = client_with_meta
+def test_api_locality_create_read_with_redirects(client_with_meta_locality):
+    client, _ = client_with_meta_locality
     name = "Lost City of Atlantis"
     path = "greece/atlantis"
     alias = "atlantis"
@@ -85,8 +96,9 @@ def test_api_locality_create_read_with_redirects(client_with_meta):
     assert read_response.status_code == HTTPStatus.PERMANENT_REDIRECT
 
 
-def test_api_locality_create_with_no_meta(client_with_user):
-    client, _ = client_with_user
+def test_api_locality_create_with_no_meta(db_and_client_with_user_no_scopes):
+    db, client, user = db_and_client_with_user_no_scopes
+    grant_scope(db, user, ScopeType.LOCALITY_WRITE)
 
     # Create child locality with aliases.
     create_response = client.post(
@@ -96,8 +108,8 @@ def test_api_locality_create_with_no_meta(client_with_user):
     assert "metadata" in create_response.json()["detail"]
 
 
-def test_api_locality_create_bad_parent_path(client_with_meta):
-    client, _ = client_with_meta
+def test_api_locality_create_bad_parent_path(client_with_meta_locality):
+    client, _ = client_with_meta_locality
 
     # Create child locality with aliases.
     create_response = client.post(
@@ -112,8 +124,8 @@ def test_api_locality_create_bad_parent_path(client_with_meta):
     assert "parent" in create_response.json()["detail"]
 
 
-def test_api_locality_create_twice(client_with_meta):
-    client, _ = client_with_meta
+def test_api_locality_create_twice(client_with_meta_locality):
+    client, _ = client_with_meta_locality
     body = {
         "name": "Lost City of Atlantis",
         "canonical_path": "greece/atlantis",
@@ -131,8 +143,8 @@ def test_api_locality_create_twice(client_with_meta):
     assert len(read_response.json()) == 1
 
 
-def test_api_locality_patch_add_aliases(client_with_meta):
-    client, _ = client_with_meta
+def test_api_locality_patch_add_aliases(client_with_meta_locality):
+    client, _ = client_with_meta_locality
     path = "greece/atlantis"
     aliases = ["atlantis", "g/atlantis"]
 

@@ -26,7 +26,7 @@ def db_schema(db_engine):
     """SQLAlchemy ORM session maker with CherryDB schema initialized."""
     with db_engine.connect() as conn:
         init_transaction = conn.begin()
-        conn.execute(text("DROP SCHEMA IF EXISTS cherrydb CASCADE"))
+        conn.execute(text("DROP SCHEMA IF EXISTS cherrydb_test"))
         conn.execute(text("CREATE SCHEMA cherrydb"))
         init_transaction.commit()
 
@@ -41,7 +41,7 @@ def db_schema(db_engine):
 @pytest.fixture
 def db(db_schema):
     """SQLAlchemy ORM session (rolls back on cleanup)."""
-    session = db_schema(future=True)
+    session = db_schema()
     yield session
     session.rollback()
     session.close()

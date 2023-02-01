@@ -23,7 +23,7 @@ class ObjectMetaCreate(ObjectMetaBase):
 class ObjectMeta(ObjectMetaBase):
     """Object metadata returned by the database."""
 
-    meta_id: int
+    uuid: str
     created_at: datetime
     created_by: UserEmail
 
@@ -33,7 +33,7 @@ class ObjectMeta(ObjectMetaBase):
     @classmethod
     def from_orm(cls, obj: models.ObjectMeta):
         return cls(
-            meta_id=obj.meta_id,
+            uuid=str(obj.uuid),
             notes=obj.notes,
             created_at=obj.created_at,
             created_by=obj.user.email,
@@ -133,7 +133,7 @@ class Column(ColumnBase):
         orm_mode = True
 
     @classmethod
-    def from_orm(cls, obj: models.Column):
+    def from_orm(cls, obj: models.DataColumn):
         canonical_path = obj.canonical_ref.path
         return cls(
             canonical_path=canonical_path,

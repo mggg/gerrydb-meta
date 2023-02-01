@@ -3,6 +3,7 @@ import re
 from hashlib import sha512
 from http import HTTPStatus
 from typing import Generator
+from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
@@ -63,14 +64,14 @@ def get_obj_meta(
         )
 
     try:
-        meta_id = int(x_cherry_meta_id)
+        meta_uuid = UUID(x_cherry_meta_id)
     except ValueError:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail="Object metadata ID must be an integer.",
+            detail="Object metadata ID is not a valid UUID hex string.",
         )
 
-    obj_meta = crud.obj_meta.get(db=db, id=meta_id)
+    obj_meta = crud.obj_meta.get(db=db, id=meta_uuid)
     if obj_meta is None:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -110,4 +111,15 @@ def can_write_localities(
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail="You do not have sufficient permissions to write localities.",
+        )
+
+
+def can_write_meta(
+    scopes: ScopeManager = Depends(get_scopes),
+) -> None:
+    """Raises a 403 Forbidden if the user cannot write metadata."""
+    if not scopes.can_write_meta():
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="You do not have sufficient permissions to write metadata.",
         )

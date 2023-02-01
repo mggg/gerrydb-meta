@@ -25,7 +25,11 @@ class ScopeManager:
         user_global_scopes = {
             scope.scope
             for scope in self.user.scopes
-            if scope.namespace_id is None and scope.namespace_group is None
+            if scope.namespace_id is None
+            and (
+                scope.namespace_group is None
+                or scope.namespace_group == NamespaceGroup.ALL
+            )
         }
         group_group_scopes = {
             (scope.scope, scope.namespace_group)
@@ -43,7 +47,11 @@ class ScopeManager:
             scope.scope
             for group in self.user.groups
             for scope in group.group.scopes
-            if scope.namespace_id is None and scope.namespace_group is None
+            if scope.namespace_id is None
+            and (
+                scope.namespace_group is None
+                or scope.namespace_group == NamespaceGroup.ALL
+            )
         }
         self._namespace_scopes = user_namespace_scopes | group_namespace_scopes
         self._namespace_group_scopes = user_group_scopes | group_group_scopes
@@ -54,6 +62,12 @@ class ScopeManager:
 
     def can_write_localities(self):
         return self._has_global_scope(ScopeType.LOCALITY_WRITE)
+
+    def can_read_meta(self):
+        return self._has_global_scope(ScopeType.META_READ)
+
+    def can_write_meta(self):
+        return self._has_global_scope(ScopeType.META_WRITE)
 
     def can_create_namespace(self):
         return self._has_global_scope(ScopeType.NAMESPACE_CREATE)

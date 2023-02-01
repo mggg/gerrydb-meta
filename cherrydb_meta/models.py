@@ -1,8 +1,9 @@
 """SQL table definitions for CherryDB."""
+import uuid
 from datetime import datetime
 from typing import Any
 from geoalchemy2 import Geometry
-from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
     ForeignKey,
@@ -41,7 +42,7 @@ class User(Base):
     groups = relationship("UserGroupMember", lazy="joined")
     api_keys = relationship("ApiKey", back_populates="user")
 
-    def __str__(self):
+    def __repr__(self):
         return f"User(email={self.email}, name={self.name})"
 
 
@@ -59,7 +60,7 @@ class UserGroup(Base):
     users = relationship("UserGroupMember", lazy="joined", back_populates="group")
     meta = relationship("ObjectMeta")
 
-    def __str__(self):
+    def __repr__(self):
         return f"UserGroup(name={self.name})"
 
 
@@ -103,6 +104,13 @@ class UserScope(Base):
     user = relationship("User", back_populates="scopes")
     namespace = relationship("Namespace")
     meta = relationship("ObjectMeta")
+    
+    def __repr__(self):
+        return (
+            f"UserScope(user_id={self.user_id}, scope={self.scope}, "
+            f"namespace_group={self.namespace_group}, "
+            f"namespace_id={self.namespace_id})"
+        )
 
 
 class UserGroupScope(Base):
@@ -148,6 +156,13 @@ class ObjectMeta(Base):
     __tablename__ = "meta"
 
     meta_id = mapped_column(Integer, primary_key=True)
+    uuid = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        index=True,
+        unique=True,
+        nullable=False,
+        default=uuid.uuid4,
+    )
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
