@@ -13,19 +13,17 @@ router = APIRouter()
 @router.get("/{namespace}", response_model=list[schemas.Column])
 def read_columns_in_namespace(
     *, db: Session = Depends(get_db), namespace: str
-) -> list[models.Column]:
+) -> list[models.DataColumn]:
     return crud.column.all_in_namespace(db=db, namespace=namespace)
 
 
-@router.get(
-    "/{namespace}/{path:path}", name="path-convertor", response_model=schemas.Column
-)
+@router.get("/{namespace}/{path:path}", response_model=schemas.Column)
 def read_column(
     *,
     namespace: str,
     path: str,
     db: Session = Depends(get_db),
-) -> models.Column:
+) -> models.DataColumn:
     column = crud.column.get(db=db, path=path)
     if column is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="No column found.")
@@ -40,5 +38,5 @@ def create_column(
     loc_in: schemas.ColumnCreate,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-) -> models.Column:
+) -> models.DataColumn:
     return crud.column.create(db=db, obj_in=loc_in, obj_meta=obj_meta)

@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.scopes import ScopeManager
-from cherrydb_meta.api.deps import (get_db, get_obj_meta, get_scopes, can_create_namespace)
+from cherrydb_meta.api.deps import (
+    get_db,
+    get_obj_meta,
+    get_scopes,
+    can_create_namespace,
+)
 
 router = APIRouter()
 
@@ -24,16 +29,16 @@ def read_namespaces(
     ]
 
 
-@router.get("/{path:path}", name="path-convertor", response_model=schemas.Namespace)
+@router.get("/{namespace}", response_model=schemas.Namespace)
 def read_namespace(
     *,
-    path: str,
+    namespace: str,
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
 ) -> models.Namespace:
-    namespace = crud.namespace.get(db=db, path=path)
+    namespace_obj = crud.namespace.get(db=db, path=namespace)
 
-    if namespace is None or not scopes.can_read_in_namespace(namespace):
+    if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
@@ -41,7 +46,7 @@ def read_namespace(
                 "permissions to access this namespace."
             ),
         )
-    return namespace
+    return namespace_obj
 
 
 @router.post(

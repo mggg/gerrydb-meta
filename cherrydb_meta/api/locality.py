@@ -30,7 +30,6 @@ def read_localities(
 
 @router.get(
     "/{path:path}",
-    name="path-convertor",
     response_model=schemas.Locality,
     dependencies=[Depends(can_read_localities)],
 )
@@ -58,7 +57,6 @@ def read_locality(
 
 @router.patch(
     "/{path:path}",
-    name="path-convertor",
     response_model=schemas.Locality,
     dependencies=[Depends(can_write_localities)],
 )

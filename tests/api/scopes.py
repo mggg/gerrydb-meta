@@ -7,6 +7,7 @@ def grant_scope(
     db: Session,
     user_or_meta: models.User | models.ObjectMeta,
     scope: enums.ScopeType,
+    *,
     namespace_group: enums.NamespaceGroup | None = None,
 ) -> None:
     """Grants a scope to a test user."""

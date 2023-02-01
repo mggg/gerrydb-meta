@@ -64,6 +64,7 @@ def db_and_client_with_meta_no_scopes(db):
     def get_test_db() -> Generator:
         yield db
 
+    # TODO: replace with `crud` calls.
     admin = CherryAdmin(db)
     user = admin.user_create(name="Test User", email="test@example.com")
     api_key = admin.key_create(user)

@@ -84,9 +84,9 @@ class Locality(LocalityBase):
 class NamespaceBase(BaseModel):
     """Base model for namespace metadata."""
 
-    path: CherryPath
-    name: str
+    path: constr(regex=r"[a-zA-Z0-9-]+")
     description: str
+    public: bool
 
 
 class NamespaceCreate(NamespaceBase):

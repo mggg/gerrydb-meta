@@ -179,7 +179,6 @@ class Namespace(Base):
 
     namespace_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     path: Mapped[str] = mapped_column(Text, nullable=False, unique=True, index=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     public: Mapped[bool] = mapped_column(Boolean, nullable=False)
     meta_id: Mapped[int] = mapped_column(
