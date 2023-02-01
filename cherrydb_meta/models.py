@@ -104,7 +104,7 @@ class UserScope(Base):
     user = relationship("User", back_populates="scopes")
     namespace = relationship("Namespace")
     meta = relationship("ObjectMeta")
-    
+
     def __repr__(self):
         return (
             f"UserScope(user_id={self.user_id}, scope={self.scope}, "

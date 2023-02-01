@@ -24,7 +24,7 @@ class ScopeType(str, Enum):
     META_READ = "meta:read"
     META_WRITE = "meta:write"
     ALL = "all"
-    
+
     def __str__(self):
         return self.value
 

@@ -46,7 +46,7 @@ def get_obj_meta(
     "/",
     status_code=HTTPStatus.CREATED,
     dependencies=[Depends(can_write_meta)],
-    response_model=schemas.ObjectMeta
+    response_model=schemas.ObjectMeta,
 )
 def create_obj_meta(
     *,
