@@ -241,19 +241,15 @@ class LocalityRef(Base):
     )
 
 
-class GeoSet(Base):
-    __tablename__ = "geo_set"
-    __table_args__ = (UniqueConstraint("name", "namespace_id"),)
+class GeoLayer(Base):
+    __tablename__ = "geo_layer"
+    __table_args__ = (UniqueConstraint("path", "namespace_id"),)
 
-    set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    loc_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("locality.loc_id"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    layer_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
     namespace_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("namespace.namespace_id"), nullable=False
     )
-    srid: Mapped[int | None] = mapped_column(Integer)
     description: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(String(2048))
     meta_id: Mapped[int] = mapped_column(
@@ -263,24 +259,52 @@ class GeoSet(Base):
     meta = relationship("ObjectMeta", lazy="joined")
 
 
-class Geography(Base):
-    __tablename__ = "geography"
+class GeoSet(Base):
+    __tablename__ = "geo_set"
+    __table_args__ = (
+        UniqueConstraint("path", "namespace_id"),
+        UniqueConstraint("loc_id", "layer_id"),
+    )
 
-    geo_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    geometry = mapped_column(Geometry, nullable=False)
+    set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    layer_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_layer.layer_id"), nullable=False
+    )
+    loc_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locality.loc_id"), nullable=False
+    )
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
+    )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta")
+    meta = relationship("ObjectMeta", lazy="joined")
+
+
+class GeoSetVersion(Base):
+    __tablename__ = "geo_set_version"
+
+    version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    diff = mapped_column(Text)
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+
+    meta = relationship("ObjectMeta", lazy="joined")
 
 
 class GeoMember(Base):
     __tablename__ = "geo_member"
 
-    geo_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_set.set_id"), primary_key=True
+    set_version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_set_version.version_id"), primary_key=True
     )
     node_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), primary_key=True
@@ -292,6 +316,45 @@ class GeoMember(Base):
     meta = relationship("ObjectMeta")
 
 
+class Geography(Base):
+    __tablename__ = "geography"
+
+    geo_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+
+    meta = relationship("ObjectMeta")
+
+
+class GeoVersion(Base):
+    __tablename__ = "geo_version"
+
+    version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    meta = relationship("ObjectMeta", lazy="joined")
+
+
+class GeoInstance(Base):
+    __tablename__ = "geo_instance"
+
+    geo_version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_version.version_id"), primary_key=True
+    )
+    geo_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geography.geo_id"), nullable=False
+    )
+    geometry = mapped_column(Geometry, nullable=False)
+
+
+# TODO: should these be versioned? tagged by algorithm?
 class GeoHierarchy(Base):
     __tablename__ = "geo_hierarchy"
     __table_args__ = (CheckConstraint("parent_id <> child_id"),)
@@ -411,86 +474,45 @@ class ColumnSetMember(Base):
     )
 
 
-class ColumnValueFloat(Base):
-    __tablename__ = "column_value_float"
+class ColumnValueVersion(Base):
+    __tablename__ = "column_value_version"
+    __table_args__ = (UniqueConstraint("col_id", "created_at"),)
 
-    node_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
+    version_id = mapped_column(Integer, primary_key=True)
+    col_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("column.col_id"), nullable=False
     )
-    attr_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    val: Mapped[float] = mapped_column(postgresql.DOUBLE_PRECISION, nullable=False)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
+    diff = mapped_column(Text)
 
     meta = relationship("ObjectMeta")
 
 
-class ColumnValueInt(Base):
-    __tablename__ = "column_value_int"
+class ColumnValue(Base):
+    __tablename__ = "column_value"
 
-    node_id: Mapped[int] = mapped_column(
+    col_version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("column_value_version.value_id"),
+        nullable=False,
+        primary_key=True,
+    )
+    geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
     )
-    attr_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
-    )
-    val: Mapped[int] = mapped_column(Integer, nullable=False)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta")
-
-
-class ColumnValueBool(Base):
-    __tablename__ = "column_value_bool"
-
-    node_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
-    )
-    attr_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
-    )
-    val: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    meta_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
-
-    meta = relationship("ObjectMeta")
-
-
-class ColumnValueStr(Base):
-    __tablename__ = "column_value_str"
-
-    node_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
-    )
-    attr_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
-    )
-    val: Mapped[str] = mapped_column(String(65535), nullable=False)
-    meta_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
-
-    meta = relationship("ObjectMeta")
-
-
-class ColumnValueJSON(Base):
-    __tablename__ = "column_value_json"
-
-    node_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
-    )
-    attr_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False, primary_key=True
-    )
-    val: Mapped[Any] = mapped_column(postgresql.JSONB, nullable=False)
-    meta_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
+    val_float: Mapped[float] = mapped_column(postgresql.DOUBLE_PRECISION)
+    val_int: Mapped[int] = mapped_column(Integer)
+    val_str: Mapped[str] = mapped_column(Text)
+    val_bool: Mapped[bool] = mapped_column(Boolean)
+    val_json: Mapped[Any] = mapped_column(postgresql.JSONB)
 
     meta = relationship("ObjectMeta")
