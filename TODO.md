@@ -18,3 +18,8 @@ Expose:
 [ ] ColumnValue/column data imports (with versioning)
 [ ] ViewTemplate
 [ ] View
+
+...then pivot to clients/admin. Later:
+[ ] User/group/role management
+[ ] ETL infrastructure (separate repo)
+[ ] Minimal admin panel, probably by hacking up [aminalaee/sqladmin](https://github.com/aminalaee/sqladmin)
