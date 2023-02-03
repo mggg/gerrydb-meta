@@ -15,6 +15,7 @@ from cherrydb_meta.models import Base, Namespace, ObjectMeta
 ModelType = TypeVar("ModelType", bound=Base)
 GetSchemaType = TypeVar("GetSchemaType", bound=BaseModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
+PatchSchemaType = TypeVar("PatchSchemaType", bound=BaseModel)
 
 
 def normalize_path(path: str) -> str:

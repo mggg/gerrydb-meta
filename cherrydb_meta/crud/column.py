@@ -12,7 +12,7 @@ from cherrydb_meta.exceptions import CreateValueError
 log = logging.getLogger()
 
 
-class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
+class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
     def create(
         self,
         db: Session,
@@ -20,12 +20,12 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
         obj_in: schemas.ColumnCreate,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-    ) -> models.Column:
+    ) -> models.DataColumn:
         """Creates a new column with a canonical reference."""
         with db.begin(nested=True):
             # Create a path to the column.
             canonical_path = normalize_path(obj_in.canonical_path)
-            canonical_ref = models.ColumnRef(
+            canonical_ref = models.DataColumnRef(
                 path=canonical_path,
                 meta_id=obj_meta.meta_id,
                 namespace_id=namespace.namespace_id,
@@ -46,7 +46,7 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
                 )
 
             # Create the column itself.
-            col = models.Column(
+            col = models.DataColumn(
                 canonical_ref_id=canonical_ref.ref_id,
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
@@ -73,9 +73,9 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
                 )
         return col
 
-    def get_by_ref(
+    def get(
         self, db: Session, *, path: str, namespace: models.Namespace
-    ) -> models.Column | None:
+    ) -> models.DataColumn | None:
         """Retrieves a column by reference path.
 
         Args:
@@ -85,10 +85,10 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
         normalized_path = normalize_path(path)
 
         ref = (
-            db.query(models.ColumnRef)
+            db.query(models.DataColumnRef)
             .filter(
-                (models.ColumnRef.path == normalized_path)
-                & (models.ColumnRef.namespace_id == namespace.namespace_id)
+                (models.DataColumnRef.path == normalized_path)
+                & (models.DataColumnRef.namespace_id == namespace.namespace_id)
             )
             .first()
         )
@@ -98,10 +98,10 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
         self,
         db: Session,
         *,
-        obj: models.Column,
+        obj: models.DataColumn,
         obj_meta: models.ObjectMeta,
         patch: schemas.ColumnPatch,
-    ) -> models.Column | None:
+    ) -> models.DataColumn | None:
         """Patches a column (adds new aliases)."""
         new_aliases = set(normalize_path(path) for path in patch.aliases) - set(
             ref.path for ref in obj.refs
@@ -119,12 +119,12 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
         *,
         db: Session,
         alias_paths: Collection[str],
-        col: models.Column,
+        col: models.DataColumn,
         obj_meta: models.ObjectMeta,
     ) -> None:
         """Adds aliases to a column."""
         for alias_path in alias_paths:
-            alias_ref = models.ColumnRef(
+            alias_ref = models.DataColumnRef(
                 path=normalize_path(alias_path),
                 col_id=col.col_id,
                 namespace_id=col.namespace_id,
@@ -147,4 +147,4 @@ class CRColumn(CRBase[models.Column, schemas.ColumnCreate]):
                 )
 
 
-column = CRColumn(models.Column)
+column = CRColumn(models.DataColumn)
