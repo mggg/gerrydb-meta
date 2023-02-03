@@ -10,7 +10,6 @@ api_router.include_router(locality.router, prefix="/localities", tags=["localiti
 api_router.include_router(namespace.router, prefix="/namespaces", tags=["namespaces"])
 api_router.include_router(obj_meta.router, prefix="/meta", tags=["meta"])
 
-
 api_router.include_router(
     NamespacedObjectApi(
         crud=crud.column,
@@ -34,4 +33,16 @@ api_router.include_router(
     ).router(),
     prefix="/column-sets",
     tags=["column-sets"],
+)
+
+api_router.include_router(
+    NamespacedObjectApi(
+        crud=crud.geo_layer,
+        get_schema=schemas.GeoLayer,
+        create_schema=schemas.GeoLayerCreate,
+        obj_name_singular="GeoLayer",
+        obj_name_plural="GeoLayers",
+    ).router(),
+    prefix="/layers",
+    tags=["layers"],
 )

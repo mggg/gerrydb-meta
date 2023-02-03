@@ -29,7 +29,7 @@ class CRColumnSet(CRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                 path=canonical_path,
                 description=obj_in.description,
                 namespace_id=namespace.namespace_id,
-                obj_meta=obj_meta.meta_id,
+                meta_id=obj_meta.meta_id,
             )
 
             try:
@@ -74,7 +74,7 @@ class CRColumnSet(CRBase[models.ColumnSet, schemas.ColumnSetCreate]):
 
         Args:
             path: Path to column set (namespace excluded).
-            namespace: Column set namespace.
+            namespace: Column set's namespace.
         """
         return (
             db.query(models.ColumnSet)

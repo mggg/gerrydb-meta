@@ -258,6 +258,7 @@ class GeoLayer(Base):
     )
 
     meta = relationship("ObjectMeta", lazy="joined")
+    namespace = relationship("Namespace", lazy="joined")
 
 
 class GeoSet(Base):
