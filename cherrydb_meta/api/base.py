@@ -15,37 +15,38 @@ from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 def _namespace_read_error_msg(obj_name: str) -> str:
     """Generates an error message for a failed read in a namespace."""
     return (
-         "Namespace not found, or you do not have sufficient permissions "
-        f"to read {obj_name.lower()} in this namespace." 
-    )    
-   
-    
+        "Namespace not found, or you do not have sufficient permissions "
+        f"to read {obj_name.lower()} in this namespace."
+    )
+
+
 def _namespace_write_error_msg(obj_name: str) -> str:
     """Generates an error message for a failed write in a namespace."""
     return (
-         "Namespace not found, or you do not have sufficient permissions "
-        f"to write {obj_name.lower()} in this namespace." 
+        "Namespace not found, or you do not have sufficient permissions "
+        f"to write {obj_name.lower()} in this namespace."
     )
-    
 
-def body_schema(obj_type: Type, obj_arg: str = 'obj_in') -> Callable:
+
+def body_schema(obj_type: Type, obj_arg: str = "obj_in") -> Callable:
     """Injects a schema type into the signature of a request handler.
-    
+
     FastAPI derives validation logic and API documentation from the type
     annotations of request handlers, so it does not suffice to use the `BaseModel`
-    class or similar as the type annotation for a request body (conventionally 
+    class or similar as the type annotation for a request body (conventionally
     the `obj_in` argument to a handler). Thus, we mutate a handler's signature
     in place to provide a more specific type annotation before registering it
     with an API router.
     """
+
     def decorator(func: Callable) -> Callable:
         signature = inspect.signature(func)
         params = dict(signature.parameters)
         params[obj_arg] = params[obj_arg].replace(annotation=obj_type)
         func.__signature__ = signature.replace(parameters=params.values())
         return func
+
     return decorator
-    
 
 
 @dataclass
@@ -76,7 +77,7 @@ class NamespacedObjectApi:
             if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
                 raise HTTPException(
                     status_code=HTTPStatus.NOT_FOUND,
-                    detail=_namespace_read_error_msg(self.obj_name_plural)
+                    detail=_namespace_read_error_msg(self.obj_name_plural),
                 )
 
             obj = self.crud.get(db=db, namespace=namespace_obj, path=path)
@@ -140,7 +141,6 @@ class NamespacedObjectApi:
             )
 
         return create_route
-    
 
     def _patch(self, router: APIRouter) -> Callable:
         @router.patch(
@@ -175,16 +175,15 @@ class NamespacedObjectApi:
                 )
             return self.crud.patch(db=db, obj=obj, obj_meta=obj_meta, patch=obj_in)
 
-        return patch_route    
-    
-    
+        return patch_route
+
     def router(self) -> APIRouter:
         """Generates a router with basic CR operations for the object."""
         router = APIRouter()
         for route_func in (self._get, self._all, self._create):
             route_func(router)
-            
+
         if self.patch_schema is not None and hasattr(self.crud, "patch"):
-            self._patch(router) 
-            
+            self._patch(router)
+
         return router
