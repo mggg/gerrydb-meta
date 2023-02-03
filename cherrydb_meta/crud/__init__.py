@@ -11,3 +11,4 @@ from cherrydb_meta.crud.locality import locality
 from cherrydb_meta.crud.namespace import namespace
 from cherrydb_meta.crud.obj_meta import obj_meta
 from cherrydb_meta.crud.column import column
+from cherrydb_meta.crud.column_set import column_set

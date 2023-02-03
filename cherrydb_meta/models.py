@@ -207,6 +207,7 @@ class Locality(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    default_proj: Mapped[str | None] = mapped_column(Text)
 
     parent = relationship("Locality", remote_side=[loc_id])
     meta = relationship("ObjectMeta", lazy="joined")
@@ -288,7 +289,9 @@ class GeoSetVersion(Base):
     __tablename__ = "geo_set_version"
 
     version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    set_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_set.set_id"), primary_key=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -328,10 +331,20 @@ class Geography(Base):
     meta = relationship("ObjectMeta")
 
 
-class GeoVersion(Base):
-    __tablename__ = "geo_version"
+class GeoImport(Base):
+    __tablename__ = "geo_import"
 
-    version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    import_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        index=True,
+        unique=True,
+        nullable=False,
+        default=uuid.uuid4,
+    )
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
+    )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
@@ -340,13 +353,14 @@ class GeoVersion(Base):
     )
 
     meta = relationship("ObjectMeta", lazy="joined")
+    namespace = relationship("Namespace", lazy="joined")
 
 
 class GeoInstance(Base):
     __tablename__ = "geo_instance"
 
-    geo_version_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_version.version_id"), primary_key=True
+    import_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_import.import_id"), primary_key=True
     )
     geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), nullable=False
@@ -387,6 +401,7 @@ class DataColumn(Base):
         nullable=False,
     )
     description: Mapped[str | None] = mapped_column(Text)
+    source_url: Mapped[str | None] = mapped_column(String(2048))
     type: Mapped[ColumnType] = mapped_column(SqlEnum(ColumnType), nullable=False)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
@@ -448,10 +463,10 @@ class ColumnRelationMember(Base):
 
 class ColumnSet(Base):
     __tablename__ = "column_set"
-    __table_args__ = (UniqueConstraint("name", "namespace_id"),)
+    __table_args__ = (UniqueConstraint("path", "namespace_id"),)
 
     set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
     namespace_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("namespace.namespace_id"), nullable=False
     )
@@ -461,6 +476,7 @@ class ColumnSet(Base):
     )
 
     meta = relationship("ObjectMeta", lazy="joined")
+    columns = relationship("ColumnSetMember", lazy="joined")
 
 
 class ColumnSetMember(Base):
@@ -472,6 +488,7 @@ class ColumnSetMember(Base):
     col_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("column.col_id"), primary_key=True
     )
+    set = relationship("ColumnSet", back_populates="columns")
 
 
 class ColumnValueVersion(Base):

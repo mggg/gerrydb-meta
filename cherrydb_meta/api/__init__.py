@@ -23,3 +23,15 @@ api_router.include_router(
     prefix="/columns",
     tags=["columns"],
 )
+
+api_router.include_router(
+    NamespacedObjectApi(
+        crud=crud.column_set,
+        get_schema=schemas.ColumnSet,
+        create_schema=schemas.ColumnSetCreate,
+        obj_name_singular="ColumnSet",
+        obj_name_plural="ColumnSets",
+    ).router(),
+    prefix="/column-sets",
+    tags=["column-sets"],
+)

@@ -13,6 +13,8 @@ log = logging.getLogger()
 
 
 class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
+    """CRUD operations and transformations for column metadata."""
+
     def create(
         self,
         db: Session,
@@ -51,6 +53,7 @@ class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
                 description=obj_in.description,
+                source_url=obj_in.source_url,
             )
             db.add(col)
             try:
@@ -93,6 +96,39 @@ class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
             .first()
         )
         return None if ref is None else ref.col
+
+    def get_global(
+        self, db: Session, *, path: str, namespace: models.Namespace
+    ) -> models.DataColumn | None:
+        """Retrieves a column by reference path, potentially within a different
+        namespace than `namespace`.
+
+        Only public namespaces can be addressed with a global path.
+
+        Args:
+            path: Path to column, either global-style (prefixed by `/`)
+                or a local-style path.
+            namespace: Default column namespace.
+        """
+        normalized_path = normalize_path(path)
+        if normalized_path.startswith("/"):
+            namespace_path = normalized_path[1]
+            column_path = "/".join(normalized_path[2:])
+            alt_namespace = (
+                db.query(models.Namespace)
+                .filter(
+                    models.Namespace.path == namespace_path,
+                    models.Namespace.public.is_(True),
+                )
+                .first()
+            )
+            return (
+                None
+                if alt_namespace is None
+                else self.get(db, path=column_path, namespace=alt_namespace)
+            )
+
+        return self.get(db, path=path, namespace=namespace)
 
     def patch(
         self,
