@@ -184,10 +184,6 @@ class GeoImportBase(BaseModel):
     """Base model for a geographic unit import."""
 
 
-class GeoImportCreate(GeoImportBase):
-    """Geographic unit import metadata received on creation."""
-
-
 class GeoImport(GeoImportBase):
     """Geographic unit import metadata returned by the database."""
 

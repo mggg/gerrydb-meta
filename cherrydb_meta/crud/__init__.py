@@ -12,4 +12,5 @@ from cherrydb_meta.crud.namespace import namespace
 from cherrydb_meta.crud.obj_meta import obj_meta
 from cherrydb_meta.crud.column import column
 from cherrydb_meta.crud.column_set import column_set
+from cherrydb_meta.crud.geo_import import geo_import
 from cherrydb_meta.crud.geo_layer import geo_layer

@@ -12,7 +12,7 @@ from cherrydb_meta.scopes import ScopeManager
 from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 
 
-def _namespace_read_error_msg(obj_name: str) -> str:
+def namespace_read_error_msg(obj_name: str) -> str:
     """Generates an error message for a failed read in a namespace."""
     return (
         "Namespace not found, or you do not have sufficient permissions "
@@ -20,7 +20,7 @@ def _namespace_read_error_msg(obj_name: str) -> str:
     )
 
 
-def _namespace_write_error_msg(obj_name: str) -> str:
+def namespace_write_error_msg(obj_name: str) -> str:
     """Generates an error message for a failed write in a namespace."""
     return (
         "Namespace not found, or you do not have sufficient permissions "
@@ -55,10 +55,39 @@ class NamespacedObjectApi:
 
     crud: crud.NamespacedCRBase
     get_schema: crud.GetSchemaType
-    create_schema: crud.CreateSchemaType
+    create_schema: crud.CreateSchemaType | None
     obj_name_singular: str
     obj_name_plural: str
     patch_schema: crud.PatchSchemaType | None = None
+    
+    def _namespace_with_read(self, *, db: Session, scopes: ScopeManager, path: str) -> models.Namespace:
+        """Loads a namespace with read access or raises an HTTP error."""
+        namespace_obj = crud.namespace.get(db=db, path=path)
+        if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=namespace_read_error_msg(self.obj_name_plural),
+            )
+        return namespace_obj
+    
+    def _namespace_with_write(self, *, db: Session, scopes: ScopeManager, path: str) -> models.Namespace:
+        """Loads a namespace with write access or raises an HTTP error."""
+        namespace_obj = crud.namespace.get(db=db, path=path)
+        if namespace_obj is None or not scopes.can_write_in_namespace(namespace_obj):
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=namespace_write_error_msg(self.obj_name_plural),
+            )
+        return namespace_obj
+    
+    def _obj(self, *, db: Session, namespace: models.Namespace, path: str) -> models.DeclarativeBase:
+        """Loads a generic namespaced object or raises an HTTP error."""
+        obj = self.crud.get(db=db, namespace=namespace, path=path)
+        if obj is None:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=f"{self.obj_name_singular} not found in namespace.",
+            )
 
     def _get(self, router: APIRouter) -> Callable:
         @router.get(
@@ -73,21 +102,9 @@ class NamespacedObjectApi:
             db: Session = Depends(get_db),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-            namespace_obj = crud.namespace.get(db=db, path=namespace)
-            if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=_namespace_read_error_msg(self.obj_name_plural),
-                )
-
-            obj = self.crud.get(db=db, namespace=namespace_obj, path=path)
-            if obj is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=f"{self.obj_name_singulars} not found in namespace.",
-                )
-            return obj
-
+            namespace_obj = self._namespace_with_read(db=db, scopes=scopes, path=namespace)
+            return self._obj(db=db, namespace=namespace_obj, path=path)
+        
         return get_route
 
     def _all(self, router: APIRouter) -> Callable:
@@ -102,12 +119,7 @@ class NamespacedObjectApi:
             db: Session = Depends(get_db),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-            namespace_obj = crud.namespace.get(db=db, path=namespace)
-            if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=_namespace_write_error_msg(self.obj_name_plural),
-                )
+            namespace_obj = self._namespace_with_read(db=db, scopes=scopes, path=namespace)
             return self.crud.all(db=db, namespace=namespace_obj)
 
         return all_route
@@ -128,14 +140,7 @@ class NamespacedObjectApi:
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-            namespace_obj = crud.namespace.get(db=db, path=namespace)
-            if namespace_obj is None or not scopes.can_write_in_namespace(
-                namespace_obj
-            ):
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=_namespace_write_error_msg(self.obj_name_plural),
-                )
+            namespace_obj = self._namespace_with_write(db=db, scopes=scopes, path=namespace)
             return self.crud.create(
                 db=db, obj_in=obj_in, namespace=namespace_obj, obj_meta=obj_meta
             )
@@ -158,21 +163,8 @@ class NamespacedObjectApi:
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-            namespace_obj = crud.namespace.get(db=db, path=namespace)
-            if namespace_obj is None or not scopes.can_write_in_namespace(
-                namespace_obj
-            ):
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=_namespace_write_error_msg(self.obj_name_plural),
-                )
-
-            obj = self.crud.get(db=db, namespace=namespace_obj, path=path)
-            if obj is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=f"{self.obj_name_singular} not found in namespace.",
-                )
+            namespace_obj = self._namespace_with_write(db=db, scopes=scopes, path=namespace)
+            obj = self._obj(db=db, namespace=namespace_obj, path=path)
             return self.crud.patch(db=db, obj=obj, obj_meta=obj_meta, patch=obj_in)
 
         return patch_route
