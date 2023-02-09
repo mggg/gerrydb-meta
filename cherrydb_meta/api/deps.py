@@ -93,6 +93,41 @@ def get_scopes(
     return ScopeManager(user=user)
 
 
+def get_geo_import(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_user),
+    scopes: ScopeManager = Depends(get_scopes),
+    x_cherry_geo_import_id: str | None = Header(default=None),
+) -> models.ObjectMeta:
+    """Retrieves the geographic import metadata referenced in a request header."""
+    if x_cherry_geo_import_id is None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="GeoImport ID required."
+        )
+
+    try:
+        meta_uuid = UUID(x_cherry_geo_import_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="GeoImport ID is not a valid UUID hex string.",
+        )
+
+    geo_import = crud.geo_import.get(db=db, uuid=meta_uuid)
+    if geo_import is None or not scopes.can_read_in_namespace(geo_import.namespace):
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail="Unknown GeoImport ID.",
+        )
+
+    if geo_import.created_by != user.user_id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="Cannot use GeoImport created by another user.",
+        )
+    return geo_import
+
+
 def no_perms(msg: str) -> str:
     """Generates a permissions-related error string."""
     return f"You do not have sufficient permissions to {msg}."

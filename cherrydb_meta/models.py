@@ -325,6 +325,9 @@ class Geography(Base):
 
     geo_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     path: Mapped[str] = mapped_column(Text, nullable=False)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False
+    )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
