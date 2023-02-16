@@ -1,33 +1,35 @@
 """CRUD operations and transformations for geographic improts."""
-import uuid
 import logging
+import uuid
+from typing import Tuple
 
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.crud.base import CRBase
+from cherrydb_meta.crud.base import NamespacedCRBase
 
 log = logging.getLogger()
 
 
-class CRGeoImport(CRBase[models.GeoImport, None]):
+class CRGeoImport(NamespacedCRBase[models.GeoImport, None]):
     def create(
         self,
         db: Session,
         *,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-    ) -> models.GeoImport:
+    ) -> Tuple[models.GeoImport, uuid.UUID]:
         """Creates a new geographic import."""
         with db.begin(nested=True):
             geo_import = models.GeoImport(
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
             )
+            etag = self._update_etag(db, namespace)
 
         db.flush()
         db.refresh(geo_import)
-        return geo_import
+        return geo_import, etag
 
     def get(
         self, db: Session, *, uuid: uuid.UUID, namespace: models.Namespace

@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
+from cherrydb_meta.api.deps import can_write_meta, get_db, get_scopes, get_user
 from cherrydb_meta.scopes import ScopeManager
-from cherrydb_meta.api.deps import can_write_meta, get_db, get_user, get_scopes
 
 router = APIRouter()
 

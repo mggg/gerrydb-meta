@@ -1,5 +1,6 @@
 """Utilities for granting API permissions to test users."""
 from sqlalchemy.orm import Session
+
 from cherrydb_meta import enums, models
 
 

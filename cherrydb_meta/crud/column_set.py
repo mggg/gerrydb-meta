@@ -1,18 +1,20 @@
 """CRUD operations and transformations for column sets."""
 import logging
+import uuid
+from typing import Tuple
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.crud.base import CRBase, normalize_path
+from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from cherrydb_meta.crud.column import column as crud_column
 from cherrydb_meta.exceptions import CreateValueError
 
 log = logging.getLogger()
 
 
-class CRColumnSet(CRBase[models.ColumnSet, schemas.ColumnSetCreate]):
+class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
     def create(
         self,
         db: Session,
@@ -20,7 +22,7 @@ class CRColumnSet(CRBase[models.ColumnSet, schemas.ColumnSetCreate]):
         obj_in: schemas.ColumnSetCreate,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-    ) -> models.ColumnSet:
+    ) -> Tuple[models.ColumnSet, uuid.UUID]:
         """Creates a new column set."""
         with db.begin(nested=True):
             # Create a path to the column.
@@ -64,8 +66,10 @@ class CRColumnSet(CRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                     )
                 )
 
+                etag = self._update_etag(db, namespace)
+
         db.refresh(column_set)
-        return column_set
+        return column_set, etag
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace

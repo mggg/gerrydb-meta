@@ -1,11 +1,13 @@
 """Tests for CherryDB REST API namespace endpoints."""
-import pytest
 from http import HTTPStatus
 
+import pytest
 from sqlalchemy.orm import Session
+
 from cherrydb_meta import crud, models, schemas
-from cherrydb_meta.enums import ScopeType, NamespaceGroup
+from cherrydb_meta.enums import NamespaceGroup, ScopeType
 from cherrydb_meta.main import API_PREFIX
+
 from .scopes import grant_scope
 
 NAMESPACES_ROOT = f"{API_PREFIX}/namespaces"

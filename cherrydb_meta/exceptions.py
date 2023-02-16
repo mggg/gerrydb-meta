@@ -5,7 +5,7 @@ class CreateValueError(ValueError):
     """`ValueError` raised on failed object creation."""
 
 
-class CreateConflictError(ValueError):
+class BulkCreateError(ValueError):
     """`ValueError` raised when object(s) already exist."""
 
     paths: list[str]

@@ -13,7 +13,7 @@ EMAIL = "pjrule@me.com"
 if __name__ == "__main__":
     engine = create_engine(os.getenv("CHERRY_DATABASE_URI"))
     with engine.connect() as conn:
-        conn.execute(text("DROP SCHEMA cherrydb CASCADE"))
+        conn.execute(text("DROP SCHEMA IF EXISTS cherrydb CASCADE"))
         conn.execute(text("CREATE SCHEMA cherrydb"))
         conn.commit()
     Base.metadata.create_all(engine)

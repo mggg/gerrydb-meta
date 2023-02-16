@@ -1,10 +1,12 @@
 """Tests for CherryDB REST API locality endpoints."""
-import pytest
 from http import HTTPStatus
+
+import pytest
 
 from cherrydb_meta import crud, schemas
 from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.main import API_PREFIX
+
 from .scopes import grant_scope
 
 LOCALITIES_ROOT = f"{API_PREFIX}/localities"

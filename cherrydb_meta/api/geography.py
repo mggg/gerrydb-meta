@@ -1,13 +1,40 @@
 """Endpoints for base geographic data (points and polygons)."""
 from http import HTTPStatus
-from typing import Callable
+from typing import Any, Callable
 
-from fastapi import APIRouter, Depends, HTTPException
+import msgpack
+import shapely.wkb
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from cherrydb_meta import crud, schemas, models
+
+from cherrydb_meta import crud, models, schemas
+from cherrydb_meta.api.base import MsgpackRoute, NamespacedObjectApi
+from cherrydb_meta.api.deps import (
+    get_db,
+    get_geo_import,
+    get_obj_meta,
+    get_scopes,
+    msgpack_body,
+)
 from cherrydb_meta.scopes import ScopeManager
-from cherrydb_meta.api.base import NamespacedObjectApi
-from cherrydb_meta.api.deps import get_db, get_geo_import, get_obj_meta, get_scopes
+
+
+def parse_geometries(
+    raw_geos: list[schemas.GeographyCreateRaw],
+) -> list[schemas.GeographyCreate]:
+    """Parses geometries as WKB or raises a 400 Bad Request error."""
+    try:
+        return [
+            schemas.GeographyCreate(
+                path=raw_geo.path, geography=shapely.wkb.loads(raw_geo.geography)
+            )
+            for raw_geo in raw_geos
+        ]
+    except (shapely.wkb.WKBReadingError, UnicodeDecodeError):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            description="At least one geography is not in WKB format.",
+        )
 
 
 class GeographyApi(NamespacedObjectApi):
@@ -21,7 +48,7 @@ class GeographyApi(NamespacedObjectApi):
         def create_route(
             *,
             namespace: str,
-            obj_in: schemas.Geography | list[schemas.Geography],
+            obj_in: schemas.GeographyCreateRaw | list[schemas.GeographyCreateRaw],
             db: Session = Depends(get_db),
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             geo_import: models.GeoImport = Depends(get_geo_import),
@@ -30,8 +57,27 @@ class GeographyApi(NamespacedObjectApi):
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
-            geographies = [obj_in] if isinstance(obj_in, schemas.Geography) else obj_in
-            self.crud.create_bulk()
+            raw_geographies = (
+                [obj_in] if isinstance(obj_in, schemas.GeographyCreateRaw) else obj_in
+            )
+            self.crud.create_bulk(
+                db=db,
+                objs_in=parse_geometries(raw_geographies),
+                obj_meta=obj_meta,
+                geo_import=geo_import,
+                namespace=namespace_obj,
+            )
+
+            return create_route
+
+    def router(self) -> APIRouter:
+        """Generates a router with basic CR operations for geographies."""
+        router = APIRouter()
+        msgpack_router = APIRouter()
+        msgpack_router.api_route = MsgpackRoute
+        self._create(msgpack_router)
+        self._get(router)
+        router.include_router(msgpack_router)
 
 
 router = GeographyApi(

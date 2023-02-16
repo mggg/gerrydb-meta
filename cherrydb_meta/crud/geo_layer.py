@@ -1,17 +1,19 @@
 """CRUD operations and transformations for geographic layers."""
 import logging
+import uuid
+from typing import Tuple
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.crud.base import CRBase, normalize_path
+from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from cherrydb_meta.exceptions import CreateValueError
 
 log = logging.getLogger()
 
 
-class CRGeoLayer(CRBase[models.GeoLayer, schemas.GeoLayerCreate]):
+class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
     def create(
         self,
         db: Session,
@@ -19,12 +21,12 @@ class CRGeoLayer(CRBase[models.GeoLayer, schemas.GeoLayerCreate]):
         obj_in: schemas.GeoLayerCreate,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-    ) -> models.GeoLayer:
+    ) -> Tuple[models.GeoLayer, uuid.UUID]:
         """Creates a new geographic layer."""
         with db.begin(nested=True):
             # Create a path to the column.
             canonical_path = normalize_path(obj_in.canonical_path)
-            column_set = models.GeoLayer(
+            geo_layer = models.GeoLayer(
                 path=canonical_path,
                 description=obj_in.description,
                 namespace_id=namespace.namespace_id,
@@ -42,9 +44,10 @@ class CRGeoLayer(CRBase[models.GeoLayer, schemas.GeoLayerCreate]):
                     f"Failed to create geographic layer '{canonical_path}'."
                     "(The path may already exist in the namespace.)"
                 )
+            etag = self._update_etag(db, namespace)
 
-        db.refresh(column_set)
-        return column_set
+        db.refresh(geo_layer)
+        return geo_layer, etag
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace

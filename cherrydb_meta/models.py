@@ -2,6 +2,7 @@
 import uuid
 from datetime import datetime
 from typing import Any
+
 from geoalchemy2 import Geometry
 from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime
 from sqlalchemy import Enum as SqlEnum
@@ -17,7 +18,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from cherrydb_meta.enums import ColumnType, ScopeType, NamespaceGroup
+
+from cherrydb_meta.enums import ColumnType, NamespaceGroup, ScopeType
 
 metadata_obj = MetaData(schema="cherrydb")
 
@@ -263,10 +265,7 @@ class GeoLayer(Base):
 
 class GeoSet(Base):
     __tablename__ = "geo_set"
-    __table_args__ = (
-        UniqueConstraint("path", "namespace_id"),
-        UniqueConstraint("loc_id", "layer_id"),
-    )
+    __table_args__ = (UniqueConstraint("loc_id", "layer_id"),)
 
     set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     layer_id: Mapped[int] = mapped_column(
@@ -274,10 +273,6 @@ class GeoSet(Base):
     )
     loc_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("locality.loc_id"), nullable=False
-    )
-    path: Mapped[str] = mapped_column(Text, nullable=False)
-    namespace_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("namespace.namespace_id"), nullable=False
     )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
@@ -291,11 +286,12 @@ class GeoSetVersion(Base):
 
     version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     set_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_set.set_id"), primary_key=True
+        Integer, ForeignKey("geo_set.set_id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
+    valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     diff = mapped_column(Text)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
@@ -304,8 +300,8 @@ class GeoSetVersion(Base):
     meta = relationship("ObjectMeta", lazy="joined")
 
 
-class GeoMember(Base):
-    __tablename__ = "geo_member"
+class GeoSetMember(Base):
+    __tablename__ = "geo_set_member"
 
     set_version_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geo_set_version.version_id"), primary_key=True
@@ -352,9 +348,10 @@ class GeoImport(Base):
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
+    valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     meta = relationship("ObjectMeta", lazy="joined")
     namespace = relationship("Namespace", lazy="joined")
@@ -497,15 +494,16 @@ class ColumnSetMember(Base):
 
 class ColumnValueVersion(Base):
     __tablename__ = "column_value_version"
-    __table_args__ = (UniqueConstraint("col_id", "created_at"),)
+    __table_args__ = (UniqueConstraint("col_id", "valid_from"),)
 
     version_id = mapped_column(Integer, primary_key=True)
     col_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("column.col_id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
+    valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
@@ -519,7 +517,7 @@ class ColumnValue(Base):
 
     col_version_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("column_value_version.value_id"),
+        ForeignKey("column_value_version.version_id"),
         nullable=False,
         primary_key=True,
     )
@@ -537,3 +535,18 @@ class ColumnValue(Base):
     val_json: Mapped[Any] = mapped_column(postgresql.JSONB)
 
     meta = relationship("ObjectMeta")
+
+
+class ETag(Base):
+    __tablename__ = "etag"
+    __table_args__ = (UniqueConstraint("namespace_id", "table"),)
+
+    etag_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    namespace_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id")
+    )
+    table: Mapped[str] = mapped_column(Text, nullable=False)
+    etag: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        nullable=False,
+    )

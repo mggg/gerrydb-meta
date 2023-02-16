@@ -7,8 +7,9 @@ from fastapi.testclient import TestClient
 from cherrydb_meta import models
 from cherrydb_meta.admin import CherryAdmin
 from cherrydb_meta.api.deps import get_db
+from cherrydb_meta.enums import NamespaceGroup, ScopeType
 from cherrydb_meta.main import app
-from cherrydb_meta.enums import ScopeType, NamespaceGroup
+
 from .scopes import grant_scope
 
 

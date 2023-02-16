@@ -1,15 +1,24 @@
 """Generic CR(UD) views for namespaced objects."""
 import inspect
 from dataclasses import dataclass
-from pydantic import BaseModel
 from http import HTTPStatus
 from typing import Callable, Type
 
-from fastapi import APIRouter, Depends, HTTPException
+import msgpack
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi.routing import APIRoute
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
 from cherrydb_meta import crud, models
+from cherrydb_meta.api.deps import (
+    add_etag,
+    check_namespaced_etag,
+    get_db,
+    get_obj_meta,
+    get_scopes,
+)
 from cherrydb_meta.scopes import ScopeManager
-from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 
 
 def namespace_read_error_msg(obj_name: str) -> str:
@@ -47,6 +56,46 @@ def body_schema(obj_type: Type, obj_arg: str = "obj_in") -> Callable:
         return func
 
     return decorator
+
+
+# see https://fastapi.tiangolo.com/advanced/custom-request-and-route/
+class MsgpackRequest(Request):
+    """A request with a MessagePack-encoded body."""
+
+    async def body(self) -> bytes:
+        if not hasattr(self, "_body"):
+            body = await super().body()
+            if body:
+                body = msgpack.unpackb(body)
+            self._body = body
+        return self._body
+
+
+class MsgpackRoute(APIRoute):
+    """A route where requests must have a MessagePack-encoded body."""
+
+    def get_route_handler(self) -> Callable:
+        original_route_handler = super().get_route_handler()
+
+        async def custom_route_handler(request: Request) -> Response:
+            if request.headers.get("content-type") not in (
+                "application/msgpack",
+                "application/x-msgpack",
+            ):
+                raise HTTPException(
+                    status_code=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    detail="Only MessagePack requests are supported by this endpoint.",
+                )
+
+            try:
+                return await original_route_handler(request)
+            except msgpack.UnpackException:
+                raise HTTPException(
+                    status_code=HTTPStatus.BAD_REQUEST,
+                    detail="Request body is not a valid MessagePack object.",
+                )
+
+        return custom_route_handler
 
 
 @dataclass
@@ -95,6 +144,24 @@ class NamespacedObjectApi:
                 detail=f"{self.obj_name_singular} not found in namespace.",
             )
 
+    def _check_etag(
+        self, *, db: Session, namespace: models.Namespace, header: str | None
+    ) -> None:
+        """Processes an `If-None-Match` header.
+
+        Raises 304 Not Modified if the namespaced collection's current ETag
+        matches the ETag in `header`. Otherwise, does nothing.
+        """
+        check_namespaced_etag(
+            db=db, crud_obj=self.crud, namespace=namespace, header=header
+        )
+
+    def _add_etag(
+        self, *, response: Response, db: Session, namespace: models.Namespace
+    ) -> None:
+        """Adds an `ETag` header to a response."""
+        add_etag(response, self.crud.etag(db, namespace))
+
     def _get(self, router: APIRouter) -> Callable:
         @router.get(
             "/{namespace}/{path:path}",
@@ -103,15 +170,21 @@ class NamespacedObjectApi:
         )
         def get_route(
             *,
+            response: Response,
             namespace: str,
             path: str,
             db: Session = Depends(get_db),
             scopes: ScopeManager = Depends(get_scopes),
+            if_none_match: str | None = Header(default=None),
         ):
             namespace_obj = self._namespace_with_read(
                 db=db, scopes=scopes, path=namespace
             )
-            return self._obj(db=db, namespace=namespace_obj, path=path)
+            self._check_etag(db=db, namespace=namespace_obj, header=if_none_match)
+            etag = self.crud.etag(db, namespace)
+            obj = self._obj(db=db, namespace=namespace_obj, path=path)
+            add_etag(response, etag)
+            return obj
 
         return get_route
 
@@ -123,14 +196,19 @@ class NamespacedObjectApi:
         )
         def all_route(
             *,
+            response: Response,
             namespace: str,
             db: Session = Depends(get_db),
             scopes: ScopeManager = Depends(get_scopes),
+            if_none_match: str | None = Header(default=None),
         ):
             namespace_obj = self._namespace_with_read(
                 db=db, scopes=scopes, path=namespace
             )
-            return self.crud.all(db=db, namespace=namespace_obj)
+            self._check_etag(db=db, namespace=namespace_obj, header=if_none_match)
+            add_etag(response, self.crud.etag(db, namespace))
+            objs = self.crud.all(db=db, namespace=namespace_obj)
+            return objs
 
         return all_route
 
@@ -144,6 +222,7 @@ class NamespacedObjectApi:
         @body_schema(self.create_schema)
         def create_route(
             *,
+            response: Response,
             namespace: str,
             obj_in: BaseModel,
             db: Session = Depends(get_db),
@@ -153,9 +232,11 @@ class NamespacedObjectApi:
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
-            return self.crud.create(
+            obj, etag = self.crud.create(
                 db=db, obj_in=obj_in, namespace=namespace_obj, obj_meta=obj_meta
             )
+            add_etag(response, etag)
+            return obj
 
         return create_route
 
@@ -168,6 +249,7 @@ class NamespacedObjectApi:
         @body_schema(self.patch_schema)
         def patch_route(
             *,
+            response: Response,
             namespace: str,
             path: str,
             obj_in: BaseModel,
@@ -179,7 +261,11 @@ class NamespacedObjectApi:
                 db=db, scopes=scopes, path=namespace
             )
             obj = self._obj(db=db, namespace=namespace_obj, path=path)
-            return self.crud.patch(db=db, obj=obj, obj_meta=obj_meta, patch=obj_in)
+            patched_obj, etag = self.crud.patch(
+                db=db, obj=obj, obj_meta=obj_meta, patch=obj_in
+            )
+            add_etag(response, etag)
+            return patched_obj
 
         return patch_route
 

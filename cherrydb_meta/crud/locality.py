@@ -1,6 +1,7 @@
 """CRUD operations and transformations for location metadata."""
 import logging
-from typing import Collection
+import uuid
+from typing import Collection, Tuple
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
@@ -19,7 +20,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         *,
         obj_in: schemas.LocalityCreate,
         obj_meta: models.ObjectMeta,
-    ) -> models.Locality:
+    ) -> Tuple[models.Locality, uuid.UUID]:
         """Creates a new location with a canonical reference."""
         with db.begin(nested=True):
             # Look up the reference to a possible parent location.
@@ -85,7 +86,9 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
                     db=db, alias_paths=obj_in.aliases, loc=loc, obj_meta=obj_meta
                 )
 
-        return loc
+            etag = self._update_etag(db)
+
+        return loc, etag
 
     def get_by_ref(self, db: Session, *, path: str) -> models.Locality | None:
         """Retrieves a location by reference path."""
@@ -103,7 +106,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         obj: models.Locality,
         obj_meta: models.ObjectMeta,
         patch: schemas.LocalityPatch,
-    ) -> models.Locality | None:
+    ) -> Tuple[models.Locality, uuid.UUID]:
         """Patches a location (adds new aliases)."""
         new_aliases = set(normalize_path(path) for path in patch.aliases) - set(
             ref.path for ref in obj.refs
@@ -111,10 +114,11 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         if not new_aliases:
             return obj
 
+        etag = self._update_etag(db)
         db.flush()
         self._add_aliases(db=db, alias_paths=new_aliases, loc=obj, obj_meta=obj_meta)
         db.refresh(obj)
-        return obj
+        return obj, etag
 
     def _add_aliases(
         self,

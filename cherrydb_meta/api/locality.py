@@ -1,16 +1,18 @@
 """Endpoints for locality metadata."""
 from http import HTTPStatus
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.api.deps import (
-    get_db,
-    get_obj_meta,
+    add_etag,
     can_read_localities,
     can_write_localities,
+    check_etag,
+    get_db,
+    get_obj_meta,
 )
 
 router = APIRouter()
@@ -23,9 +25,14 @@ router = APIRouter()
 )
 def read_localities(
     *,
+    response: Response,
     db: Session = Depends(get_db),
+    if_none_match: str | None = Header(default=None),
 ) -> list[models.Locality]:
-    return crud.locality.all(db=db)
+    check_etag(db=db, crud_obj=crud.locality, header=if_none_match)
+    add_etag(response, crud.locality.etag(db=db))
+    objs = crud.locality.all(db=db)
+    return objs
 
 
 @router.get(
@@ -37,13 +44,18 @@ def read_locality(
     *,
     path: str,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
+    if_none_match: str | None = Header(default=None),
 ) -> models.Locality:
+    etag = crud.locality.etag(db=db)
     loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="No locality found."
         )
+
+    check_etag(db=db, crud_obj=crud.locality, header=if_none_match)
 
     # Redirect to the canonical resource if an alias is used.
     canonical_path = loc.canonical_ref.path
@@ -52,6 +64,8 @@ def read_locality(
             url=str(request.url).replace(path, canonical_path),
             status_code=HTTPStatus.PERMANENT_REDIRECT,
         )
+
+    add_etag(response, etag)
     return loc
 
 
@@ -60,8 +74,9 @@ def read_locality(
     response_model=schemas.Locality,
     dependencies=[Depends(can_write_localities)],
 )
-def patch_locality_aliases(
+def patch_locality(
     *,
+    response: Response,
     path: str,
     loc_patch: schemas.LocalityPatch,
     db: Session = Depends(get_db),
@@ -72,7 +87,11 @@ def patch_locality_aliases(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="No locality found."
         )
-    return crud.locality.patch(db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch)
+    patched, etag = crud.locality.patch(
+        db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch
+    )
+    add_etag(response, etag)
+    return patched
 
 
 @router.post(
@@ -83,8 +102,11 @@ def patch_locality_aliases(
 )
 def create_locality(
     *,
+    response: Response,
     loc_in: schemas.LocalityCreate,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
 ) -> models.Locality:
-    return crud.locality.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
+    loc, etag = crud.locality.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
+    add_etag(response, etag)
+    return loc

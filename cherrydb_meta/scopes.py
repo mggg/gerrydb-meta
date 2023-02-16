@@ -1,7 +1,8 @@
 """Scopes (permissions) and role management."""
 from dataclasses import dataclass
-from cherrydb_meta.enums import ScopeType, NamespaceGroup
-from cherrydb_meta.models import User, Namespace
+
+from cherrydb_meta.enums import NamespaceGroup, ScopeType
+from cherrydb_meta.models import Namespace, User
 
 
 @dataclass

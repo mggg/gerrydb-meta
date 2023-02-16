@@ -2,10 +2,10 @@
 import re
 from hashlib import sha512
 from http import HTTPStatus
-from typing import Generator
+from typing import Any, Generator
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
@@ -151,3 +151,36 @@ can_write_meta = global_scope_check(ScopeType.META_WRITE, "write metadata")
 can_create_namespace = global_scope_check(
     ScopeType.NAMESPACE_CREATE, "create namespaces"
 )
+
+
+def check_etag(db: Session, crud_obj: crud.CRBase, header: str) -> None:
+    """Processes an `If-None-Match` header.
+
+    Raises 304 Not Modified if the collection's current ETag
+    matches the ETag in `header`. Otherwise, does nothing.
+    """
+    etag = crud_obj.etag(db=db)
+    if etag is not None and header == '"{etag}"':
+        raise HTTPException(status_code=HTTPStatus.NOT_MODIFIED)
+
+
+def check_namespaced_etag(
+    db: Session,
+    crud_obj: crud.NamespacedCRBase,
+    namespace: models.Namespace,
+    header: str,
+):
+    """Processes an `If-None-Match` header.
+
+    Raises 304 Not Modified if the namespaced collection's current ETag
+    matches the ETag in `header`. Otherwise, does nothing.
+    """
+    etag = crud_obj.etag(db=db, namespace=namespace)
+    if etag is not None and header == '"{etag}"':
+        raise HTTPException(status_code=HTTPStatus.NOT_MODIFIED)
+
+
+def add_etag(response: Response, etag: UUID | None) -> None:
+    """Adds an `ETag` header to a response from a UUID."""
+    if etag is not None:
+        response.headers["ETag"] = f'"{etag}"'

@@ -1,5 +1,6 @@
 """CRUD operations and transformations for namespace metadata."""
 import logging
+
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
@@ -35,6 +36,9 @@ class CRNamespace(CRBase[models.Namespace, schemas.NamespaceCreate]):
                 f"Failed to create namespace '{canonical_path}'. "
                 "(The namespace may already exist.)"
             )
+
+        self._update_etag(db)
+        db.flush()
 
         return namespace
 

@@ -12,7 +12,7 @@ Basic CRUD tests =
 
 # Features (ordered, short-term)
 Expose:
-[ ] GeoImport
+[x] GeoImport / GeoLayer
 [ ] Geography (with versioning)
 [ ] GeoSet (with versioning)
 [ ] ColumnValue/column data imports (with versioning)

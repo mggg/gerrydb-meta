@@ -1,18 +1,19 @@
 """CRUD operations and transformations for column metadata."""
 import logging
-from typing import Collection
+import uuid
+from typing import Collection, Tuple
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.crud.base import CRBase, normalize_path
+from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from cherrydb_meta.exceptions import CreateValueError
 
 log = logging.getLogger()
 
 
-class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
+class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
     """CRUD operations and transformations for column metadata."""
 
     def create(
@@ -22,7 +23,7 @@ class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
         obj_in: schemas.ColumnCreate,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-    ) -> models.DataColumn:
+    ) -> Tuple[models.DataColumn, uuid.UUID]:
         """Creates a new column with a canonical reference."""
         with db.begin(nested=True):
             # Create a path to the column.
@@ -74,7 +75,9 @@ class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
                     obj_meta=obj_meta,
                     namespace=namespace,
                 )
-        return col
+            etag = self._update_etag(db, namespace)
+
+        return col, etag
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
@@ -137,7 +140,7 @@ class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
         obj: models.DataColumn,
         obj_meta: models.ObjectMeta,
         patch: schemas.ColumnPatch,
-    ) -> models.DataColumn | None:
+    ) -> Tuple[models.DataColumn, uuid.UUID]:
         """Patches a column (adds new aliases)."""
         new_aliases = set(normalize_path(path) for path in patch.aliases) - set(
             ref.path for ref in obj.refs
@@ -147,8 +150,9 @@ class CRColumn(CRBase[models.DataColumn, schemas.ColumnCreate]):
 
         db.flush()
         self._add_aliases(db=db, alias_paths=new_aliases, col=obj, obj_meta=obj_meta)
+        etag = self._update_etag(db, obj.namespace)
         db.refresh(obj)
-        return obj
+        return obj, etag
 
     def _add_aliases(
         self,

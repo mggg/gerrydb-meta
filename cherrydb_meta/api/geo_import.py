@@ -5,10 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from cherrydb_meta import crud, schemas, models
-from cherrydb_meta.scopes import ScopeManager
+
+from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.api.base import NamespacedObjectApi
 from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
+from cherrydb_meta.scopes import ScopeManager
 
 
 class GeoImportApi(NamespacedObjectApi):

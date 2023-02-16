@@ -215,6 +215,13 @@ class GeographyBase(BaseModel):
         arbitrary_types_allowed = True
 
 
+class GeographyCreateRaw(GeographyBase):
+    """Geographic unit data received on creation (geography as raw WKB bytes)."""
+
+    path: CherryPath
+    geography: bytes
+
+
 class GeographyCreate(GeographyBase):
     """Geographic unit data received on creation."""
 
