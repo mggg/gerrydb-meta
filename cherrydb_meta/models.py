@@ -19,7 +19,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from cherrydb_meta.enums import ColumnType, NamespaceGroup, ScopeType
+from cherrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
 
 metadata_obj = MetaData(schema="cherrydb")
 
@@ -403,6 +403,7 @@ class DataColumn(Base):
     )
     description: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(String(2048))
+    kind: Mapped[ColumnKind] = mapped_column(SqlEnum(ColumnKind), nullable=False)
     type: Mapped[ColumnType] = mapped_column(SqlEnum(ColumnType), nullable=False)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False

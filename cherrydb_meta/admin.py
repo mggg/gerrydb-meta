@@ -12,7 +12,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SessionType
 from sqlalchemy.orm import sessionmaker
 
-from cherrydb_meta.models import ApiKey, User
+from cherrydb_meta.enums import NamespaceGroup, ScopeType
+from cherrydb_meta.models import ApiKey, ObjectMeta, User, UserScope
 
 log = logging.getLogger()
 Session = sessionmaker(create_engine(os.getenv("CHERRY_DATABASE_URI")))
@@ -33,6 +34,32 @@ def _generate_api_key() -> tuple[str, bytes]:
     return key, key_hash
 
 
+def grant_scope(
+    db: SessionType,
+    user: User,
+    scope: ScopeType,
+    *,
+    namespace_group: NamespaceGroup | None = None,
+) -> None:
+    """Grants a scope to a user."""
+    meta = ObjectMeta(
+        created_by=user.user_id, notes="Used for authorization configuration only."
+    )
+    db.add(meta)
+    db.flush()
+
+    scope = UserScope(
+        user_id=user.user_id,
+        scope=scope,
+        namespace_group=namespace_group,
+        namespace_id=None,
+        meta_id=meta.meta_id,
+    )
+    db.add(scope)
+    db.flush()
+    db.refresh(user)
+
+
 @dataclass(frozen=True)
 class CherryAdmin:
     """Common CherryDB administration operations."""
@@ -44,6 +71,15 @@ class CherryAdmin:
         user = User(email=email, name=name)
         log.info("Created new user: %s", user)
         self.session.add(user)
+        self.session.flush()
+        self.session.refresh(user)
+
+        # TODO: don't grant broad privileges by default!
+        grant_scope(self.session, user, ScopeType.ALL, namespace_group=None)
+        grant_scope(
+            self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
+        )
+
         return user
 
     def user_find_by_email(self, email: str) -> User:

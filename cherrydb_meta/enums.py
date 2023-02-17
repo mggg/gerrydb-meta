@@ -12,6 +12,15 @@ class ColumnType(str, Enum):
     JSON = "json"
 
 
+class ColumnKind(str, Enum):
+    """Meaning of a column."""
+
+    COUNT = "count"
+    PERCENT = "percent"
+    CATEGORICAL = "categorical"
+    OTHER = "other"
+
+
 class ScopeType(str, Enum):
     """An abstract scope (no namespace information)."""
 

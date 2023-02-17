@@ -112,6 +112,7 @@ class ColumnBase(BaseModel):
     namespace: str
     description: str
     source_url: AnyUrl | None
+    kind: enums.ColumnKind
     type: enums.ColumnType
 
 

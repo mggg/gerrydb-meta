@@ -57,7 +57,7 @@ class CRBase(Generic[ModelType, CreateSchemaType]):
         """Retrieves the latest UUID-format ETag for the collection."""
         etag = (
             db.query(ETag.etag)
-            .filter(ETag.table == self.model.__tablename__, ETag.namespace_id is None)
+            .filter(ETag.table == self.model.__tablename__, ETag.namespace_id.is_(None))
             .first()
         )
         return None if etag is None else etag[0]
