@@ -1,12 +1,14 @@
 """Endpoints for namespace metadata."""
 from http import HTTPStatus
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.api.deps import (
+    add_etag,
     can_create_namespace,
+    check_etag,
     get_db,
     get_obj_meta,
     get_scopes,
@@ -35,6 +37,7 @@ def read_namespace(
     namespace: str,
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
+    if_none_match: str | None = Header(default=None),
 ) -> models.Namespace:
     namespace_obj = crud.namespace.get(db=db, path=namespace)
 
@@ -46,6 +49,8 @@ def read_namespace(
                 "permissions to access this namespace."
             ),
         )
+
+    check_etag(db=db, crud_obj=crud.namespace, header=if_none_match)
     return namespace_obj
 
 
@@ -57,8 +62,11 @@ def read_namespace(
 )
 def create_namespace(
     *,
+    response: Response,
     loc_in: schemas.NamespaceCreate,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
 ) -> models.Namespace:
-    return crud.namespace.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
+    namespace, etag = crud.namespace.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
+    add_etag(response, etag)
+    return namespace

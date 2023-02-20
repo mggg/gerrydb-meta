@@ -27,5 +27,8 @@ if __name__ == "__main__":
 
     print(api_key)
     with open(".cherryrc", "w") as fp:
-        print(f'export CHERRY_USER="{NAME}"', file=fp)
-        print(f'export CHERRY_API_KEY="{api_key}"', file=fp)
+        print(f'export CHERRY_TEST_USER="{NAME}"', file=fp)
+        print(f'export CHERRY_TEST_API_KEY="{api_key}"', file=fp)
+
+    os.environ["CHERRY_TEST_USER"] = NAME
+    os.environ["CHERRY_TEST_API_KEY"] = api_key

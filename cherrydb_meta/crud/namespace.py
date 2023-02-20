@@ -1,5 +1,7 @@
 """CRUD operations and transformations for namespace metadata."""
 import logging
+import uuid
+from typing import Tuple
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
@@ -18,7 +20,7 @@ class CRNamespace(CRBase[models.Namespace, schemas.NamespaceCreate]):
         *,
         obj_in: schemas.NamespaceCreate,
         obj_meta: models.ObjectMeta,
-    ) -> models.Namespace:
+    ) -> Tuple[models.Namespace, uuid.UUID]:
         canonical_path = obj_in.path.lower()
         namespace = models.Namespace(
             path=canonical_path,
@@ -37,10 +39,10 @@ class CRNamespace(CRBase[models.Namespace, schemas.NamespaceCreate]):
                 "(The namespace may already exist.)"
             )
 
-        self._update_etag(db)
+        etag = self._update_etag(db)
         db.flush()
 
-        return namespace
+        return namespace, etag
 
     def get(self, db: Session, path: str) -> models.Namespace:
         return db.query(self.model).filter(self.model.path == path.lower()).first()

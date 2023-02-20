@@ -143,6 +143,7 @@ class NamespacedObjectApi:
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=f"{self.obj_name_singular} not found in namespace.",
             )
+        return obj
 
     def _check_etag(
         self, *, db: Session, namespace: models.Namespace, header: str | None
@@ -155,12 +156,6 @@ class NamespacedObjectApi:
         check_namespaced_etag(
             db=db, crud_obj=self.crud, namespace=namespace, header=header
         )
-
-    def _add_etag(
-        self, *, response: Response, db: Session, namespace: models.Namespace
-    ) -> None:
-        """Adds an `ETag` header to a response."""
-        add_etag(response, self.crud.etag(db, namespace))
 
     def _get(self, router: APIRouter) -> Callable:
         @router.get(
@@ -181,7 +176,7 @@ class NamespacedObjectApi:
                 db=db, scopes=scopes, path=namespace
             )
             self._check_etag(db=db, namespace=namespace_obj, header=if_none_match)
-            etag = self.crud.etag(db, namespace)
+            etag = self.crud.etag(db, namespace_obj)
             obj = self._obj(db=db, namespace=namespace_obj, path=path)
             add_etag(response, etag)
             return obj

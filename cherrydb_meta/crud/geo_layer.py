@@ -25,13 +25,14 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
         """Creates a new geographic layer."""
         with db.begin(nested=True):
             # Create a path to the column.
-            canonical_path = normalize_path(obj_in.canonical_path)
+            canonical_path = normalize_path(obj_in.path)
             geo_layer = models.GeoLayer(
                 path=canonical_path,
                 description=obj_in.description,
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
             )
+            db.add(geo_layer)
 
             try:
                 db.flush()
