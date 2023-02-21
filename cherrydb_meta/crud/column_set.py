@@ -25,14 +25,14 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
     ) -> Tuple[models.ColumnSet, uuid.UUID]:
         """Creates a new column set."""
         with db.begin(nested=True):
-            # Create a path to the column.
-            canonical_path = normalize_path(obj_in.canonical_path)
+            canonical_path = normalize_path(obj_in.path)
             column_set = models.ColumnSet(
                 path=canonical_path,
                 description=obj_in.description,
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
             )
+            db.add(column_set)
 
             try:
                 db.flush()

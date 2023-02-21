@@ -416,9 +416,7 @@ class DataColumn(Base):
         lazy="joined",
         primaryjoin="DataColumn.canonical_ref_id==ColumnRef.ref_id",
     )
-    refs = relationship(
-        "ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id"
-    )
+    refs = relationship("ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id")
 
 
 class ColumnRef(Base):
@@ -487,6 +485,7 @@ class ColumnSet(Base):
 
     meta = relationship("ObjectMeta", lazy="joined")
     columns = relationship("ColumnSetMember", lazy="joined")
+    namespace = relationship("Namespace", lazy="joined")
 
 
 class ColumnSetMember(Base):
@@ -499,6 +498,7 @@ class ColumnSetMember(Base):
         Integer, ForeignKey("column.col_id"), primary_key=True
     )
     set = relationship("ColumnSet", back_populates="columns")
+    column = relationship("DataColumn", lazy="joined")
 
 
 class ColumnValueVersion(Base):

@@ -147,7 +147,7 @@ class Column(ColumnBase):
             meta=obj.meta,
             aliases=[ref.path for ref in obj.refs if ref.path != canonical_path],
             kind=obj.kind,
-            type=obj.type
+            type=obj.type,
         )
 
 
@@ -278,7 +278,8 @@ class ColumnSet(ColumnSetBase):
     def from_orm(cls, obj: models.ColumnSet):
         return cls(
             path=obj.path,
+            description=obj.description,
             namespace=obj.namespace.path,
-            columns=obj.columns,
+            columns=[col.column for col in obj.columns],
             meta=obj.meta,
         )
