@@ -411,6 +411,14 @@ class DataColumn(Base):
 
     meta = relationship("ObjectMeta", lazy="joined")
     namespace = relationship("Namespace", lazy="joined")
+    canonical_ref = relationship(
+        "ColumnRef",
+        lazy="joined",
+        primaryjoin="DataColumn.canonical_ref_id==ColumnRef.ref_id",
+    )
+    refs = relationship(
+        "ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id"
+    )
 
 
 class ColumnRef(Base):

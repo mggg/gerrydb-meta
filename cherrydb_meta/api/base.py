@@ -185,7 +185,7 @@ class NamespacedObjectApi:
 
     def _all(self, router: APIRouter) -> Callable:
         @router.get(
-            "/{namespace}/",
+            "/{namespace}",
             response_model=list[self.get_schema],
             name=f"Read {self.obj_name_plural}",
         )
@@ -201,15 +201,16 @@ class NamespacedObjectApi:
                 db=db, scopes=scopes, path=namespace
             )
             self._check_etag(db=db, namespace=namespace_obj, header=if_none_match)
-            add_etag(response, self.crud.etag(db, namespace))
-            objs = self.crud.all(db=db, namespace=namespace_obj)
+            etag = self.crud.etag(db, namespace_obj)
+            objs = self.crud.all_in_namespace(db=db, namespace=namespace_obj)
+            add_etag(response, etag)
             return objs
 
         return all_route
 
     def _create(self, router: APIRouter) -> Callable:
         @router.post(
-            "/{namespace}/",
+            "/{namespace}",
             response_model=self.get_schema,
             name=f"Create {self.obj_name_singular}",
             status_code=HTTPStatus.CREATED,

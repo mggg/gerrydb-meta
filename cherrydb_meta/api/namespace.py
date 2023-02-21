@@ -34,11 +34,13 @@ def read_namespaces(
 @router.get("/{namespace}", response_model=schemas.Namespace)
 def read_namespace(
     *,
+    response: Response,
     namespace: str,
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
     if_none_match: str | None = Header(default=None),
 ) -> models.Namespace:
+    etag = crud.locality.etag(db=db)
     namespace_obj = crud.namespace.get(db=db, path=namespace)
 
     if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
@@ -51,6 +53,7 @@ def read_namespace(
         )
 
     check_etag(db=db, crud_obj=crud.namespace, header=if_none_match)
+    add_etag(response, etag)
     return namespace_obj
 
 

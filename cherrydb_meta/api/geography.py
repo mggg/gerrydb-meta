@@ -40,7 +40,7 @@ def parse_geometries(
 class GeographyApi(NamespacedObjectApi):
     def _create(self, router: APIRouter) -> Callable:
         @router.post(
-            "/{namespace}/",
+            "/{namespace}",
             response_model=self.get_schema,
             name=f"Create {self.obj_name_singular} or {self.obj_name_plural}",
             status_code=HTTPStatus.CREATED,

@@ -146,6 +146,8 @@ class Column(ColumnBase):
             description=obj.description,
             meta=obj.meta,
             aliases=[ref.path for ref in obj.refs if ref.path != canonical_path],
+            kind=obj.kind,
+            type=obj.type
         )
 
 

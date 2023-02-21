@@ -28,7 +28,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         with db.begin(nested=True):
             # Create a path to the column.
             canonical_path = normalize_path(obj_in.canonical_path)
-            canonical_ref = models.DataColumnRef(
+            canonical_ref = models.ColumnRef(
                 path=canonical_path,
                 meta_id=obj_meta.meta_id,
                 namespace_id=namespace.namespace_id,
@@ -55,6 +55,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 meta_id=obj_meta.meta_id,
                 description=obj_in.description,
                 source_url=obj_in.source_url,
+                kind=obj_in.kind,
+                type=obj_in.type,
             )
             db.add(col)
             try:
@@ -73,7 +75,6 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                     alias_paths=obj_in.aliases,
                     col=col,
                     obj_meta=obj_meta,
-                    namespace=namespace,
                 )
             etag = self._update_etag(db, namespace)
 
@@ -91,14 +92,14 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         normalized_path = normalize_path(path)
 
         ref = (
-            db.query(models.DataColumnRef)
+            db.query(models.ColumnRef)
             .filter(
-                (models.DataColumnRef.path == normalized_path)
-                & (models.DataColumnRef.namespace_id == namespace.namespace_id)
+                (models.ColumnRef.path == normalized_path)
+                & (models.ColumnRef.namespace_id == namespace.namespace_id)
             )
             .first()
         )
-        return None if ref is None else ref.col
+        return None if ref is None else ref.column
 
     def get_global(
         self, db: Session, *, path: str, namespace: models.Namespace
@@ -164,7 +165,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
     ) -> None:
         """Adds aliases to a column."""
         for alias_path in alias_paths:
-            alias_ref = models.DataColumnRef(
+            alias_ref = models.ColumnRef(
                 path=normalize_path(alias_path),
                 col_id=col.col_id,
                 namespace_id=col.namespace_id,
