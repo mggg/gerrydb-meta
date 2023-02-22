@@ -69,7 +69,9 @@ class GeoImportApi(NamespacedObjectApi):
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
-            import_obj, _ = self.crud.create(db=db, namespace=namespace_obj, obj_meta=obj_meta)
+            import_obj, _ = self.crud.create(
+                db=db, namespace=namespace_obj, obj_meta=obj_meta
+            )
             return import_obj
 
         return create_route

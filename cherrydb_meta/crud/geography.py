@@ -3,6 +3,7 @@ import logging
 import uuid
 from typing import Tuple
 
+from geoalchemy2.elements import WKBElement
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
@@ -34,22 +35,24 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 .all()
             )
 
-            geos = [
-                models.Geography(
+            geos = []
+            for obj_in in objs_in:
+                geo = models.Geography(
                     path=obj_in.path,
                     meta_id=obj_meta.meta_id,
                     namespace_id=namespace.namespace_id,
                 )
-                for obj_in in objs_in
-            ]
+                db.add(geo)
+                geos.append(geo)
             db.flush()
 
             for geo, obj_in in zip(geos, objs_in):
+                db.refresh(geo)  # TODO: ouch?
                 db.add(
-                    models.GeoInstance(
+                    models.GeoVersion(
                         import_id=geo_import.import_id,
                         geo_id=geo.geo_id,
-                        geometry=obj_in.geometry,
+                        geography=WKBElement(obj_in.geography, srid=4326),
                     )
                 )
 
@@ -100,7 +103,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
 
             for geo, obj_in in zip(geos, objs_in):
                 db.add(
-                    models.GeoInstance(
+                    models.GeoVersion(
                         import_id=geo_import.import_id,
                         geo_id=geo.geo_id,
                         geometry=obj_in.geometry,
@@ -112,7 +115,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         return geos, etag
 
     def get(
-        self, db: Session, *, uuid: uuid.UUID, namespace: models.Namespace
+        self, db: Session, *, path: str, namespace: models.Namespace
     ) -> models.Geography | None:
         """Retrieves a geographic import by UUID.
 
@@ -124,7 +127,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             db.query(models.Geography)
             .filter(
                 models.Geography.namespace_id == namespace.namespace_id,
-                models.Geography.uuid == uuid,
+                models.Geography.path == path,
             )
             .first()
         )

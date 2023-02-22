@@ -18,24 +18,6 @@ from cherrydb_meta.api.deps import (
 from cherrydb_meta.scopes import ScopeManager
 
 
-def parse_geometries(
-    raw_geos: list[schemas.GeographyCreateRaw],
-) -> list[schemas.GeographyCreate]:
-    """Parses geometries as WKB or raises a 400 Bad Request error."""
-    try:
-        return [
-            schemas.GeographyCreate(
-                path=raw_geo.path, geography=shapely.wkb.loads(raw_geo.geography)
-            )
-            for raw_geo in raw_geos
-        ]
-    except (shapely.wkb.WKBReadingError, UnicodeDecodeError):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            description="At least one geography is not in WKB format.",
-        )
-
-
 class GeographyApi(NamespacedObjectApi):
     def _create(self, router: APIRouter) -> Callable:
         @router.post(
@@ -47,7 +29,7 @@ class GeographyApi(NamespacedObjectApi):
         def create_route(
             *,
             namespace: str,
-            obj_in: schemas.GeographyCreateRaw | list[schemas.GeographyCreateRaw],
+            obj_in: schemas.GeographyCreate | list[schemas.GeographyCreate],
             db: Session = Depends(get_db),
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             geo_import: models.GeoImport = Depends(get_geo_import),
@@ -57,11 +39,11 @@ class GeographyApi(NamespacedObjectApi):
                 db=db, scopes=scopes, path=namespace
             )
             raw_geographies = (
-                [obj_in] if isinstance(obj_in, schemas.GeographyCreateRaw) else obj_in
+                [obj_in] if isinstance(obj_in, schemas.GeographyCreate) else obj_in
             )
             self.crud.create_bulk(
                 db=db,
-                objs_in=parse_geometries(raw_geographies),
+                objs_in=raw_geographies,
                 obj_meta=obj_meta,
                 geo_import=geo_import,
                 namespace=namespace_obj,
@@ -81,8 +63,8 @@ class GeographyApi(NamespacedObjectApi):
 
 
 router = GeographyApi(
-    crud=crud.geo_import,
-    get_schema=None, #schemas.Geography,
+    crud=crud.geography,
+    get_schema=schemas.Geography,
     create_schema=None,
     obj_name_singular="Geography",
     obj_name_plural="Geographies",

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from geoalchemy2 import Geometry
+from geoalchemy2 import Geography as SqlGeography
 from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
@@ -360,8 +360,8 @@ class GeoImport(Base):
     user = relationship("User", lazy="joined")
 
 
-class GeoInstance(Base):
-    __tablename__ = "geo_instance"
+class GeoVersion(Base):
+    __tablename__ = "geo_version"
 
     import_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geo_import.import_id"), primary_key=True
@@ -369,7 +369,7 @@ class GeoInstance(Base):
     geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), nullable=False
     )
-    geometry = mapped_column(Geometry, nullable=False)
+    geography = mapped_column(SqlGeography(srid=4326), nullable=False)
 
 
 # TODO: should these be versioned? tagged by algorithm?

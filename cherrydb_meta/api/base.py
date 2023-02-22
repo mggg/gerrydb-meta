@@ -63,10 +63,12 @@ class MsgpackRequest(Request):
     """A request with a MessagePack-encoded body."""
 
     async def body(self) -> bytes:
+        print("parsing...")
         if not hasattr(self, "_body"):
             body = await super().body()
             if body:
                 body = msgpack.unpackb(body)
+                print("unpacked body:", body)
             self._body = body
         return self._body
 
@@ -88,6 +90,7 @@ class MsgpackRoute(APIRoute):
                 )
 
             try:
+                request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
             except msgpack.UnpackException:
                 raise HTTPException(

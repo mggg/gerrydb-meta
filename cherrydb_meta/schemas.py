@@ -182,6 +182,7 @@ class GeoLayer(GeoLayerBase):
             meta=obj.meta,
         )
 
+
 class GeoImport(BaseModel):
     """Geographic unit import metadata returned by the database."""
 
@@ -209,21 +210,14 @@ class GeographyBase(BaseModel):
     """Base model for a geographic unit."""
 
     path: CherryPath
-    geography: BaseGeometry
+    geography: bytes
 
     class Config:
         arbitrary_types_allowed = True
 
 
-class GeographyCreateRaw(GeographyBase):
-    """Geographic unit data received on creation (geography as raw WKB bytes)."""
-
-    path: CherryPath
-    geography: bytes
-
-
 class GeographyCreate(GeographyBase):
-    """Geographic unit data received on creation."""
+    """Geographic unit data received on creation (geography as raw WKB bytes)."""
 
 
 class GeographyPatch(BaseModel):
