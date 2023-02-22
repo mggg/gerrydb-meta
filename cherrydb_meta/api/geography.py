@@ -14,7 +14,6 @@ from cherrydb_meta.api.deps import (
     get_geo_import,
     get_obj_meta,
     get_scopes,
-    msgpack_body,
 )
 from cherrydb_meta.scopes import ScopeManager
 
@@ -74,15 +73,16 @@ class GeographyApi(NamespacedObjectApi):
         """Generates a router with basic CR operations for geographies."""
         router = APIRouter()
         msgpack_router = APIRouter()
-        msgpack_router.api_route = MsgpackRoute
+        msgpack_router.route_class = MsgpackRoute
         self._create(msgpack_router)
         self._get(router)
         router.include_router(msgpack_router)
+        return router
 
 
 router = GeographyApi(
     crud=crud.geo_import,
-    get_schema=schemas.Geography,
+    get_schema=None, #schemas.Geography,
     create_schema=None,
     obj_name_singular="Geography",
     obj_name_plural="Geographies",

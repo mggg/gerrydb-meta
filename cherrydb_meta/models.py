@@ -348,13 +348,16 @@ class GeoImport(Base):
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
-    valid_from: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.user_id"), nullable=False
+    )
 
     meta = relationship("ObjectMeta", lazy="joined")
     namespace = relationship("Namespace", lazy="joined")
+    user = relationship("User", lazy="joined")
 
 
 class GeoInstance(Base):

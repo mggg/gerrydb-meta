@@ -182,17 +182,13 @@ class GeoLayer(GeoLayerBase):
             meta=obj.meta,
         )
 
-
-class GeoImportBase(BaseModel):
-    """Base model for a geographic unit import."""
-
-
-class GeoImport(GeoImportBase):
+class GeoImport(BaseModel):
     """Geographic unit import metadata returned by the database."""
 
     uuid: str
     namespace: str
     created_at: datetime
+    created_by: str
     meta: ObjectMeta
 
     class Config:
@@ -201,9 +197,10 @@ class GeoImport(GeoImportBase):
     @classmethod
     def from_orm(cls, obj: models.GeoImport):
         return cls(
-            uuid=obj.uuid,
+            uuid=str(obj.uuid),
             namespace=obj.namespace.path,
             created_at=obj.created_at,
+            created_by=obj.user.email,
             meta=obj.meta,
         )
 

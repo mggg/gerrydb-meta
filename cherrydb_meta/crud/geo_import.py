@@ -18,13 +18,16 @@ class CRGeoImport(NamespacedCRBase[models.GeoImport, None]):
         *,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
+        user: models.User,
     ) -> Tuple[models.GeoImport, uuid.UUID]:
         """Creates a new geographic import."""
         with db.begin(nested=True):
             geo_import = models.GeoImport(
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
+                created_by=user.user_id,
             )
+            db.add(geo_import)
             etag = self._update_etag(db, namespace)
 
         db.flush()
@@ -32,7 +35,7 @@ class CRGeoImport(NamespacedCRBase[models.GeoImport, None]):
         return geo_import, etag
 
     def get(
-        self, db: Session, *, uuid: uuid.UUID, namespace: models.Namespace
+        self, db: Session, *, uuid: uuid.UUID
     ) -> models.GeoImport | None:
         """Retrieves a geographic import by UUID.
 
@@ -42,10 +45,7 @@ class CRGeoImport(NamespacedCRBase[models.GeoImport, None]):
         """
         return (
             db.query(models.GeoImport)
-            .filter(
-                models.GeoImport.namespace_id == namespace.namespace_id,
-                models.GeoImport.uuid == uuid,
-            )
+            .filter(models.GeoImport.uuid == uuid)
             .first()
         )
 
