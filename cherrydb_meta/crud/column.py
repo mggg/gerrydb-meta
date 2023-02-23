@@ -8,9 +8,9 @@ from sqlalchemy import exc, insert, update
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.enums import ColumnType
 from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
-from cherrydb_meta.exceptions import CreateValueError, ColumnValueTypeError
+from cherrydb_meta.enums import ColumnType
+from cherrydb_meta.exceptions import ColumnValueTypeError, CreateValueError
 
 log = logging.getLogger()
 

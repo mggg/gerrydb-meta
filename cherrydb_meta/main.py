@@ -7,8 +7,8 @@ from fastapi.responses import JSONResponse
 from cherrydb_meta.api import api_router
 from cherrydb_meta.exceptions import (
     BulkCreateError,
-    CreateValueError,
     ColumnValueTypeError,
+    CreateValueError,
 )
 
 API_PREFIX = "/api/v1"

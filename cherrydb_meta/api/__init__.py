@@ -4,8 +4,8 @@ from fastapi import APIRouter
 from cherrydb_meta import crud, schemas
 from cherrydb_meta.api import (
     column_value,
-    geography,
     geo_import,
+    geography,
     locality,
     namespace,
     obj_meta,

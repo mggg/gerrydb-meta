@@ -9,12 +9,7 @@ from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.api.base import MsgpackRoute, NamespacedObjectApi
-from cherrydb_meta.api.deps import (
-    get_db,
-    get_geo_import,
-    get_obj_meta,
-    get_scopes,
-)
+from cherrydb_meta.api.deps import get_db, get_geo_import, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
 
 

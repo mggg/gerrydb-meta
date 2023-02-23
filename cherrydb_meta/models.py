@@ -294,7 +294,6 @@ class GeoSetVersion(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    diff: Mapped[str] = mapped_column(Text)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
@@ -557,16 +556,80 @@ class ViewTemplate:
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
 
-# TODO: view template version?
+
+class ViewTemplateVersion:
+    __tablename__ = "view_template_version"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    template_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view_template.template_id"), nullable=False
+    )
+    valid_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    parent: Mapped[ViewTemplate] = relationship("ViewTemplate", lazy="joined")
 
 
 class ViewTemplateColumnMember:
     __tablename__ = "view_template_column_member"
 
+    version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view_template_version.version_id"), primary_key=True
+    )
+    col_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("column.col_id"), primary_key=True
+    )
+
+    template_version: Mapped[ViewTemplate] = relationship("ViewTemplateVersion")
+
 
 class ViewTemplateColumnSetMember:
     __tablename__ = "view_template_column_set_member"
+
+    version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view_template_version.version_id"), primary_key=True
+    )
+    set_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("column_set.set_id"), primary_key=True
+    )
+
+    template_version: Mapped[ViewTemplate] = relationship("ViewTemplateVersion")
+
+
+class View:
+    __tablename__ = "view"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    view_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False, index=True
+    )
+    path: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    template_version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view_template_version.version_id"), nullable=False
+    )
+    at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    template_version: Mapped[ViewTemplate] = relationship(
+        "ViewTemplateVersion", lazy="joined"
+    )
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 
 class ETag(Base):
