@@ -2,10 +2,18 @@
 from fastapi import APIRouter
 
 from cherrydb_meta import crud, schemas
-from cherrydb_meta.api import geography, geo_import, locality, namespace, obj_meta
+from cherrydb_meta.api import (
+    column_value,
+    geography,
+    geo_import,
+    locality,
+    namespace,
+    obj_meta,
+)
 from cherrydb_meta.api.base import NamespacedObjectApi
 
 api_router = APIRouter()
+api_router.include_router(locality.router, prefix="/columns/values", tags=["columns"])
 api_router.include_router(locality.router, prefix="/localities", tags=["localities"])
 api_router.include_router(namespace.router, prefix="/namespaces", tags=["namespaces"])
 api_router.include_router(obj_meta.router, prefix="/meta", tags=["meta"])

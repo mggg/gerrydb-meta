@@ -1,16 +1,27 @@
 """CRUD operations and transformations for column metadata."""
 import logging
 import uuid
-from typing import Collection, Tuple
+from datetime import datetime
+from typing import Any, Collection, Tuple
 
-from sqlalchemy import exc
+from sqlalchemy import exc, insert, update
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
+from cherrydb_meta.enums import ColumnType
 from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
-from cherrydb_meta.exceptions import CreateValueError
+from cherrydb_meta.exceptions import CreateValueError, ColumnValueTypeError
 
 log = logging.getLogger()
+
+# Maps the `ColumnType` enum to columns in `ColumnValue`.
+_COLUMN_TYPE_TO_VALUE_COLUMN = {
+    ColumnType.FLOAT: "val_float",
+    ColumnType.INT: "val_int",
+    ColumnType.STR: "val_str",
+    ColumnType.BOOL: "val_bool",
+    ColumnType.JSON: "val_json",
+}
 
 
 class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
@@ -133,6 +144,64 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             )
 
         return self.get(db, path=path, namespace=namespace)
+
+    def set_values(
+        self,
+        db: Session,
+        *,
+        col: models.DataColumn,
+        values: list[Tuple[models.Geography, Any]],
+        obj_meta: models.ObjectMeta,
+    ) -> None:
+        """Sets column values across geographies.
+
+        Raises:
+            ColumnValueTypeError:
+        """
+        val_column = _COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
+        now = datetime.now()
+
+        # Validate column data.
+        rows = []
+        validation_errors = []
+        for geo, value in values:
+            suffix = "column value for geography {geo.full_path}"
+            if col.type == ColumnType.FLOAT and isinstance(value, int):
+                # Silently promote int -> float.
+                value = float(value)
+            elif col.type == ColumnType.FLOAT and not isinstance(value, float):
+                validation_errors.append(f"Expected integer or floating-point {suffix}")
+            elif col.type == ColumnType.INT and not isinstance(value, int):
+                validation_errors.append(f"Expected integer {suffix}")
+            elif col.type == ColumnType.STR and not isinstance(value, str):
+                validation_errors.append(f"Expected string {suffix}")
+            elif col.type == ColumnType.BOOL and isinstance(value, bool):
+                validation_errors.append(f"Expected boolean {suffix}")
+            rows.append(
+                {
+                    "col_id": col.col_id,
+                    "geo_id": geo.geo_id,
+                    "meta_id": obj_meta.meta_id,
+                    "valid_from": now,
+                    val_column: value,
+                }
+            )
+
+        if validation_errors:
+            raise ColumnValueTypeError(errors=validation_errors)
+
+        # Add the new column values and invalidate the old ones where present.
+        geo_ids = [geo.geo_id for geo, _ in values]
+        with db.begin(nested=True):
+            db.execute(insert(models.ColumnValue), rows)
+            db.execute(
+                update(models.ColumnValue)
+                .where(
+                    models.ColumnValue.geo_id.in_(geo_ids),
+                    models.ColumnValue.valid_to.is_(None),
+                )
+                .values(valid_to=now)
+            )
 
     def patch(
         self,

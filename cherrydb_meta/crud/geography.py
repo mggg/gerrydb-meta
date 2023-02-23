@@ -1,9 +1,11 @@
 """CRUD operations and transformations for geographic imports."""
 import logging
 import uuid
-from typing import Tuple
+from collections import defaultdict
+from typing import Collection, Tuple
 
 from geoalchemy2.elements import WKBElement
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
@@ -117,12 +119,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
     ) -> models.Geography | None:
-        """Retrieves a geographic import by UUID.
-
-        Args:
-            uuid: UUID of geographic import (namespace excluded).
-            namespace: Geographic layer's namespace.
-        """
+        """Gets a geography by path."""
         return (
             db.query(models.Geography)
             .filter(
@@ -131,6 +128,32 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             )
             .first()
         )
+
+    def get_bulk(
+        self, db: Session, *, namespaced_paths: Collection[tuple[str]]
+    ) -> list[models.Geography]:
+        """Gets all geographies referenced by `namespaced_paths`."""
+        # Group paths by namespace.
+        paths_by_namespace: dict[str, list[str]] = defaultdict(lambda: [])
+        for namespace, path in namespaced_paths:
+            paths_by_namespace[namespace].append(path)
+
+        namespaces = (
+            db.query(models.Namespace.path, models.Namespace.namespace_id)
+            .filter(models.Namespace.path.in_(paths_by_namespace))
+            .all()
+        )
+        namespace_ids = {row.path: row.namespace_id for row in namespaces}
+
+        namespace_clauses = [
+            and_(
+                models.Geography.namespace_id == namespace_ids[namespace],
+                models.Geography.path.in_(paths),
+            )
+            for namespace, paths in paths_by_namespace.items()
+        ]
+
+        return db.query(models.Geography).filter(or_(*namespace_clauses)).all()
 
 
 geography = CRGeography(models.Geography)

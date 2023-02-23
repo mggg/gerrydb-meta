@@ -40,9 +40,9 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    scopes = relationship("UserScope", lazy="joined")
-    groups = relationship("UserGroupMember", lazy="joined")
-    api_keys = relationship("ApiKey", back_populates="user")
+    scopes: Mapped["UserScope"] = relationship("UserScope", lazy="joined")
+    groups: Mapped["UserGroupMember"] = relationship("UserGroupMember", lazy="joined")
+    api_keys: Mapped["ApiKey"] = relationship("ApiKey", back_populates="user")
 
     def __repr__(self):
         return f"User(email={self.email}, name={self.name})"
@@ -58,9 +58,11 @@ class UserGroup(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    scopes = relationship("UserGroupScope", lazy="joined")
-    users = relationship("UserGroupMember", lazy="joined", back_populates="group")
-    meta = relationship("ObjectMeta")
+    scopes: Mapped["UserGroupScope"] = relationship("UserGroupScope", lazy="joined")
+    users: Mapped["UserGroupMember"] = relationship(
+        "UserGroupMember", lazy="joined", back_populates="group"
+    )
+    meta: Mapped["ObjectMeta"] = relationship("ObjectMeta")
 
     def __repr__(self):
         return f"UserGroup(name={self.name})"
@@ -79,9 +81,9 @@ class UserGroupMember(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    user = relationship("User", lazy="joined", back_populates="groups")
+    user: Mapped[User] = relationship("User", lazy="joined", back_populates="groups")
     group = relationship("UserGroup", lazy="joined", back_populates="users")
-    meta = relationship("ObjectMeta")
+    meta: Mapped["ObjectMeta"] = relationship("ObjectMeta")
 
 
 class UserScope(Base):
@@ -103,9 +105,9 @@ class UserScope(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    user = relationship("User", back_populates="scopes")
-    namespace = relationship("Namespace")
-    meta = relationship("ObjectMeta")
+    user: Mapped[User] = relationship("User", back_populates="scopes")
+    namespace: Mapped["Namespace"] = relationship("Namespace")
+    meta: Mapped["ObjectMeta"] = relationship("ObjectMeta")
 
     def __repr__(self):
         return (
@@ -134,9 +136,9 @@ class UserGroupScope(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    group = relationship("UserGroup", back_populates="scopes")
-    namespace = relationship("Namespace")
-    meta = relationship("ObjectMeta")
+    group: Mapped[UserGroup] = relationship("UserGroup", back_populates="scopes")
+    namespace: Mapped["Namespace"] = relationship("Namespace")
+    meta: Mapped["ObjectMeta"] = relationship("ObjectMeta")
 
 
 class ApiKey(Base):
@@ -151,7 +153,7 @@ class ApiKey(Base):
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    user = relationship("User", back_populates="api_keys")
+    user: Mapped[User] = relationship("User", back_populates="api_keys")
 
 
 class ObjectMeta(Base):
@@ -173,7 +175,7 @@ class ObjectMeta(Base):
         Integer, ForeignKey("user.user_id"), nullable=False
     )
 
-    user = relationship("User")
+    user: Mapped[User] = relationship("User")
 
 
 class Namespace(Base):
@@ -187,7 +189,7 @@ class Namespace(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 
 class Locality(Base):
@@ -212,13 +214,13 @@ class Locality(Base):
     default_proj: Mapped[str | None] = mapped_column(Text)
 
     parent = relationship("Locality", remote_side=[loc_id])
-    meta = relationship("ObjectMeta", lazy="joined")
-    canonical_ref = relationship(
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    canonical_ref: Mapped["LocalityRef"] = relationship(
         "LocalityRef",
         lazy="joined",
         primaryjoin="Locality.canonical_ref_id==LocalityRef.ref_id",
     )
-    refs = relationship(
+    refs: Mapped[list["LocalityRef"]] = relationship(
         "LocalityRef", primaryjoin="Locality.loc_id==LocalityRef.loc_id"
     )
 
@@ -236,7 +238,7 @@ class LocalityRef(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    loc = relationship(
+    loc: Mapped[Locality] = relationship(
         "Locality",
         lazy="joined",
         primaryjoin="Locality.loc_id==LocalityRef.loc_id",
@@ -259,8 +261,8 @@ class GeoLayer(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
-    namespace = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
 
 
 class GeoSet(Base):
@@ -278,7 +280,7 @@ class GeoSet(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 
 class GeoSetVersion(Base):
@@ -292,12 +294,12 @@ class GeoSetVersion(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    diff = mapped_column(Text)
+    diff: Mapped[str] = mapped_column(Text)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 
 class GeoSetMember(Base):
@@ -313,7 +315,7 @@ class GeoSetMember(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
 
 
 class Geography(Base):
@@ -328,7 +330,13 @@ class Geography(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+
+    @property
+    def full_path(self):
+        """Path with namespace prefix."""
+        return f"/{self.namespace.path}/{self.path}"
 
 
 class GeoImport(Base):
@@ -355,9 +363,9 @@ class GeoImport(Base):
         Integer, ForeignKey("user.user_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
-    namespace = relationship("Namespace", lazy="joined")
-    user = relationship("User", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    user: Mapped[User] = relationship("User", lazy="joined")
 
 
 class GeoVersion(Base):
@@ -387,7 +395,7 @@ class GeoHierarchy(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
 
 
 class DataColumn(Base):
@@ -412,14 +420,16 @@ class DataColumn(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
-    namespace = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     canonical_ref = relationship(
         "ColumnRef",
         lazy="joined",
         primaryjoin="DataColumn.canonical_ref_id==ColumnRef.ref_id",
     )
-    refs = relationship("ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id")
+    refs: Mapped[list["ColumnRef"]] = relationship(
+        "ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id"
+    )
 
 
 class ColumnRef(Base):
@@ -436,7 +446,7 @@ class ColumnRef(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    column = relationship(
+    column: Mapped[DataColumn] = relationship(
         "DataColumn",
         lazy="joined",
         primaryjoin="DataColumn.col_id==ColumnRef.col_id",
@@ -458,7 +468,7 @@ class ColumnRelation(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 
 class ColumnRelationMember(Base):
@@ -486,9 +496,11 @@ class ColumnSet(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    meta = relationship("ObjectMeta", lazy="joined")
-    columns = relationship("ColumnSetMember", lazy="joined")
-    namespace = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    columns: Mapped[list["ColumnSetMember"]] = relationship(
+        "ColumnSetMember", lazy="joined"
+    )
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
 
 
 class ColumnSetMember(Base):
@@ -500,38 +512,16 @@ class ColumnSetMember(Base):
     col_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("column.col_id"), primary_key=True
     )
-    set = relationship("ColumnSet", back_populates="columns")
-    column = relationship("DataColumn", lazy="joined")
-
-
-class ColumnValueVersion(Base):
-    __tablename__ = "column_value_version"
-    __table_args__ = (UniqueConstraint("col_id", "valid_from"),)
-
-    version_id = mapped_column(Integer, primary_key=True)
-    col_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False
-    )
-    valid_from: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    meta_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
-    diff = mapped_column(Text)
-
-    meta = relationship("ObjectMeta")
+    set: Mapped[ColumnSet] = relationship("ColumnSet", back_populates="columns")
+    column: Mapped[DataColumn] = relationship("DataColumn", lazy="joined")
 
 
 class ColumnValue(Base):
     __tablename__ = "column_value"
+    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
 
-    col_version_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("column_value_version.version_id"),
-        nullable=False,
-        primary_key=True,
+    col_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("column.col_id"), nullable=False
     )
     geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
@@ -539,6 +529,10 @@ class ColumnValue(Base):
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
+    valid_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     val_float: Mapped[float] = mapped_column(postgresql.DOUBLE_PRECISION)
     val_int: Mapped[int] = mapped_column(Integer)
@@ -546,7 +540,33 @@ class ColumnValue(Base):
     val_bool: Mapped[bool] = mapped_column(Boolean)
     val_json: Mapped[Any] = mapped_column(postgresql.JSONB)
 
-    meta = relationship("ObjectMeta")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
+
+
+class ViewTemplate:
+    __tablename__ = "view_template"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    template_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False, index=True
+    )
+    path: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+
+
+# TODO: view template version?
+
+
+class ViewTemplateColumnMember:
+    __tablename__ = "view_template_column_member"
+
+
+class ViewTemplateColumnSetMember:
+    __tablename__ = "view_template_column_set_member"
 
 
 class ETag(Base):

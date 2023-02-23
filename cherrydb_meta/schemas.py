@@ -1,5 +1,6 @@
 """User-facing schemas for CherryDB objects."""
 from datetime import datetime
+from typing import Any
 
 from pydantic import AnyUrl, BaseModel, constr
 from shapely.geometry.base import BaseGeometry
@@ -149,6 +150,13 @@ class Column(ColumnBase):
             kind=obj.kind,
             type=obj.type,
         )
+
+
+class ColumnValue(BaseModel):
+    """Value of a column for a geography."""
+
+    path: str  # of geography
+    value: Any
 
 
 class GeoLayerBase(BaseModel):
