@@ -1,24 +1,52 @@
-"""Generic CR(UD) views for namespaced objects."""
+"""Generic CR(UD) views and utilities."""
 import inspect
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import Callable, Type
+from typing import Any, Callable, Type
+from uuid import UUID
 
-import msgpack
+import ormsgpack as msgpack
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
-from cherrydb_meta.api.deps import (
-    add_etag,
-    check_namespaced_etag,
-    get_db,
-    get_obj_meta,
-    get_scopes,
-)
+from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
+
+
+def check_etag(db: Session, crud_obj: crud.CRBase, header: str) -> None:
+    """Processes an `If-None-Match` header.
+
+    Raises 304 Not Modified if the collection's current ETag
+    matches the ETag in `header`. Otherwise, does nothing.
+    """
+    etag = crud_obj.etag(db=db)
+    if etag is not None and header == '"{etag}"':
+        raise HTTPException(status_code=HTTPStatus.NOT_MODIFIED)
+
+
+def check_namespaced_etag(
+    db: Session,
+    crud_obj: crud.NamespacedCRBase,
+    namespace: models.Namespace,
+    header: str,
+):
+    """Processes an `If-None-Match` header.
+
+    Raises 304 Not Modified if the namespaced collection's current ETag
+    matches the ETag in `header`. Otherwise, does nothing.
+    """
+    etag = crud_obj.etag(db=db, namespace=namespace)
+    if etag is not None and header == '"{etag}"':
+        raise HTTPException(status_code=HTTPStatus.NOT_MODIFIED)
+
+
+def add_etag(response: Response, etag: UUID | None) -> None:
+    """Adds an `ETag` header to a response from a UUID."""
+    if etag is not None:
+        response.headers["ETag"] = f'"{etag}"'
 
 
 def namespace_read_error_msg(obj_name: str) -> str:
@@ -63,14 +91,22 @@ class MsgpackRequest(Request):
     """A request with a MessagePack-encoded body."""
 
     async def body(self) -> bytes:
-        print("parsing...")
         if not hasattr(self, "_body"):
             body = await super().body()
             if body:
                 body = msgpack.unpackb(body)
-                print("unpacked body:", body)
             self._body = body
         return self._body
+
+
+# see https://fastapi.tiangolo.com/advanced/custom-response/
+class MsgpackResponse(Response):
+    """A request with a MessagePack-encoded body."""
+
+    media_type = "application/msgpack"
+
+    def render(self, content: Any) -> bytes:
+        return msgpack.packb(content)
 
 
 class MsgpackRoute(APIRoute):
@@ -92,7 +128,7 @@ class MsgpackRoute(APIRoute):
             try:
                 request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
-            except msgpack.UnpackException:
+            except msgpack.MsgpackDecodeError:
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
                     detail="Request body is not a valid MessagePack object.",

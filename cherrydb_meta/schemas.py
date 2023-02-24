@@ -220,9 +220,6 @@ class GeographyBase(BaseModel):
     path: CherryPath
     geography: bytes
 
-    class Config:
-        arbitrary_types_allowed = True
-
 
 class GeographyCreate(GeographyBase):
     """Geographic unit data received on creation (geography as raw WKB bytes)."""
@@ -231,10 +228,7 @@ class GeographyCreate(GeographyBase):
 class GeographyPatch(BaseModel):
     """Geographic unit data received on PATCH."""
 
-    class Config:
-        arbitrary_types_allowed = True
-
-    geography: BaseGeometry
+    geography: bytes
 
 
 class Geography(GeographyBase):
@@ -242,12 +236,20 @@ class Geography(GeographyBase):
 
     meta: ObjectMeta
     namespace: str
-    modified_at: datetime
+    valid_from: datetime
 
     class Config:
         orm_mode = True
 
-    # TODO: serialization.
+    @classmethod
+    def from_orm(cls, obj: models.GeoVersion):
+        return cls(
+            namespace=obj.parent.namespace.path,
+            geography=obj.geography.data,
+            path=obj.parent.path,
+            meta=obj.parent.meta,
+            valid_from=obj.valid_from,
+        )
 
 
 class ColumnSetBase(BaseModel):

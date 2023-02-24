@@ -6,11 +6,10 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
+from cherrydb_meta.api.base import add_etag, check_etag
 from cherrydb_meta.api.deps import (
-    add_etag,
     can_read_localities,
     can_write_localities,
-    check_etag,
     get_db,
     get_obj_meta,
 )

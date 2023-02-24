@@ -2,6 +2,7 @@
 import logging
 import uuid
 from collections import defaultdict
+from datetime import datetime
 from typing import Collection, Tuple
 
 from geoalchemy2.elements import WKBElement
@@ -24,9 +25,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         obj_meta: models.ObjectMeta,
         geo_import: models.GeoImport,
         namespace: models.Namespace,
-    ) -> Tuple[list[models.Geography], uuid.UUID]:
+    ) -> Tuple[list[models.GeoVersion], uuid.UUID]:
         """Creates new geographies, possibly in bulk."""
         with db.begin(nested=True):
+            now = datetime.now()
+
             # TODO: check for existing, raise error.
             existing_geos = (
                 db.query(models.Geography.path)
@@ -48,15 +51,17 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 geos.append(geo)
             db.flush()
 
+            geo_versions = []
             for geo, obj_in in zip(geos, objs_in):
                 db.refresh(geo)  # TODO: ouch?
-                db.add(
-                    models.GeoVersion(
-                        import_id=geo_import.import_id,
-                        geo_id=geo.geo_id,
-                        geography=WKBElement(obj_in.geography, srid=4326),
-                    )
+                geo_version = models.GeoVersion(
+                    import_id=geo_import.import_id,
+                    geo_id=geo.geo_id,
+                    geography=WKBElement(obj_in.geography, srid=4326),
+                    valid_from=now,
                 )
+                db.add(geo_version)
+                geo_versions.append(geo_version)
 
             etag = self._update_etag(db, namespace)
 
@@ -66,7 +71,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 "Cannot create geographies that already exist.",
                 paths=[geo.path for geo in existing_geos],
             )
-        return geos, etag
+        return geo_versions, etag
 
     def patch_bulk(
         self,
@@ -76,7 +81,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         obj_meta: models.ObjectMeta,
         geo_import: models.GeoImport,
         namespace: models.Namespace,
-    ) -> Tuple[list[models.Geography], uuid.UUID]:
+    ) -> Tuple[list[models.GeoVersion], uuid.UUID]:
         """Creates a new geographic import."""
         with db.begin(nested=True):
             existing_geos = (

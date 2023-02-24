@@ -13,7 +13,9 @@ from cherrydb_meta.api import (
 from cherrydb_meta.api.base import NamespacedObjectApi
 
 api_router = APIRouter()
-api_router.include_router(locality.router, prefix="/columns/values", tags=["columns"])
+api_router.include_router(
+    column_value.router, prefix="/columns/values", tags=["columns"]
+)
 api_router.include_router(locality.router, prefix="/localities", tags=["localities"])
 api_router.include_router(namespace.router, prefix="/namespaces", tags=["namespaces"])
 api_router.include_router(obj_meta.router, prefix="/meta", tags=["meta"])

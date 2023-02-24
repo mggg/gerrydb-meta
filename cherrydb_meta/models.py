@@ -1,7 +1,7 @@
 """SQL table definitions for CherryDB."""
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from geoalchemy2 import Geography as SqlGeography
 from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime
@@ -14,9 +14,16 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    select,
 )
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    column_property,
+    mapped_column,
+    relationship,
+)
 from sqlalchemy.sql import func
 
 from cherrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
@@ -40,8 +47,10 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    scopes: Mapped["UserScope"] = relationship("UserScope", lazy="joined")
-    groups: Mapped["UserGroupMember"] = relationship("UserGroupMember", lazy="joined")
+    scopes: Mapped[list["UserScope"]] = relationship("UserScope", lazy="joined")
+    groups: Mapped[list["UserGroupMember"]] = relationship(
+        "UserGroupMember", lazy="joined"
+    )
     api_keys: Mapped["ApiKey"] = relationship("ApiKey", back_populates="user")
 
     def __repr__(self):
@@ -58,8 +67,10 @@ class UserGroup(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
-    scopes: Mapped["UserGroupScope"] = relationship("UserGroupScope", lazy="joined")
-    users: Mapped["UserGroupMember"] = relationship(
+    scopes: Mapped[list["UserGroupScope"]] = relationship(
+        "UserGroupScope", lazy="joined", uselist=True
+    )
+    users: Mapped[list["UserGroupMember"]] = relationship(
         "UserGroupMember", lazy="joined", back_populates="group"
     )
     meta: Mapped["ObjectMeta"] = relationship("ObjectMeta")
@@ -317,6 +328,24 @@ class GeoSetMember(Base):
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
 
 
+class GeoVersion(Base):
+    __tablename__ = "geo_version"
+
+    import_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_import.import_id"), primary_key=True
+    )
+    geo_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geography.geo_id"), primary_key=True
+    )
+    valid_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    geography = mapped_column(SqlGeography(srid=4326), nullable=False)
+
+    parent: Mapped["Geography"] = relationship("Geography", back_populates="versions")
+
+
 class Geography(Base):
     __tablename__ = "geography"
 
@@ -331,6 +360,7 @@ class Geography(Base):
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    versions: Mapped[list[GeoVersion]] = relationship("GeoVersion")
 
     @property
     def full_path(self):
@@ -365,18 +395,6 @@ class GeoImport(Base):
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     user: Mapped[User] = relationship("User", lazy="joined")
-
-
-class GeoVersion(Base):
-    __tablename__ = "geo_version"
-
-    import_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_import.import_id"), primary_key=True
-    )
-    geo_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geography.geo_id"), nullable=False
-    )
-    geography = mapped_column(SqlGeography(srid=4326), nullable=False)
 
 
 # TODO: should these be versioned? tagged by algorithm?
