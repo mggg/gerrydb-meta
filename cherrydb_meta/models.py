@@ -1,10 +1,10 @@
 """SQL table definitions for CherryDB."""
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from geoalchemy2 import Geography as SqlGeography
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime
+from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
     ForeignKey,
@@ -14,7 +14,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    select,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import (
@@ -304,7 +303,7 @@ class GeoSetVersion(Base):
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
@@ -343,7 +342,9 @@ class GeoVersion(Base):
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     geography = mapped_column(SqlGeography(srid=4326), nullable=False)
 
-    parent: Mapped["Geography"] = relationship("Geography", back_populates="versions")
+    parent: Mapped["Geography"] = relationship(
+        "Geography", back_populates="versions", lazy="joined"
+    )
 
 
 class Geography(Base):
@@ -535,10 +536,12 @@ class ColumnSetMember(Base):
 
 class ColumnValue(Base):
     __tablename__ = "column_value"
-    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
 
     col_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), nullable=False
+        Integer,
+        ForeignKey("column.col_id"),
+        nullable=False,
+        primary_key=True,
     )
     geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
@@ -549,13 +552,13 @@ class ColumnValue(Base):
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    val_float: Mapped[float] = mapped_column(postgresql.DOUBLE_PRECISION)
-    val_int: Mapped[int] = mapped_column(Integer)
-    val_str: Mapped[str] = mapped_column(Text)
-    val_bool: Mapped[bool] = mapped_column(Boolean)
-    val_json: Mapped[Any] = mapped_column(postgresql.JSONB)
+    val_float: Mapped[float] = mapped_column(postgresql.DOUBLE_PRECISION, nullable=True)
+    val_int: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    val_str: Mapped[str] = mapped_column(Text, nullable=True)
+    val_bool: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    val_json: Mapped[Any] = mapped_column(postgresql.JSONB, nullable=True)
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
 
@@ -589,7 +592,7 @@ class ViewTemplateVersion:
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )

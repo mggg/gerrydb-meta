@@ -192,16 +192,28 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
+        with_values = (
+            db.query(models.ColumnValue.geo_id)
+            .filter(
+                models.ColumnValue.col_id == col.col_id,
+                models.ColumnValue.geo_id.in_(geo_ids),
+            )
+            .all()
+        )
+
         with db.begin(nested=True):
             db.execute(insert(models.ColumnValue), rows)
-            db.execute(
-                update(models.ColumnValue)
-                .where(
-                    models.ColumnValue.geo_id.in_(geo_ids),
-                    models.ColumnValue.valid_to.is_(None),
+            # Optimization: most column values are only set once, so we don't
+            # need to invalidate old versions unless we previously detected them.
+            if with_values:
+                db.execute(
+                    update(models.ColumnValue)
+                    .where(
+                        models.ColumnValue.geo_id.in_(with_values),
+                        models.ColumnValue.valid_to.is_(None),
+                    )
+                    .values(valid_to=now)
                 )
-                .values(valid_to=now)
-            )
 
     def patch(
         self,

@@ -16,6 +16,16 @@ class BulkCreateError(ValueError):
         super().__init__(message)
 
 
+class BulkPatchError(ValueError):
+    """`ValueError` raised when patched object(s) do not exist."""
+
+    paths: list[str]
+
+    def __init__(self, message: str, paths: list[str]):
+        self.paths = paths
+        super().__init__(message)
+
+
 @dataclass
 class ColumnValueTypeError(ValueError):
     """`ValueError` raised when column value(s) do not match the column type."""

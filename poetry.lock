@@ -867,6 +867,35 @@ pymysql = ["pymysql"]
 sqlcipher = ["sqlcipher3-binary"]
 
 [[package]]
+name = "sqlparse"
+version = "0.4.3"
+description = "A non-validating SQL parser."
+category = "dev"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "sqlparse-0.4.3-py3-none-any.whl", hash = "sha256:0323c0ec29cd52bceabc1b4d9d579e311f3e4961b98d174201d5622a23b85e34"},
+    {file = "sqlparse-0.4.3.tar.gz", hash = "sha256:69ca804846bb114d2ec380e4360a8a340db83f0ccf3afceeb1404df028f57268"},
+]
+
+[[package]]
+name = "sqltap"
+version = "0.3.11"
+description = "Profiling and introspection for applications using sqlalchemy"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "sqltap-0.3.11.tar.gz", hash = "sha256:e0570ee5274b3d9345573f5adb60dea7a2d3de09ff01d70231a0d703313fec49"},
+]
+
+[package.dependencies]
+Mako = ">=0.4.1"
+SQLAlchemy = ">=0.9"
+sqlparse = ">=0.1.15"
+Werkzeug = ">=0.9.6"
+
+[[package]]
 name = "starlette"
 version = "0.22.0"
 description = "The little ASGI library that shines."
@@ -952,7 +981,25 @@ h11 = ">=0.8"
 [package.extras]
 standard = ["colorama (>=0.4)", "httptools (>=0.5.0)", "python-dotenv (>=0.13)", "pyyaml (>=5.1)", "uvloop (>=0.14.0,!=0.15.0,!=0.15.1)", "watchfiles (>=0.13)", "websockets (>=10.4)"]
 
+[[package]]
+name = "werkzeug"
+version = "2.2.3"
+description = "The comprehensive WSGI web application library."
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "Werkzeug-2.2.3-py3-none-any.whl", hash = "sha256:56433961bc1f12533306c624f3be5e744389ac61d722175d543e1751285da612"},
+    {file = "Werkzeug-2.2.3.tar.gz", hash = "sha256:2e1ccc9417d4da358b9de6f174e3ac094391ea1d4fbef2d667865d819dfd0afe"},
+]
+
+[package.dependencies]
+MarkupSafe = ">=2.1.1"
+
+[package.extras]
+watchdog = ["watchdog"]
+
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "4f6034e69065f3e2b9db61762ea3201922d2ed0788bf5d8b56611766a575ae58"
+content-hash = "51b71b28a1d9a350d8105f132e759d8b6c1b0acc9d844510232b4d7371f2163c"

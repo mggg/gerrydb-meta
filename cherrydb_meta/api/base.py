@@ -128,7 +128,8 @@ class MsgpackRoute(APIRoute):
             try:
                 request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
-            except msgpack.MsgpackDecodeError:
+            except msgpack.MsgpackDecodeError as ex:
+                raise ex
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
                     detail="Request body is not a valid MessagePack object.",

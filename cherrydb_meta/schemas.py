@@ -245,7 +245,7 @@ class Geography(GeographyBase):
     def from_orm(cls, obj: models.GeoVersion):
         return cls(
             namespace=obj.parent.namespace.path,
-            geography=obj.geography.data,
+            geography=bytes(obj.geography.data),
             path=obj.parent.path,
             meta=obj.parent.meta,
             valid_from=obj.valid_from,

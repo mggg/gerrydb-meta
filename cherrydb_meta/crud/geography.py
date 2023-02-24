@@ -3,15 +3,15 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime
-from typing import Collection, Tuple
+from typing import Collection
 
 from geoalchemy2.elements import WKBElement
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, insert, or_, update
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
-from cherrydb_meta.crud.base import NamespacedCRBase
-from cherrydb_meta.exceptions import BulkCreateError
+from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
+from cherrydb_meta.exceptions import BulkCreateError, BulkPatchError
 
 log = logging.getLogger()
 
@@ -25,101 +25,112 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         obj_meta: models.ObjectMeta,
         geo_import: models.GeoImport,
         namespace: models.Namespace,
-    ) -> Tuple[list[models.GeoVersion], uuid.UUID]:
-        """Creates new geographies, possibly in bulk."""
-        with db.begin(nested=True):
-            now = datetime.now()
-
-            # TODO: check for existing, raise error.
-            existing_geos = (
-                db.query(models.Geography.path)
-                .filter(
-                    models.Geography.path.in_(obj_in.path for obj_in in objs_in),
-                    models.Geography.namespace_id == namespace.namespace_id,
-                )
-                .all()
+    ) -> tuple[list[tuple[models.Geography, models.GeoVersion]], uuid.UUID]:
+        """Creates new geographies in bulk."""
+        now = datetime.now()
+        existing_geos = (
+            db.query(models.Geography.path)
+            .filter(
+                models.Geography.path.in_(
+                    normalize_path(obj_in.path) for obj_in in objs_in
+                ),
+                models.Geography.namespace_id == namespace.namespace_id,
             )
-
-            geos = []
-            for obj_in in objs_in:
-                geo = models.Geography(
-                    path=obj_in.path,
-                    meta_id=obj_meta.meta_id,
-                    namespace_id=namespace.namespace_id,
-                )
-                db.add(geo)
-                geos.append(geo)
-            db.flush()
-
-            geo_versions = []
-            for geo, obj_in in zip(geos, objs_in):
-                db.refresh(geo)  # TODO: ouch?
-                geo_version = models.GeoVersion(
-                    import_id=geo_import.import_id,
-                    geo_id=geo.geo_id,
-                    geography=WKBElement(obj_in.geography, srid=4326),
-                    valid_from=now,
-                )
-                db.add(geo_version)
-                geo_versions.append(geo_version)
-
-            etag = self._update_etag(db, namespace)
-
-        db.flush()
+            .all()
+        )
         if existing_geos:
             raise BulkCreateError(
                 "Cannot create geographies that already exist.",
                 paths=[geo.path for geo in existing_geos],
             )
-        return geo_versions, etag
+
+        with db.begin(nested=True):
+            geos = db.scalars(
+                insert(models.Geography).returning(models.Geography),
+                [
+                    {
+                        "path": normalize_path(obj_in.path),
+                        "meta_id": obj_meta.meta_id,
+                        "namespace_id": namespace.namespace_id,
+                    }
+                    for obj_in in objs_in
+                ],
+            )
+
+            geo_versions = db.scalars(
+                insert(models.GeoVersion).returning(models.GeoVersion),
+                [
+                    {
+                        "import_id": geo_import.import_id,
+                        "geo_id": geo.geo_id,
+                        "geography": WKBElement(obj_in.geography, srid=4326),
+                        "valid_from": now,
+                    }
+                    for geo, obj_in in zip(geos, objs_in)
+                ],
+            )
+
+            etag = self._update_etag(db, namespace)
+
+        db.flush()
+        return list(zip(geos, geo_versions)), etag
 
     def patch_bulk(
         self,
         db: Session,
         *,
-        objs_in: list[schemas.GeographyCreate],
-        obj_meta: models.ObjectMeta,
+        objs_in: list[schemas.GeographyPatch],
         geo_import: models.GeoImport,
         namespace: models.Namespace,
-    ) -> Tuple[list[models.GeoVersion], uuid.UUID]:
-        """Creates a new geographic import."""
-        with db.begin(nested=True):
-            existing_geos = (
-                db.query(models.Geography.path)
-                .filter(
-                    models.Geography.path.in_(obj_in.path for obj_in in objs_in),
-                    models.Geography.namespace_id == namespace.namespace_id,
-                )
-                .all()
+    ) -> tuple[list[tuple[models.Geography, models.GeoVersion]], uuid.UUID]:
+        """Updates geographies in bulk."""
+        now = datetime.now()
+        existing_geos = (
+            db.query(models.Geography)
+            .filter(
+                models.Geography.path.in_(
+                    normalize_path(obj_in.path) for obj_in in objs_in
+                ),
+                models.Geography.namespace_id == namespace.namespace_id,
             )
-            if existing_geos:
-                raise BulkCreateError(
-                    "Cannot create geographies that already exist.",
-                    paths=[geo.path for geo in existing_geos],
-                )
+            .all()
+        )
+        if len(existing_geos) < len(objs_in):
+            missing = set(normalize_path(geo.path) for geo in objs_in) - set(
+                geo.path for geo in existing_geos
+            )
+            raise BulkPatchError(
+                "Cannot update geographies that do not exist.", paths=list(missing)
+            )
 
-            geos = [
-                models.Geography(
-                    path=obj_in.path,
-                    meta_id=obj_meta.meta_id,
-                    namespace_id=namespace.namespace_id,
-                )
-                for obj_in in objs_in
-            ]
-            db.flush()
+        geos_by_path = {geo.path: geo for geo in existing_geos}
+        geos_ordered = [geos_by_path[normalize_path(geo.path)] for geo in objs_in]
 
-            for geo, obj_in in zip(geos, objs_in):
-                db.add(
-                    models.GeoVersion(
-                        import_id=geo_import.import_id,
-                        geo_id=geo.geo_id,
-                        geometry=obj_in.geometry,
-                    )
+        with db.begin(nested=True):
+            geo_versions = db.scalars(
+                insert(models.GeoVersion).returning(models.GeoVersion),
+                [
+                    {
+                        "import_id": geo_import.import_id,
+                        "geo_id": geo.geo_id,
+                        "geography": WKBElement(obj_in.geography, srid=4326),
+                        "valid_from": now,
+                    }
+                    for geo, obj_in in zip(geos_ordered, objs_in)
+                ],
+            )
+            db.execute(
+                update(models.GeoVersion)
+                .where(
+                    models.GeoVersion.geo_id.in_(geo.geo_id for geo in existing_geos),
+                    models.GeoVersion.valid_to.is_(None),
                 )
+                .values(valid_to=now)
+            )
             etag = self._update_etag(db, namespace)
 
         db.flush()
-        return geos, etag
+        return list(zip(geos_ordered, geo_versions)), etag
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace

@@ -49,9 +49,17 @@ class GeographyApi(NamespacedObjectApi):
                 namespace=namespace_obj,
             )
             add_etag(response, etag)
-            return MsgpackResponse(
-                [self.get_schema.from_orm(geo).dict() for geo in geos]
-            )
+            response_geos = [
+                schemas.Geography(
+                    path=geo.path,
+                    geography=bytes(geo_version.geography.data),
+                    namespace=namespace,
+                    meta=obj_meta,
+                    valid_from=geo_version.valid_from,
+                ).dict()
+                for geo, geo_version in geos
+            ]
+            return MsgpackResponse(response_geos)
 
         return create_route
 
@@ -76,7 +84,7 @@ class GeographyApi(NamespacedObjectApi):
                 db=db, scopes=scopes, path=namespace
             )
             raw_geographies = (
-                [obj_in] if isinstance(obj_in, schemas.Geographypatch) else obj_in
+                [obj_in] if isinstance(obj_in, schemas.GeographyPatch) else obj_in
             )
             geos, etag = self.crud.patch_bulk(
                 db=db,
@@ -86,7 +94,17 @@ class GeographyApi(NamespacedObjectApi):
                 namespace=namespace_obj,
             )
             add_etag(response, etag)
-            return MsgpackResponse([geo.dict() for geo in geos])
+            response_geos = [
+                schemas.Geography(
+                    path=geo.path,
+                    geography=bytes(geo_version.geography.data),
+                    namespace=namespace,
+                    meta=obj_meta,
+                    valid_from=geo_version.valid_from,
+                ).dict()
+                for geo, geo_version in geos
+            ]
+            return MsgpackResponse(response_geos)
 
         return patch_route
 
