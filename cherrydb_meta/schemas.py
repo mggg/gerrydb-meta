@@ -218,7 +218,7 @@ class GeographyBase(BaseModel):
     """Base model for a geographic unit."""
 
     path: CherryPath
-    geography: bytes
+    geography: bytes | None
 
 
 class GeographyCreate(GeographyBase):
@@ -228,7 +228,7 @@ class GeographyCreate(GeographyBase):
 class GeographyPatch(BaseModel):
     """Geographic unit data received on PATCH."""
 
-    geography: bytes
+    geography: bytes | None
 
 
 class Geography(GeographyBase):
@@ -245,7 +245,7 @@ class Geography(GeographyBase):
     def from_orm(cls, obj: models.GeoVersion):
         return cls(
             namespace=obj.parent.namespace.path,
-            geography=bytes(obj.geography.data),
+            geography=None if obj.geography is None else bytes(obj.geography.data),
             path=obj.parent.path,
             meta=obj.parent.meta,
             valid_from=obj.valid_from,

@@ -63,7 +63,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     {
                         "import_id": geo_import.import_id,
                         "geo_id": geo.geo_id,
-                        "geography": WKBElement(obj_in.geography, srid=4326),
+                        "geography": (
+                            None
+                            if obj_in.geography is None
+                            else WKBElement(obj_in.geography, srid=4326)
+                        ),
                         "valid_from": now,
                     }
                     for geo, obj_in in zip(geos, objs_in)
@@ -113,7 +117,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     {
                         "import_id": geo_import.import_id,
                         "geo_id": geo.geo_id,
-                        "geography": WKBElement(obj_in.geography, srid=4326),
+                        "geography": (
+                            None
+                            if obj_in.geography is None
+                            else WKBElement(obj_in.geography, srid=4326)
+                        ),
                         "valid_from": now,
                     }
                     for geo, obj_in in zip(geos_ordered, objs_in)
