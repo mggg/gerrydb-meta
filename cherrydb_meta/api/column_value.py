@@ -96,9 +96,10 @@ def set_column_values(
         missing = set(namespaced_values) - set(
             (geo.namespace.path, geo.path) for geo in geos
         )
+        formatted_missing = [f"/{miss_ns}/{miss_path}" for miss_ns, miss_path in missing]
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Geographies not found: {', '.join(missing)}",
+            detail=f"Geographies not found: {', '.join(formatted_missing)}",
         )
 
     # Pair the geography objects with their values.

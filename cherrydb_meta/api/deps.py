@@ -9,16 +9,24 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
-from cherrydb_meta.db import Session
+# from cherrydb_meta.db import Session
 from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.scopes import ScopeManager
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+import os
+import threading
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 
 def get_db() -> Generator:
     try:
-        db = Session(future=True)
+        Session = sessionmaker(create_engine(os.getenv("CHERRY_DATABASE_URI")))
+        db = Session()
+        print("initialized db session on thread", threading.get_ident())
         yield db
         db.commit()
     finally:

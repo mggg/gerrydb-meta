@@ -128,8 +128,7 @@ class MsgpackRoute(APIRoute):
             try:
                 request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
-            except msgpack.MsgpackDecodeError as ex:
-                raise ex
+            except msgpack.MsgpackDecodeError:
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
                     detail="Request body is not a valid MessagePack object.",
@@ -175,7 +174,7 @@ class NamespacedObjectApi:
 
     def _obj(
         self, *, db: Session, namespace: models.Namespace, path: str
-    ) -> models.DeclarativeBase:
+    ) -> Any:
         """Loads a generic namespaced object or raises an HTTP error."""
         obj = self.crud.get(db=db, namespace=namespace, path=path)
         if obj is None:

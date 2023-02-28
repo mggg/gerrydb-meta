@@ -29,7 +29,7 @@ class GeographyApi(NamespacedObjectApi):
             *,
             response: Response,
             namespace: str,
-            obj_in: schemas.GeographyCreate | list[schemas.GeographyCreate],
+            raw_geographies: list[schemas.GeographyCreate],
             db: Session = Depends(get_db),
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             geo_import: models.GeoImport = Depends(get_geo_import),
@@ -37,9 +37,6 @@ class GeographyApi(NamespacedObjectApi):
         ):
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
-            )
-            raw_geographies = (
-                [obj_in] if isinstance(obj_in, schemas.GeographyCreate) else obj_in
             )
             geos, etag = self.crud.create_bulk(
                 db=db,
@@ -74,7 +71,7 @@ class GeographyApi(NamespacedObjectApi):
             *,
             response: Response,
             namespace: str,
-            obj_in: schemas.GeographyPatch | list[schemas.GeographyPatch],
+            raw_geographies: list[schemas.GeographyPatch],
             db: Session = Depends(get_db),
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             geo_import: models.GeoImport = Depends(get_geo_import),
@@ -82,9 +79,6 @@ class GeographyApi(NamespacedObjectApi):
         ):
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
-            )
-            raw_geographies = (
-                [obj_in] if isinstance(obj_in, schemas.GeographyPatch) else obj_in
             )
             geos, etag = self.crud.patch_bulk(
                 db=db,
@@ -114,6 +108,7 @@ class GeographyApi(NamespacedObjectApi):
         msgpack_router = APIRouter()
         msgpack_router.route_class = MsgpackRoute
         self._create(msgpack_router)
+        self._patch(msgpack_router)
         self._get(router)
         router.include_router(msgpack_router)
         return router

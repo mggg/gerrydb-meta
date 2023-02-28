@@ -18,6 +18,7 @@ class ColumnKind(str, Enum):
     COUNT = "count"
     PERCENT = "percent"
     CATEGORICAL = "categorical"
+    IDENTIFIER = "identifier"
     OTHER = "other"
 
 

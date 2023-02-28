@@ -1,7 +1,6 @@
 """Entrypoint for Cherry API server."""
 from http import HTTPStatus
 
-import sqltap
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -46,17 +45,6 @@ def bulk_create_error(request: Request, exc: BulkCreateError):
             "paths": exc.paths,
         },
     )
-
-
-# quick'n'dirty inspection:
-# https://medium.com/indigoag-eng/profiling-orm-in-fastapi-d8f616b90aa2
-@app.middleware("http")
-async def tap(request: Request, call_next):
-    profiler = sqltap.start()
-    response = await call_next(request)
-    statistics = profiler.collect()
-    sqltap.report(statistics, "report.txt", report_format="text")
-    return response
 
 
 app.add_middleware(GZipMiddleware)
