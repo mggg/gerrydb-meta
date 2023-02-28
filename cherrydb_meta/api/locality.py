@@ -51,7 +51,7 @@ def read_locality(
     loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="No locality found."
+            status_code=HTTPStatus.NOT_FOUND, detail="Locality not found."
         )
 
     check_etag(db=db, crud_obj=crud.locality, header=if_none_match)

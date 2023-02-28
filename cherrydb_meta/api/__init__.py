@@ -5,6 +5,7 @@ from cherrydb_meta import crud, schemas
 from cherrydb_meta.api import (
     column_value,
     geo_import,
+    geo_set,
     geography,
     locality,
     namespace,
@@ -21,6 +22,8 @@ api_router.include_router(
     geo_import.router, prefix="/geo-imports", tags=["geo-imports"]
 )
 api_router.include_router(column_value.router, prefix="/columns", tags=["columns"])
+api_router.include_router(geo_set.router, prefix="/layers", tags=["layers"])
+
 
 api_router.include_router(
     NamespacedObjectApi(

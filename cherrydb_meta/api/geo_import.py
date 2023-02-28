@@ -13,9 +13,7 @@ from cherrydb_meta.scopes import ScopeManager
 
 
 class GeoImportApi(NamespacedObjectApi):
-    def _obj(
-        self, *, db: Session, namespace: models.Namespace, uuid: str
-    ) -> Any:
+    def _obj(self, *, db: Session, namespace: models.Namespace, uuid: str) -> Any:
         """Loads a generic namespaced object by UUID or raises an HTTP error."""
         try:
             parsed_uuid = UUID(uuid)

@@ -202,7 +202,6 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         )
 
         with db.begin(nested=True):
-            db.execute(insert(models.ColumnValue), rows)
             # Optimization: most column values are only set once, so we don't
             # need to invalidate old versions unless we previously detected them.
             if with_values:
@@ -214,6 +213,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                     )
                     .values(valid_to=now)
                 )
+
+            db.execute(insert(models.ColumnValue), rows)
 
     def patch(
         self,

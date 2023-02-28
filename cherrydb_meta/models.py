@@ -275,30 +275,15 @@ class GeoLayer(Base):
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
 
 
-class GeoSet(Base):
-    __tablename__ = "geo_set"
-    __table_args__ = (UniqueConstraint("loc_id", "layer_id"),)
+class GeoSetVersion(Base):
+    __tablename__ = "geo_set_version"
 
-    set_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    set_version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     layer_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geo_layer.layer_id"), nullable=False
     )
     loc_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("locality.loc_id"), nullable=False
-    )
-    meta_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
-
-    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
-
-
-class GeoSetVersion(Base):
-    __tablename__ = "geo_set_version"
-
-    version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    set_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_set.set_id"), nullable=False
     )
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -308,23 +293,25 @@ class GeoSetVersion(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
+    layer: Mapped[GeoLayer] = relationship("GeoLayer", lazy="joined")
+    loc: Mapped[Locality] = relationship("Locality", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    members: Mapped[list["GeoSetMember"]] = relationship("GeoSetMember")
 
 
 class GeoSetMember(Base):
     __tablename__ = "geo_set_member"
 
     set_version_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_set_version.version_id"), primary_key=True
+        Integer, ForeignKey("geo_set_version.set_version_id"), primary_key=True
     )
-    node_id: Mapped[int] = mapped_column(
+    geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), primary_key=True
     )
-    meta_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
 
-    meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
+    set_version: Mapped[GeoSetVersion] = relationship(
+        "GeoSetVersion", back_populates="members"
+    )
 
 
 class GeoVersion(Base):

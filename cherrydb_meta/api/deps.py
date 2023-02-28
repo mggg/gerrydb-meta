@@ -1,23 +1,21 @@
 """Database and authorization dependencies for CherryDB endpoints."""
+import os
 import re
+import threading
 from hashlib import sha512
 from http import HTTPStatus
 from typing import Generator
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from cherrydb_meta import crud, models
+
 # from cherrydb_meta.db import Session
 from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.scopes import ScopeManager
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-import os
-import threading
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 

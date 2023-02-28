@@ -252,6 +252,12 @@ class Geography(GeographyBase):
         )
 
 
+class GeoSetCreate(BaseModel):
+    """Paths to geographies in a `GeoSet`."""
+
+    paths: list[str]
+
+
 class ColumnSetBase(BaseModel):
     """Base model for a logical column grouping."""
 

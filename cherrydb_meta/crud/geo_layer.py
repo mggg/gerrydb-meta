@@ -1,9 +1,10 @@
 """CRUD operations and transformations for geographic layers."""
 import logging
 import uuid
+from datetime import datetime
 from typing import Tuple
 
-from sqlalchemy import exc
+from sqlalchemy import exc, insert, update
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
@@ -67,6 +68,50 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
             )
             .first()
         )
+
+    def map_locality(
+        self,
+        db: Session,
+        *,
+        layer: models.GeoLayer,
+        locality: models.Locality,
+        geographies: list[models.Geography],
+        obj_meta: models.ObjectMeta,
+    ) -> None:
+        """Maps a set of `geographies` to `layer` in `locality`."""
+        now = datetime.now()
+        with db.begin(nested=True):
+            # Deprecate old version if present.
+            db.execute(
+                update(models.GeoSetVersion)
+                .where(
+                    models.GeoSetVersion.layer_id == layer.layer_id,
+                    models.GeoSetVersion.loc_id == locality.loc_id,
+                    models.GeoSetVersion.valid_to.is_(None),
+                )
+                .values(valid_to=now)
+            )
+
+            set_version = models.GeoSetVersion(
+                layer_id=layer.layer_id,
+                loc_id=locality.loc_id,
+                meta_id=obj_meta.meta_id,
+                valid_from=now,
+            )
+            db.add(set_version)
+            db.flush()
+            db.refresh(set_version)
+
+            db.execute(
+                insert(models.GeoSetMember),
+                [
+                    {
+                        "set_version_id": set_version.set_version_id,
+                        "geo_id": geo.geo_id,
+                    }
+                    for geo in geographies
+                ],
+            )
 
 
 geo_layer = CRGeoLayer(models.GeoLayer)
