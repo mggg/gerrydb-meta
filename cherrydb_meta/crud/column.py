@@ -91,10 +91,10 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
         return col, etag
 
-    def get(
+    def get_ref(
         self, db: Session, *, path: str, namespace: models.Namespace
-    ) -> models.DataColumn | None:
-        """Retrieves a column by reference path.
+    ) -> models.ColumnRef | None:
+        """Retrieves a column reference by reference path.
 
         Args:
             path: Path to column (namespace excluded).
@@ -102,7 +102,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         """
         normalized_path = normalize_path(path)
 
-        ref = (
+        return (
             db.query(models.ColumnRef)
             .filter(
                 (models.ColumnRef.path == normalized_path)
@@ -110,9 +110,20 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             )
             .first()
         )
+
+    def get(
+        self, db: Session, *, path: str, namespace: models.Namespace
+    ) -> models.ColumnRef | None:
+        """Retrieves a column by reference path.
+
+        Args:
+            path: Path to column (namespace excluded).
+            namespace: Column namespace.
+        """
+        ref = self.get_ref(db, path=path, namespace=namespace)
         return None if ref is None else ref.column
 
-    def get_global(
+    def get_global_ref(
         self, db: Session, *, path: str, namespace: models.Namespace
     ) -> models.DataColumn | None:
         """Retrieves a column by reference path, potentially within a different
@@ -125,10 +136,11 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 or a local-style path.
             namespace: Default column namespace.
         """
-        normalized_path = normalize_path(path)
-        if normalized_path.startswith("/"):
-            namespace_path = normalized_path[1]
-            column_path = "/".join(normalized_path[2:])
+        if path.startswith("/"):
+            # TODO: Move global path parsing out of here!
+            parts = path.strip().lower().split("/")
+            namespace_path = parts[1]
+            column_path = "/".join(parts[2:])
             alt_namespace = (
                 db.query(models.Namespace)
                 .filter(
@@ -140,10 +152,10 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             return (
                 None
                 if alt_namespace is None
-                else self.get(db, path=column_path, namespace=alt_namespace)
+                else self.get_ref(db, path=column_path, namespace=alt_namespace)
             )
 
-        return self.get(db, path=path, namespace=namespace)
+        return self.get_ref(db, path=path, namespace=namespace)
 
     def set_values(
         self,

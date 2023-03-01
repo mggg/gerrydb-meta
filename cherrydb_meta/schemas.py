@@ -277,16 +277,19 @@ class ColumnSet(ColumnSetBase):
     meta: ObjectMeta
     namespace: str
     columns: list[Column]
+    refs: list[str]
 
     class Config:
         orm_mode = True
 
     @classmethod
     def from_orm(cls, obj: models.ColumnSet):
+        ordered_cols = sorted(obj.columns, key=lambda v: v.order)
         return cls(
             path=obj.path,
             description=obj.description,
             namespace=obj.namespace.path,
-            columns=[col.column for col in obj.columns],
+            columns=[col.ref.column for col in ordered_cols],
+            refs=[col.ref.path for col in ordered_cols], 
             meta=obj.meta,
         )

@@ -514,11 +514,13 @@ class ColumnSetMember(Base):
     set_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("column_set.set_id"), primary_key=True
     )
-    col_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), primary_key=True
+    ref_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("column_ref.ref_id"), primary_key=True
     )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
+
     set: Mapped[ColumnSet] = relationship("ColumnSet", back_populates="columns")
-    column: Mapped[DataColumn] = relationship("DataColumn", lazy="joined")
+    ref: Mapped[ColumnRef] = relationship("ColumnRef", lazy="joined")
 
 
 class ColumnValue(Base):
@@ -572,7 +574,7 @@ class ViewTemplateVersion:
     __tablename__ = "view_template_version"
     __table_args__ = (UniqueConstraint("namespace_id", "path"),)
 
-    version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    template_version_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     template_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("view_template.template_id"), nullable=False
     )
@@ -591,27 +593,35 @@ class ViewTemplateVersion:
 class ViewTemplateColumnMember:
     __tablename__ = "view_template_column_member"
 
-    version_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("view_template_version.version_id"), primary_key=True
+    template_version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("view_template_version.template_version_id"),
+        primary_key=True,
     )
-    col_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("column.col_id"), primary_key=True
+    ref_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("column_ref.ref_id"), primary_key=True
     )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     template_version: Mapped[ViewTemplate] = relationship("ViewTemplateVersion")
+    ref: Mapped[ColumnRef] = relationship("ColumnRef", lazy="joined")
 
 
 class ViewTemplateColumnSetMember:
     __tablename__ = "view_template_column_set_member"
 
-    version_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("view_template_version.version_id"), primary_key=True
+    template_version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("view_template_version.template_version_id"),
+        primary_key=True,
     )
     set_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("column_set.set_id"), primary_key=True
     )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     template_version: Mapped[ViewTemplate] = relationship("ViewTemplateVersion")
+    set: Mapped[ColumnSet] = relationship("ColumnSet", lazy="joined")
 
 
 class View:

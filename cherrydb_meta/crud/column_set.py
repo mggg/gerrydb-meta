@@ -47,11 +47,11 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                 )
             db.refresh(column_set)
 
-            for column_path in obj_in.columns:
-                column_obj = crud_column.get_global(
+            for idx, column_path in enumerate(obj_in.columns):
+                ref_obj = crud_column.get_global_ref(
                     db, path=column_path, namespace=namespace
                 )
-                if column_obj is None:
+                if ref_obj is None:
                     err_suffix = (
                         "" if namespace.public else " other than the current namespace"
                     )
@@ -62,7 +62,9 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                     )
                 db.add(
                     models.ColumnSetMember(
-                        set_id=column_set.set_id, col_id=column_obj.col_id
+                        set_id=column_set.set_id,
+                        ref_id=ref_obj.ref_id,
+                        order=idx,
                     )
                 )
 
