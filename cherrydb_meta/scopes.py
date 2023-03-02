@@ -58,31 +58,36 @@ class ScopeManager:
         self._namespace_group_scopes = user_group_scopes | group_group_scopes
         self._global_scopes = user_global_scopes | group_global_scopes
 
-    def can_read_localities(self):
+    def can_read_localities(self) -> bool:
         return self.has_global_scope(ScopeType.LOCALITY_READ)
 
-    def can_write_localities(self):
+    def can_write_localities(self) -> bool:
         return self.has_global_scope(ScopeType.LOCALITY_WRITE)
 
-    def can_read_meta(self):
+    def can_read_meta(self) -> bool:
         return self.has_global_scope(ScopeType.META_READ)
 
-    def can_write_meta(self):
+    def can_write_meta(self) -> bool:
         return self.has_global_scope(ScopeType.META_WRITE)
 
-    def can_create_namespace(self):
+    def can_create_namespace(self) -> bool:
         return self.has_global_scope(ScopeType.NAMESPACE_CREATE)
 
-    def can_read_in_namespace(self, namespace: Namespace):
+    def can_read_in_namespace(self, namespace: Namespace) -> bool:
         return self.has_namespace_scope(ScopeType.NAMESPACE_READ, namespace)
 
-    def can_write_in_namespace(self, namespace: Namespace):
+    def can_write_in_namespace(self, namespace: Namespace) -> bool:
         return self.has_namespace_scope(ScopeType.NAMESPACE_WRITE, namespace)
 
-    def can_write_derived_in_namespace(self, namespace: Namespace):
+    def can_write_derived_in_namespace(self, namespace: Namespace) -> bool:
         return self.has_namespace_scope(
-            ScopeType.NAMESPACE_WRITE, namespace
-        ) or self.has_namespace_scope(ScopeType.NAMESPACE_WRITE_DERIVED, namespace)
+            ScopeType.NAMESPACE_WRITE_DERIVED, namespace
+        ) or self.has_namespace_scope(ScopeType.NAMESPACE_WRITE, namespace)
+
+    def can_read_in_public_namespaces(self) -> bool:
+        return self.has_namespace_group_scope(
+            ScopeType.NAMESPACE_READ, NamespaceGroup.PUBLIC
+        )
 
     def has_global_scope(self, scope: ScopeType) -> bool:
         """Does the user have the global scope `scope`?"""
@@ -95,9 +100,9 @@ class ScopeManager:
             (ScopeType.ALL, namespace.namespace_id),
         }
         group = NamespaceGroup.PUBLIC if namespace.public else NamespaceGroup.PRIVATE
-        return bool(
+        return self.has_namespace_group_scope(scope, group) or bool(
             self._namespace_scopes & candidates
-        ) or self.has_namespace_group_scope(scope, group)
+        )
 
     def has_namespace_group_scope(
         self, scope: ScopeType, group: NamespaceGroup

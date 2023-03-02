@@ -113,7 +113,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
-    ) -> models.ColumnRef | None:
+    ) -> models.DataColumn | None:
         """Retrieves a column by reference path.
 
         Args:

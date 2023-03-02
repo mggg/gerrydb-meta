@@ -154,7 +154,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         )
 
     def get_bulk(
-        self, db: Session, *, namespaced_paths: Collection[tuple[str]]
+        self, db: Session, *, namespaced_paths: Collection[tuple[str, str]]
     ) -> list[models.Geography]:
         """Gets all geographies referenced by `namespaced_paths`."""
         # Group paths by namespace.

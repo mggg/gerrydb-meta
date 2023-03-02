@@ -1,5 +1,6 @@
 """Generic CR(UD) views and utilities."""
 import inspect
+from collections import defaultdict
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Callable, Type
@@ -15,6 +16,13 @@ from cherrydb_meta import crud, models
 from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 from cherrydb_meta.crud.base import normalize_path
 from cherrydb_meta.scopes import ScopeManager
+
+# For path resolution across objects.
+ENDPOINT_TO_CRUD = {
+    "columns": crud.column,
+    "column-sets": crud.column_set,
+    "geographies": crud.geography,
+}
 
 
 def check_etag(db: Session, crud_obj: crud.CRBase, header: str) -> None:
@@ -87,6 +95,127 @@ def body_schema(obj_type: Type, obj_arg: str = "obj_in") -> Callable:
     return decorator
 
 
+def from_namespaced_paths(
+    paths: list[str], db: Session, scopes: ScopeManager, follow_refs: bool = False
+) -> list[models.DeclarativeBase]:
+    """Returns a collection of objects from global paths (/<resource>/<namespace>/<path>).
+
+    This is primarily useful for creating and updating collections that contain objects
+    of heterogenous type: for instance, a `ViewTemplate` contains `Column`s, `ColumnSet`s,
+    and so on, but it is convenient to refer to these resources in one list on creation
+    to encode ordering.
+
+    Objects are returned in the order of `paths`. Paths are with respect to the API
+    route, and supported objects and their endpoint prefixes are defined globally
+    in `ENDPOINT_TO_CRUD`.
+
+    Partial success is not possible: it is required that `scopes` allows access to all
+    referenced namespaces, and that all paths are well-formed and reference existent
+    objects.
+
+    Args:
+        paths: Paths of objects with (possibly) heterogenous types.
+        namespace: Default namespace to use for path parsing.
+        db: Database session.
+        scopes: Authorization context.
+        follow_refs: If `True`, reference objects (e.g. `ColumnRef`).
+            are converted to the objects they point to (e.g. `DataColumn`).
+
+    Raises:
+        HTTPException: On parsing failure, authorization failure, or lookup failure.
+    """
+    # Break paths into (object, namespace, path) form.
+    parsed_paths = []
+    for path in paths:
+        parts = path.strip().lower().split("/")
+        if len(parts) < 3:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail=(
+                    f'Bad resource path "{path}": must have form '
+                    "/<resource>/<namespace>/<path>"
+                ),
+            )
+        if parts[0] not in ENDPOINT_TO_CRUD:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=f'Unknown resource "{parts[0]}".',
+            )
+
+        parsed_paths.append((parts[0], parts[1], normalize_path("/".join(parts[2:]))))
+
+    # Check for duplicates, which usually violate uniqueness constraints
+    # somewhere down the line.
+    if len(set(parsed_paths)) < len(parsed_paths):
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail="Duplicate resource paths found.",
+        )
+
+    # Verify that the user has read access in all namespaces
+    # the objects are in.
+    namespaces = {namespace for namespace, _, _ in parsed_paths}
+    namespace_objs = {}
+    for namespace in namespaces:
+        namespace_obj = crud.namespace.get(db=db, path=namespace)
+        namespace_objs[namespace] = namespace_obj
+        if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=(
+                    f'Namespace "{namespace}" not found, or you do not have '
+                    "sufficient permissions to read geographies in this namespace."
+                ),
+            )
+
+    # Group parsed paths by resource.
+    paths_by_endpoint = defaultdict(list)
+    for endpoint, namespace, path in parsed_paths:
+        paths_by_endpoint[endpoint].append((namespace, path))
+
+    # Look up objects, preferring bulk operations.
+    obj_by_path = {}
+    for endpoint, endpoint_paths in paths_by_endpoint.items():
+        endpoint_crud = ENDPOINT_TO_CRUD[endpoint]
+        if hasattr(endpoint_crud, "get_bulk"):
+            # Get the objects in bulk by path; fail if any are unknown.
+            objs = endpoint_crud.get_bulk(db, namespaced_paths=endpoint_paths)
+            if len(objs) < len(parsed_paths):
+                missing = set(parsed_paths) - set(
+                    (obj.namespace.path, obj.path) for obj in objs
+                )
+                formatted_missing = [
+                    f"/{endpoint}/{miss_ns}/{miss_path}"
+                    for miss_ns, miss_path in missing
+                ]
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f"Not found: {', '.join(formatted_missing)}",
+                )
+            for obj in objs:
+                obj_by_path[(endpoint, obj.namespace.path, obj.path)] = obj
+
+        else:
+            # Fall back to single-object lookup.
+            get_fn = (
+                endpoint_crud.get_ref
+                if hasattr(endpoint_crud, "get_ref") and not follow_refs
+                else endpoint_crud.get
+            )
+
+            for namespace, path in endpoint_paths:
+                obj = get_fn(namespace=namespace_objs[namespace], path=path)
+                if obj is None:
+                    raise HTTPException(
+                        status_code=HTTPStatus.NOT_FOUND,
+                        detail=f"Not found: /{endpoint}/{namespace}/{path}",
+                    )
+                obj_by_path[(endpoint, namespace, path)] = obj
+
+    # Put objects back in `path` order.
+    return [obj_by_path[key] for key in parsed_paths]
+
+
 def geos_from_paths(
     paths: list[str], namespace: str, db: Session, scopes: ScopeManager
 ) -> list[models.Geography]:
@@ -107,76 +236,16 @@ def geos_from_paths(
     Raises:
         HTTPException: On parsing failure, authorization failure, or lookup failure.
     """
-
-    # Break geography paths into (namespace, path) form.
-    #
-    # There are few realistic use cases where a user would want to upload values
-    # for a column across multiple namespaces at once, but it is often true
-    # that the column namespace (where the user needs write access) differs
-    # from the geographic namespace(s) (where the user only needs read access),
-    # so we might as well parse absolute paths.
-    namespaced_paths = []
-    for path in paths:
-        geo_path = path.strip().lower()
-        if geo_path.startswith("/"):
-            parts = geo_path.split("/")
-            try:
-                namespaced_paths.append((parts[1], normalize_path("/".join(parts[2:]))))
-            except IndexError:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail=(
-                        f'Bad column path "{geo_path}": namespaced paths must '
-                        "contain a namespace and a namespace-relative path, i.e. "
-                        "/<namespace>/<path>"
-                    ),
-                )
-        else:
-            namespaced_paths.append((namespace, geo_path))
-
-    # Check for duplicates, which usually violate uniqueness constraints
-    # somewhere down the line.
-    if len(set(namespaced_paths)) < len(namespaced_paths):
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail="Duplicate geography path(s) found.",
-        )
-
-    # Verify that the user has read access in all namespaces
-    # the geographies are in.
-    # TODO: This could be slow when the geographies are spread across
-    # a lot of namespaces -- investigate?
-    geo_namespaces = {namespace for namespace, _ in namespaced_paths}
-    for geo_namespace in geo_namespaces:
-        geo_namespace_obj = crud.namespace.get(db=db, path=geo_namespace)
-        if geo_namespace_obj is None or not scopes.can_read_in_namespace(
-            geo_namespace_obj
-        ):
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND,
-                detail=(
-                    f'Namespace "{geo_namespace}" not found, or you do not have '
-                    "sufficient permissions to read geographies in this namespace."
-                ),
-            )
-
-    # Get the geographies in bulk by path; fail if any are unknown.
-    geos = crud.geography.get_bulk(db, namespaced_paths=namespaced_paths)
-    if len(geos) < len(namespaced_paths):
-        missing = set(namespaced_paths) - set(
-            (geo.namespace.path, geo.path) for geo in geos
-        )
-        formatted_missing = [
-            f"/{miss_ns}/{miss_path}" for miss_ns, miss_path in missing
-        ]
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Geographies not found: {', '.join(formatted_missing)}",
-        )
-
-    # Put geographies in the order of `paths`.
-    geos_by_path = {(geo.namespace.path, geo.path): geo for geo in geos}
-    return [geos_by_path[key] for key in namespaced_paths]
+    return from_namespaced_paths(
+        paths=[
+            f"/geographies/{path}"
+            if path.startswith("/")
+            else f"/geographies/{namespace}/{path}"
+            for path in paths
+        ],
+        db=db,
+        scopes=scopes,
+    )
 
 
 # see https://fastapi.tiangolo.com/advanced/custom-request-and-route/

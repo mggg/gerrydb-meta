@@ -48,18 +48,9 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
             db.refresh(column_set)
 
             for idx, column_path in enumerate(obj_in.columns):
-                ref_obj = crud_column.get_global_ref(
-                    db, path=column_path, namespace=namespace
-                )
+                ref_obj = crud_column.get_ref(db, path=column_path, namespace=namespace)
                 if ref_obj is None:
-                    err_suffix = (
-                        "" if namespace.public else " other than the current namespace"
-                    )
-                    raise CreateValueError(
-                        f"Failed to resolve column '{column_path}'. "
-                        "The column may not exist, or it may be in a "
-                        f"private namespace{err_suffix}."
-                    )
+                    raise CreateValueError(f"Failed to resolve column '{column_path}'.")
                 db.add(
                     models.ColumnSetMember(
                         set_id=column_set.set_id,

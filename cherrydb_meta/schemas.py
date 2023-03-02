@@ -290,6 +290,58 @@ class ColumnSet(ColumnSetBase):
             description=obj.description,
             namespace=obj.namespace.path,
             columns=[col.ref.column for col in ordered_cols],
-            refs=[col.ref.path for col in ordered_cols], 
+            refs=[col.ref.path for col in ordered_cols],
             meta=obj.meta,
         )
+
+
+class ViewTemplateBase(BaseModel):
+    """Base model for a view template."""
+
+    path: CherryPath
+    description: str
+
+
+class ViewTemplateCreate(ViewTemplateBase):
+    """View template data received on creation."""
+
+    members: list[str]
+
+
+class ViewTemplatePatch(ViewTemplateBase):
+    """View template data received on update."""
+
+    members: list[str]
+
+
+class ViewTemplate(ViewTemplateBase):
+    """View template returned by the database."""
+
+    members: list[str]  # TODO: how to handle heterogeneity?
+
+
+class ViewBase(BaseModel):
+    """Base model for a view."""
+
+    path: CherryPath
+
+
+class ViewCreate(ViewBase):
+    """View definition received on creation."""
+
+    template: CherryPath
+    locality: CherryPath
+    layer: CherryPath
+    valid_at: datetime | None = None
+
+
+class View(ViewBase):
+    """Rendered view."""
+
+    template: ViewTemplate
+    locality: Locality
+    layer: GeoLayer
+    meta: ObjectMeta
+    valid_at: datetime
+    geographies: list[Geography]
+    values: dict[str, list]  # keys are columns, values are in order of `geographies`
