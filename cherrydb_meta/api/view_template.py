@@ -2,11 +2,11 @@
 from http import HTTPStatus
 from typing import Callable
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
-from cherrydb_meta.api.base import NamespacedObjectApi, from_namespaced_paths
+from cherrydb_meta.api.base import NamespacedObjectApi, add_etag, from_namespaced_paths
 from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
 
@@ -52,6 +52,7 @@ class ViewTemplateApi(NamespacedObjectApi):
         )
         def create_route(
             *,
+            response: Response,
             namespace: str,
             obj_in: schemas.ViewTemplateCreate,
             db: Session = Depends(get_db),
@@ -64,13 +65,15 @@ class ViewTemplateApi(NamespacedObjectApi):
             resolved_objs = from_namespaced_paths(
                 paths=obj_in.members, db=db, scopes=scopes, follow_refs=False
             )
-            return crud.view_template.create(
+            template_obj, etag = self.crud.create(
                 db=db,
                 obj_in=obj_in,
                 resolved_members=resolved_objs,
                 obj_meta=obj_meta,
                 namespace=namespace_obj,
             )
+            add_etag(response, etag)
+            return self.get_schema.from_orm(template_obj)
 
         return create_route
 

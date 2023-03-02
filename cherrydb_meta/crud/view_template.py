@@ -24,7 +24,7 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
         resolved_members: list[models.DeclarativeBase],
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-    ) -> Tuple[models.ViewTemplate, uuid.UUID]:
+    ) -> Tuple[models.ViewTemplateVersion, uuid.UUID]:
         """Creates a new view template."""
         with db.begin(nested=True):
             canonical_path = normalize_path(obj_in.path)
@@ -88,7 +88,7 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
             etag = self._update_etag(db, namespace)
 
         db.refresh(view_template)
-        return view_template, etag
+        return template_version, etag
 
     # TODO: patch()
 

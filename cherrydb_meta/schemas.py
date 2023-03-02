@@ -317,7 +317,21 @@ class ViewTemplatePatch(ViewTemplateBase):
 class ViewTemplate(ViewTemplateBase):
     """View template returned by the database."""
 
-    members: list[str]  # TODO: how to handle heterogeneity?
+    members: list[Column | ColumnSet]
+    valid_from: datetime
+    meta: ObjectMeta
+
+    @classmethod
+    def from_orm(cls, obj: models.ViewTemplateVersion):
+        members = sorted(obj.columns + obj.column_sets, key=lambda obj: obj.order)
+        return cls(
+            path=obj.parent.path,
+            namespace=obj.parent.namespace.path,
+            description=obj.parent.description,
+            members=[member.member for member in members],
+            valid_from=obj.valid_from,
+            meta=obj.meta,
+        )
 
 
 class ViewBase(BaseModel):

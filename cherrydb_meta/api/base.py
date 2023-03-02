@@ -128,7 +128,7 @@ def from_namespaced_paths(
     parsed_paths = []
     for path in paths:
         parts = path.strip().lower().split("/")
-        if len(parts) < 3:
+        if len(parts) < 4:
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST,
                 detail=(
@@ -136,13 +136,13 @@ def from_namespaced_paths(
                     "/<resource>/<namespace>/<path>"
                 ),
             )
-        if parts[0] not in ENDPOINT_TO_CRUD:
+        if parts[1] not in ENDPOINT_TO_CRUD:
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=f'Unknown resource "{parts[0]}".',
             )
 
-        parsed_paths.append((parts[0], parts[1], normalize_path("/".join(parts[2:]))))
+        parsed_paths.append((parts[1], parts[2], normalize_path("/".join(parts[3:]))))
 
     # Check for duplicates, which usually violate uniqueness constraints
     # somewhere down the line.
@@ -154,7 +154,7 @@ def from_namespaced_paths(
 
     # Verify that the user has read access in all namespaces
     # the objects are in.
-    namespaces = {namespace for namespace, _, _ in parsed_paths}
+    namespaces = {namespace for _, namespace, _ in parsed_paths}
     namespace_objs = {}
     for namespace in namespaces:
         namespace_obj = crud.namespace.get(db=db, path=namespace)
@@ -204,7 +204,7 @@ def from_namespaced_paths(
             )
 
             for namespace, path in endpoint_paths:
-                obj = get_fn(namespace=namespace_objs[namespace], path=path)
+                obj = get_fn(db=db, namespace=namespace_objs[namespace], path=path)
                 if obj is None:
                     raise HTTPException(
                         status_code=HTTPStatus.NOT_FOUND,
