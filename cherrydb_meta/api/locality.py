@@ -84,7 +84,7 @@ def patch_locality(
     loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="No locality found."
+            status_code=HTTPStatus.NOT_FOUND, detail="Locality not found."
         )
     patched, etag = crud.locality.patch(
         db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch

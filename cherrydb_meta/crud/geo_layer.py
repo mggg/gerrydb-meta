@@ -1,7 +1,7 @@
 """CRUD operations and transformations for geographic layers."""
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple
 
 from sqlalchemy import exc, insert, update
@@ -79,7 +79,7 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
         obj_meta: models.ObjectMeta,
     ) -> None:
         """Maps a set of `geographies` to `layer` in `locality`."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         with db.begin(nested=True):
             # Deprecate old version if present.
             db.execute(

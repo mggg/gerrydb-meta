@@ -102,6 +102,8 @@ class GeographyApi(NamespacedObjectApi):
 
         return patch_route
 
+    # TODO: msgpack serialization for get(), all() (?)
+
     def router(self) -> APIRouter:
         """Generates a router with basic CR operations for geographies."""
         router = APIRouter()

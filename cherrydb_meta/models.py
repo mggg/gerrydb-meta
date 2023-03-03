@@ -451,12 +451,18 @@ class ColumnRef(Base):
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     column: Mapped[DataColumn] = relationship(
         "DataColumn",
         lazy="joined",
         primaryjoin="DataColumn.col_id==ColumnRef.col_id",
         overlaps="refs",
     )
+
+    @property
+    def full_path(self):
+        """Path with namespace prefix."""
+        return f"/{self.namespace.path}/{self.path}"
 
 
 class ColumnRelation(Base):
@@ -643,20 +649,34 @@ class View(Base):
         Integer, ForeignKey("namespace.namespace_id"), nullable=False, index=True
     )
     path: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    template_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view_template.template_id"), nullable=False
+    )
+    # Technically redundant with (template_id, at), but quite useful.
     template_version_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("view_template_version.template_version_id"), nullable=False
+    )
+    loc_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locality.loc_id"), nullable=False
+    )
+    layer_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_layer.layer_id"), nullable=False
     )
     at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    proj: Mapped[str | None] = mapped_column(Text)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
 
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
-    template_version: Mapped[ViewTemplate] = relationship(
+    template: Mapped[ViewTemplate] = relationship("ViewTemplate", lazy="joined")
+    template_version: Mapped[ViewTemplateVersion] = relationship(
         "ViewTemplateVersion", lazy="joined"
     )
+    loc: Mapped[Locality] = relationship("Locality", lazy="joined")
+    layer: Mapped[GeoLayer] = relationship("GeoLayer", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 

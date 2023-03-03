@@ -139,16 +139,17 @@ class Column(ColumnBase):
         orm_mode = True
 
     @classmethod
-    def from_orm(cls, obj: models.DataColumn):
-        canonical_path = obj.canonical_ref.path
+    def from_orm(cls, obj: models.DataColumn | models.ColumnRef):
+        root_obj = obj.column if isinstance(obj, models.ColumnRef) else obj
+        canonical_path = root_obj.canonical_ref.path
         return cls(
             canonical_path=canonical_path,
-            namespace=obj.namespace.path,
-            description=obj.description,
-            meta=obj.meta,
-            aliases=[ref.path for ref in obj.refs if ref.path != canonical_path],
-            kind=obj.kind,
-            type=obj.type,
+            namespace=root_obj.namespace.path,
+            description=root_obj.description,
+            meta=root_obj.meta,
+            aliases=[ref.path for ref in root_obj.refs if ref.path != canonical_path],
+            kind=root_obj.kind,
+            type=root_obj.type,
         )
 
 
@@ -317,6 +318,7 @@ class ViewTemplatePatch(ViewTemplateBase):
 class ViewTemplate(ViewTemplateBase):
     """View template returned by the database."""
 
+    namespace: str
     members: list[Column | ColumnSet]
     valid_from: datetime
     meta: ObjectMeta
@@ -343,19 +345,23 @@ class ViewBase(BaseModel):
 class ViewCreate(ViewBase):
     """View definition received on creation."""
 
-    template: CherryPath
-    locality: CherryPath
-    layer: CherryPath
+    template: NamespacedCherryPath
+    locality: NamespacedCherryPath
+    layer: NamespacedCherryPath
+
     valid_at: datetime | None = None
+    proj: str | None = None
 
 
 class View(ViewBase):
     """Rendered view."""
 
+    namespace: str
     template: ViewTemplate
     locality: Locality
     layer: GeoLayer
     meta: ObjectMeta
     valid_at: datetime
+    proj: str | None
     geographies: list[Geography]
     values: dict[str, list]  # keys are columns, values are in order of `geographies`

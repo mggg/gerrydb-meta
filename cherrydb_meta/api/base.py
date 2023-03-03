@@ -95,10 +95,23 @@ def body_schema(obj_type: Type, obj_arg: str = "obj_in") -> Callable:
     return decorator
 
 
-def from_namespaced_paths(
+def parse_path(path: str) -> tuple[str, str]:
+    """Breaks a path of form `/<namespace>/<path>` into (namespace, path).
+
+    Returns `None` for the namespace if the path is not in the expected form
+    (i.e., the path is missing a namespace).
+    """
+    normalized_path = path.strip().lower()
+    parts = normalized_path.split("/")
+    return (
+        (None, normalized_path) if len(parts) < 3 else (parts[1], "/".join(parts[2:]))
+    )
+
+
+def from_resource_paths(
     paths: list[str], db: Session, scopes: ScopeManager, follow_refs: bool = False
 ) -> list[models.DeclarativeBase]:
-    """Returns a collection of objects from global paths (/<resource>/<namespace>/<path>).
+    """Returns a collection of objects from resource paths (/<resource>/<namespace>/<path>).
 
     This is primarily useful for creating and updating collections that contain objects
     of heterogenous type: for instance, a `ViewTemplate` contains `Column`s, `ColumnSet`s,
@@ -236,9 +249,9 @@ def geos_from_paths(
     Raises:
         HTTPException: On parsing failure, authorization failure, or lookup failure.
     """
-    return from_namespaced_paths(
+    return from_resource_paths(
         paths=[
-            f"/geographies/{path}"
+            f"/geographies{path}"
             if path.startswith("/")
             else f"/geographies/{namespace}/{path}"
             for path in paths

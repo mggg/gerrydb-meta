@@ -2,7 +2,7 @@
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Collection
 
 from geoalchemy2.elements import WKBElement
@@ -27,7 +27,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         namespace: models.Namespace,
     ) -> tuple[list[tuple[models.Geography, models.GeoVersion]], uuid.UUID]:
         """Creates new geographies in bulk."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         existing_geos = (
             db.query(models.Geography.path)
             .filter(
@@ -88,7 +88,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         namespace: models.Namespace,
     ) -> tuple[list[tuple[models.Geography, models.GeoVersion]], uuid.UUID]:
         """Updates geographies in bulk."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         existing_geos = (
             db.query(models.Geography)
             .filter(

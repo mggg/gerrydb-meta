@@ -21,7 +21,7 @@ PatchSchemaType = TypeVar("PatchSchemaType", bound=BaseModel)
 
 def normalize_path(path: str) -> str:
     """Normalizes a path (removes leading, trailing, and duplicate slashes)."""
-    return "/".join(seg for seg in path.lower().split("/") if seg)
+    return "/".join(seg for seg in path.strip().lower().split("/") if seg)
 
 
 class CRBase(Generic[ModelType, CreateSchemaType]):

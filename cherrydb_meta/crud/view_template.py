@@ -1,7 +1,7 @@
 """CRUD operations and transformations for view templates."""
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple
 
 from sqlalchemy import exc
@@ -52,7 +52,7 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
             template_version = models.ViewTemplateVersion(
                 template_id=view_template.template_id,
                 meta_id=obj_meta.meta_id,
-                valid_from=datetime.now(),
+                valid_from=datetime.now(timezone.utc),
             )
             db.add(template_version)
             db.flush()

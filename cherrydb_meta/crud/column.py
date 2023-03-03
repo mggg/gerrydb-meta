@@ -1,7 +1,7 @@
 """CRUD operations and transformations for column metadata."""
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Collection, Tuple
 
 from sqlalchemy import exc, insert, update
@@ -15,7 +15,7 @@ from cherrydb_meta.exceptions import ColumnValueTypeError, CreateValueError
 log = logging.getLogger()
 
 # Maps the `ColumnType` enum to columns in `ColumnValue`.
-_COLUMN_TYPE_TO_VALUE_COLUMN = {
+COLUMN_TYPE_TO_VALUE_COLUMN = {
     ColumnType.FLOAT: "val_float",
     ColumnType.INT: "val_int",
     ColumnType.STR: "val_str",
@@ -124,7 +124,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         return None if ref is None else ref.column
 
     def get_global_ref(
-        self, db: Session, *, path: str, namespace: models.Namespace
+        self, db: Session, *, path: tuple[str, str], namespace: models.Namespace
     ) -> models.DataColumn | None:
         """Retrieves a column by reference path, potentially within a different
         namespace than `namespace`.
@@ -132,15 +132,11 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         Only public namespaces can be addressed with a global path.
 
         Args:
-            path: Path to column, either global-style (prefixed by `/`)
-                or a local-style path.
+            path: Path to column, either global-style (two parts) or local-style.
             namespace: Default column namespace.
         """
-        if path.startswith("/"):
-            # TODO: Move global path parsing out of here!
-            parts = path.strip().lower().split("/")
-            namespace_path = parts[1]
-            column_path = "/".join(parts[2:])
+        namespace_path, column_path = path
+        if namespace_path is not None:
             alt_namespace = (
                 db.query(models.Namespace)
                 .filter(
@@ -170,8 +166,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         Raises:
             ColumnValueTypeError:
         """
-        val_column = _COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
-        now = datetime.now()
+        val_column = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
+        now = datetime.now(timezone.utc)
 
         # Validate column data.
         rows = []
