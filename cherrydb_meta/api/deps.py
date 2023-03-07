@@ -24,7 +24,6 @@ def get_db() -> Generator:
     try:
         Session = sessionmaker(create_engine(os.getenv("CHERRY_DATABASE_URI")))
         db = Session()
-        print("initialized db session on thread", threading.get_ident())
         yield db
         db.commit()
     finally:

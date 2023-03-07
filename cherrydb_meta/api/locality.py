@@ -95,17 +95,17 @@ def patch_locality(
 
 @router.post(
     "/",
-    response_model=schemas.Locality,
+    response_model=list[schemas.Locality],
     status_code=HTTPStatus.CREATED,
     dependencies=[Depends(can_write_localities)],
 )
-def create_locality(
+def create_localities(
     *,
     response: Response,
-    loc_in: schemas.LocalityCreate,
+    locs_in: list[schemas.LocalityCreate],
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
 ) -> models.Locality:
-    loc, etag = crud.locality.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
+    locs, etag = crud.locality.create_bulk(db=db, objs_in=locs_in, obj_meta=obj_meta)
     add_etag(response, etag)
-    return loc
+    return locs

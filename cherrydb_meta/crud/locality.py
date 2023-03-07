@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Collection, Tuple
 
-from sqlalchemy import exc
+from sqlalchemy import bindparam, exc, insert, update
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
@@ -14,82 +14,135 @@ log = logging.getLogger()
 
 
 class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
-    def create(
+    def create_bulk(
         self,
         db: Session,
         *,
-        obj_in: schemas.LocalityCreate,
+        objs_in: list[schemas.LocalityCreate],
         obj_meta: models.ObjectMeta,
-    ) -> Tuple[models.Locality, uuid.UUID]:
+    ) -> Tuple[list[models.Locality], uuid.UUID]:
         """Creates a new location with a canonical reference."""
-        with db.begin(nested=True):
-            # Look up the reference to a possible parent location.
-            if obj_in.parent_path is not None:
-                parent_ref = (
-                    db.query(models.LocalityRef)
-                    .filter_by(path=obj_in.parent_path)
-                    .first()
-                )
-                if parent_ref is None:
-                    raise CreateValueError(
-                        f"Reference to unknown parent location '{obj_in.parent_path}'."
-                    )
-                parent_id = parent_ref.loc_id
-                if parent_id is None:
-                    raise CreateValueError(
-                        f"Parent location reference '{obj_in.parent_path}' does not point to a "
-                        "valid location."
-                    )
-            else:
-                parent_id = None
+        parent_paths = [
+            normalize_path(obj_in.parent_path)
+            for obj_in in objs_in
+            if obj_in.parent_path is not None
+        ]
+        parent_refs = (
+            db.query(models.LocalityRef)
+            .filter(models.LocalityRef.path.in_(parent_paths))
+            .all()
+        )
+        parent_ref_loc_ids = {ref.path: ref.loc_id for ref in parent_refs}
+        if len(parent_ref_loc_ids) < len(parent_paths):
+            missing = ", ".join(set(parent_refs) - set(parent_ref_loc_ids))
+            raise CreateValueError(f"Reference to unknown parent locations {missing}.")
+        if None in parent_ref_loc_ids.values():
+            raise CreateValueError("Dangling locality reference found.")
 
-            # Create a path to the location.
-            canonical_path = normalize_path(obj_in.canonical_path)
-            canonical_ref = models.LocalityRef(
-                path=canonical_path, meta_id=obj_meta.meta_id
-            )
-            db.add(canonical_ref)
+        with db.begin(nested=True):
             try:
-                db.flush()
+                canonical_refs = list(
+                    db.scalars(
+                        insert(models.LocalityRef).returning(models.LocalityRef),
+                        [
+                            {
+                                "path": normalize_path(obj_in.canonical_path),
+                                "meta_id": obj_meta.meta_id,
+                            }
+                            for obj_in in objs_in
+                        ],
+                    )
+                )
             except exc.SQLAlchemyError:
                 # TODO: Make this more specific--the primary goal is to capture the case
                 # where the reference already exists.
-                log.exception(
-                    "Failed to create reference '%s' to new location.",
-                    obj_in.canonical_path,
-                )
+                log.exception("Failed to create references to new location.")
                 raise CreateValueError(
-                    f"Failed to create canonical path '{canonical_path}' to new location. "
-                    "(The path may already exist.)"
+                    "Failed to create canonical path to new location(s). "
+                    "(The path(s) may already exist.)"
                 )
 
-            # Create the location itself.
-            loc = models.Locality(
-                canonical_ref_id=canonical_ref.ref_id,
-                parent_id=parent_id,
-                meta_id=obj_meta.meta_id,
-                name=obj_in.name,
-                default_proj=obj_in.default_proj,
-            )
-            db.add(loc)
+            canonical_ref_ids = {ref.path: ref.ref_id for ref in canonical_refs}
+            canonical_ref_paths = {ref.ref_id: ref.path for ref in canonical_refs}
+
+            # Create the locations.
             try:
-                db.flush()
-            except exc.SQLAlchemyError:
-                log.exception("Failed to create new location.")
-                raise CreateValueError("Failed to create new location.")
-
-            canonical_ref.loc_id = loc.loc_id
-            db.flush()
-
-            # Create additional aliases (non-canonical references) to the location.
-            if obj_in.aliases:
-                self._add_aliases(
-                    db=db, alias_paths=obj_in.aliases, loc=loc, obj_meta=obj_meta
+                locs = list(
+                    db.scalars(
+                        insert(models.Locality).returning(models.Locality),
+                        [
+                            {
+                                "canonical_ref_id": canonical_ref_ids[
+                                    normalize_path(obj_in.canonical_path)
+                                ],
+                                "parent_id": (
+                                    None
+                                    if obj_in.parent_path is None
+                                    else parent_ref_loc_ids[
+                                        normalize_path(obj_in.parent_path)
+                                    ]
+                                ),
+                                "meta_id": obj_meta.meta_id,
+                                "name": obj_in.name,
+                                "default_proj": obj_in.default_proj,
+                            }
+                            for obj_in in objs_in
+                        ],
+                    )
                 )
+            except exc.SQLAlchemyError:
+                log.exception("Failed to create new location(s).")
+                raise CreateValueError("Failed to create new location(s).")
+
+            loc_ids_by_path = {
+                canonical_ref_paths[loc.canonical_ref_id]: loc.loc_id for loc in locs
+            }
+
+            # Backport location references.
+            # bulk updates: see https://stackoverflow.com/a/25720751
+            db.connection().execute(
+                update(models.LocalityRef)
+                .where(models.LocalityRef.ref_id == bindparam("_ref_id"))
+                .values({"loc_id": bindparam("loc_id")}),
+                [
+                    {"loc_id": loc.loc_id, "_ref_id": loc.canonical_ref_id}
+                    for loc in locs
+                ],
+            )
+
+            # Add aliases in bulk.
+            aliases = []
+            for obj_in in objs_in:
+                if obj_in.aliases:
+                    for alias in obj_in.aliases:
+                        aliases.append(
+                            {
+                                "path": normalize_path(alias),
+                                "meta_id": obj_meta.meta_id,
+                                "loc_id": loc_ids_by_path[
+                                    normalize_path(obj_in.canonical_path)
+                                ],
+                            }
+                        )
+
+            if aliases:
+                try:
+                    db.execute(insert(models.LocalityRef), aliases)
+                except exc.SQLAlchemyError:
+                    log.exception("Failed to create aliases for new location(s).")
+                    raise CreateValueError(
+                        "Failed to create aliases for new location(s)."
+                    )
 
             etag = self._update_etag(db)
 
-        return loc, etag
+        # Refresh localities with new aliases, etc. before returning.
+        refreshed_locs = (
+            db.query(models.Locality)
+            .filter(models.Locality.loc_id.in_(loc_ids_by_path.values()))
+            .all()
+        )
+        return refreshed_locs, etag
 
     def get_by_ref(self, db: Session, *, path: str) -> models.Locality | None:
         """Retrieves a location by reference path."""
