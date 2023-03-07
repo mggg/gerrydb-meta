@@ -328,6 +328,7 @@ class GeoVersion(Base):
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     geography = mapped_column(SqlGeography(srid=4326), nullable=False)
+    internal_point = mapped_column(SqlGeography(geometry_type="POINT", srid=4326))
 
     parent: Mapped["Geography"] = relationship(
         "Geography", back_populates="versions", lazy="joined"

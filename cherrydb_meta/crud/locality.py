@@ -69,6 +69,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
                 parent_id=parent_id,
                 meta_id=obj_meta.meta_id,
                 name=obj_in.name,
+                default_proj=obj_in.default_proj,
             )
             db.add(loc)
             try:

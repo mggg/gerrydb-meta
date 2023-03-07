@@ -68,6 +68,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                             if obj_in.geography is None
                             else WKBElement(obj_in.geography, srid=4326)
                         ),
+                        "internal_point": (
+                            None
+                            if obj_in.internal_point is None
+                            else WKBElement(obj_in.internal_point, srid=4326)
+                        ),
                         "valid_from": now,
                     }
                     for geo, obj_in in zip(geos, objs_in)
@@ -121,6 +126,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                             None
                             if obj_in.geography is None
                             else WKBElement(obj_in.geography, srid=4326)
+                        ),
+                        "internal_point": (
+                            None
+                            if obj_in.internal_point is None
+                            else WKBElement(obj_in.internal_point, srid=4326)
                         ),
                         "valid_from": now,
                     }

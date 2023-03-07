@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import AnyUrl, BaseModel, constr
-from shapely.geometry.base import BaseGeometry
 
 from cherrydb_meta import enums, models
 
@@ -220,6 +219,7 @@ class GeographyBase(BaseModel):
 
     path: CherryPath
     geography: bytes | None
+    internal_point: bytes | None
 
 
 class GeographyCreate(GeographyBase):
@@ -247,6 +247,9 @@ class Geography(GeographyBase):
         return cls(
             namespace=obj.parent.namespace.path,
             geography=None if obj.geography is None else bytes(obj.geography.data),
+            internal_point=(
+                None if obj.internal_point is None else bytes(obj.internal_point.data)
+            ),
             path=obj.parent.path,
             meta=obj.parent.meta,
             valid_from=obj.valid_from,
