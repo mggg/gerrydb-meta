@@ -22,11 +22,11 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         obj_meta: models.ObjectMeta,
     ) -> Tuple[list[models.Locality], uuid.UUID]:
         """Creates a new location with a canonical reference."""
-        parent_paths = [
+        parent_paths = {
             normalize_path(obj_in.parent_path)
             for obj_in in objs_in
             if obj_in.parent_path is not None
-        ]
+        }
         parent_refs = (
             db.query(models.LocalityRef)
             .filter(models.LocalityRef.path.in_(parent_paths))
@@ -34,7 +34,9 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         )
         parent_ref_loc_ids = {ref.path: ref.loc_id for ref in parent_refs}
         if len(parent_ref_loc_ids) < len(parent_paths):
-            missing = ", ".join(set(parent_refs) - set(parent_ref_loc_ids))
+            missing = ", ".join(
+                set(ref.path for ref in parent_refs) - set(parent_ref_loc_ids)
+            )
             raise CreateValueError(f"Reference to unknown parent locations {missing}.")
         if None in parent_ref_loc_ids.values():
             raise CreateValueError("Dangling locality reference found.")
