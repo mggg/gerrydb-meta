@@ -164,6 +164,7 @@ def from_resource_paths(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail="Duplicate resource paths found.",
         )
+        
 
     # Verify that the user has read access in all namespaces
     # the objects are in.
