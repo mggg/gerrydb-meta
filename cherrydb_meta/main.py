@@ -49,3 +49,8 @@ def bulk_create_error(request: Request, exc: BulkCreateError):
 
 app.add_middleware(GZipMiddleware)
 app.include_router(api_router, prefix=API_PREFIX)
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}

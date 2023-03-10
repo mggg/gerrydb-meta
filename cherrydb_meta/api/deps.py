@@ -12,8 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from cherrydb_meta import crud, models
-
-# from cherrydb_meta.db import Session
+from cherrydb_meta.db import db_url
 from cherrydb_meta.enums import ScopeType
 from cherrydb_meta.scopes import ScopeManager
 
@@ -22,7 +21,7 @@ API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 def get_db() -> Generator:
     try:
-        engine = create_engine(os.getenv("CHERRY_DATABASE_URI"))
+        engine = create_engine(db_url)
         Session = sessionmaker(engine)
         db = Session()
         yield db
