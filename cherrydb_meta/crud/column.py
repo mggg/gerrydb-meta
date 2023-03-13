@@ -216,7 +216,9 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 db.execute(
                     update(models.ColumnValue)
                     .where(
-                        models.ColumnValue.geo_id.in_(with_values),
+                        models.ColumnValue.geo_id.in_(
+                            geo.geo_id for geo in with_values
+                        ),
                         models.ColumnValue.valid_to.is_(None),
                     )
                     .values(valid_to=now)

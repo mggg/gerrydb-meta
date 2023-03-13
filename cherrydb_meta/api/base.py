@@ -194,7 +194,7 @@ def from_resource_paths(
             # Get the objects in bulk by path; fail if any are unknown.
             objs = endpoint_crud.get_bulk(db, namespaced_paths=endpoint_paths)
             if len(objs) < len(parsed_paths):
-                missing = set(parsed_paths) - set(
+                missing = set((ns, path) for _, ns, path in parsed_paths) - set(
                     (obj.namespace.path, obj.path) for obj in objs
                 )
                 formatted_missing = [
