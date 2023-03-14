@@ -532,15 +532,18 @@ class ColumnSetMember(Base):
 
 class ColumnValue(Base):
     __tablename__ = "column_value"
+    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
 
+    val_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     col_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("column.col_id"),
         nullable=False,
-        primary_key=True,
     )
     geo_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geography.geo_id"), nullable=False, primary_key=True
+        Integer,
+        ForeignKey("geography.geo_id"),
+        nullable=False,
     )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False

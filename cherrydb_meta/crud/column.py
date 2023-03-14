@@ -164,7 +164,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         """Sets column values across geographies.
 
         Raises:
-            ColumnValueTypeError:
+            ColumnValueTypeError: If column types do not match expected types.
         """
         val_column = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
         now = datetime.now(timezone.utc)
