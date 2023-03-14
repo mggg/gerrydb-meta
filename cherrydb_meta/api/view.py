@@ -169,6 +169,12 @@ def get_view(
         )
 
     view_obj = crud.view.get(db=db, namespace=view_namespace_obj, path=path)
+    if view_obj is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"View not found in namespace.",
+        )
+
     etag = crud.view.etag(db, view_namespace_obj)
     geo_versions, col_values = crud.view.instantiate(db=db, view=view_obj)
 
