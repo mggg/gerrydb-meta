@@ -17,10 +17,7 @@ elif os.getenv("INSTANCE_CONNECTION_NAME"):
     password = os.environ["DB_PASS"]
     db_name = os.environ["DB_NAME"]
     socket = f'/cloudsql/{os.environ["INSTANCE_CONNECTION_NAME"]}'
-    db_url = (
-        f"postgresql://{username}:{password}@/{db_name}"
-        f"?unix_sock={socket}/.s.PGSQL.5432"
-    )
+    db_url = f"postgresql://{username}:{password}@/{db_name}?host={socket}"
 else:
     # Local development: use Postgres URL direcrly.
     db_url = os.getenv("CHERRY_DATABASE_URI")
