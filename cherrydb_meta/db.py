@@ -5,6 +5,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+print("params:", os.getenv("INSTANCE_UNIX_SOCKET"), os.getenv("DB_USER"))
+
 if os.getenv("DB"):
     # AWS App Runner deployment: parse JSON blob with credentials.
     creds = json.loads(os.getenv("DB"))
