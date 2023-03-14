@@ -551,7 +551,6 @@ class ColumnValue(Base):
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        primary_key=True,
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
