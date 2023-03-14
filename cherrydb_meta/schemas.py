@@ -333,7 +333,12 @@ class ViewTemplate(ViewTemplateBase):
             path=obj.parent.path,
             namespace=obj.parent.namespace.path,
             description=obj.parent.description,
-            members=[member.member for member in members],
+            members=[
+                member.member.column
+                if isinstance(member, models.ColumnRef)
+                else member.member
+                for member in members
+            ],
             valid_from=obj.valid_from,
             meta=obj.meta,
         )
