@@ -334,9 +334,9 @@ class ViewTemplate(ViewTemplateBase):
             namespace=obj.parent.namespace.path,
             description=obj.parent.description,
             members=[
-                member.member.column
-                if isinstance(member, models.ColumnRef)
-                else member.member
+                Column.from_orm(member.member.column)
+                if isinstance(member.member, models.ColumnRef)
+                else ColumnSet.from_orm(member.member)
                 for member in members
             ],
             valid_from=obj.valid_from,

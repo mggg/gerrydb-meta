@@ -135,7 +135,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         for column in columns:
             value_count = value_counts_by_col.get(column.col_id, 0)
             if value_count < num_geos:
-                bad_cols.append((column.full_path, value_count))
+                bad_cols.append((column.canonical_ref.full_path, value_count))
 
         if bad_cols:
             bad_cols_formatted = ", ".join(

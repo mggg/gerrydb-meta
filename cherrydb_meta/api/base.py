@@ -391,7 +391,7 @@ class NamespacedObjectApi:
             etag = self.crud.etag(db, namespace_obj)
             obj = self._obj(db=db, namespace=namespace_obj, path=path)
             add_etag(response, etag)
-            return obj
+            return self.get_schema.from_orm(obj)
 
         return get_route
 
@@ -416,7 +416,7 @@ class NamespacedObjectApi:
             etag = self.crud.etag(db, namespace_obj)
             objs = self.crud.all_in_namespace(db=db, namespace=namespace_obj)
             add_etag(response, etag)
-            return objs
+            return [self.get_schema.from_orm(obj) for obj in objs]
 
         return all_route
 

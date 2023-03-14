@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Tuple
 
-from sqlalchemy import exc
+from sqlalchemy import exc, select
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
@@ -94,20 +94,47 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
-    ) -> models.ViewTemplate | None:
+    ) -> models.ViewTemplateVersion | None:
         """Retrieves a view template by reference path.
 
         Args:
             path: Path to view template (namespace excluded).
             namespace: view template's namespace.
         """
-        return (
-            db.query(models.ViewTemplate)
+        template = (
+            db.query(models.ViewTemplate.template_id)
             .filter(
                 models.ViewTemplate.namespace_id == namespace.namespace_id,
                 models.ViewTemplate.path == normalize_path(path),
             )
             .first()
+        )
+        if template is None:
+            return None
+
+        return (
+            db.query(models.ViewTemplateVersion)
+            .filter(
+                models.ViewTemplateVersion.template_id == template.template_id,
+                models.ViewTemplateVersion.valid_to.is_(None),
+            )
+            .first()
+        )
+
+    def all_in_namespace(
+        self, db: Session, *, namespace: models.Namespace
+    ) -> list[models.ViewTemplateVersion]:
+        return (
+            db.query(models.ViewTemplateVersion)
+            .filter(
+                models.ViewTemplateVersion.template_id.in_(
+                    select(models.ViewTemplate.template_id).filter(
+                        self.model.namespace_id == namespace.namespace_id
+                    )
+                ),
+                models.ViewTemplateVersion.valid_to.is_(None),
+            )
+            .all()
         )
 
 
