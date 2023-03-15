@@ -45,38 +45,41 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             )
 
         with db.begin(nested=True):
-            geos = db.scalars(
-                insert(models.Geography).returning(models.Geography),
-                [
-                    {
-                        "path": normalize_path(obj_in.path),
-                        "meta_id": obj_meta.meta_id,
-                        "namespace_id": namespace.namespace_id,
-                    }
-                    for obj_in in objs_in
-                ],
+            geos = list(
+                db.scalars(
+                    insert(models.Geography).returning(models.Geography),
+                    [
+                        {
+                            "path": normalize_path(obj_in.path),
+                            "meta_id": obj_meta.meta_id,
+                            "namespace_id": namespace.namespace_id,
+                        }
+                        for obj_in in objs_in
+                    ],
+                )
             )
-
-            geo_versions = db.scalars(
-                insert(models.GeoVersion).returning(models.GeoVersion),
-                [
-                    {
-                        "import_id": geo_import.import_id,
-                        "geo_id": geo.geo_id,
-                        "geography": (
-                            None
-                            if obj_in.geography is None
-                            else WKBElement(obj_in.geography, srid=4326)
-                        ),
-                        "internal_point": (
-                            None
-                            if obj_in.internal_point is None
-                            else WKBElement(obj_in.internal_point, srid=4326)
-                        ),
-                        "valid_from": now,
-                    }
-                    for geo, obj_in in zip(geos, objs_in)
-                ],
+            geo_versions = list(
+                db.scalars(
+                    insert(models.GeoVersion).returning(models.GeoVersion),
+                    [
+                        {
+                            "import_id": geo_import.import_id,
+                            "geo_id": geo.geo_id,
+                            "geography": (
+                                None
+                                if obj_in.geography is None
+                                else WKBElement(obj_in.geography, srid=4326)
+                            ),
+                            "internal_point": (
+                                None
+                                if obj_in.internal_point is None
+                                else WKBElement(obj_in.internal_point, srid=4326)
+                            ),
+                            "valid_from": now,
+                        }
+                        for geo, obj_in in zip(geos, objs_in)
+                    ],
+                )
             )
 
             etag = self._update_etag(db, namespace)
