@@ -68,12 +68,12 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                             "geography": (
                                 None
                                 if obj_in.geography is None
-                                else WKBElement(obj_in.geography, srid=4326)
+                                else WKBElement(obj_in.geography, srid=4269)
                             ),
                             "internal_point": (
                                 None
                                 if obj_in.internal_point is None
-                                else WKBElement(obj_in.internal_point, srid=4326)
+                                else WKBElement(obj_in.internal_point, srid=4269)
                             ),
                             "valid_from": now,
                         }
@@ -128,12 +128,12 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                         "geography": (
                             None
                             if obj_in.geography is None
-                            else WKBElement(obj_in.geography, srid=4326)
+                            else WKBElement(obj_in.geography, srid=4269)
                         ),
                         "internal_point": (
                             None
                             if obj_in.internal_point is None
-                            else WKBElement(obj_in.internal_point, srid=4326)
+                            else WKBElement(obj_in.internal_point, srid=4269)
                         ),
                         "valid_from": now,
                     }
