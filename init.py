@@ -20,12 +20,12 @@ def main(name: str, email: str, reset: bool):
     a PostgreSQL connection string.
     """
     engine = create_engine(os.getenv("CHERRY_DATABASE_URI"))
-    
+
     if reset:
         with engine.connect() as conn:
             conn.execute(text("DROP SCHEMA IF EXISTS cherrydb CASCADE"))
             conn.commit()
-            
+
     with engine.connect() as conn:
         conn.execute(text("CREATE SCHEMA cherrydb"))
         conn.commit()
