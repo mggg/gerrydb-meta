@@ -113,5 +113,23 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
                 ],
             )
 
+    def get_set_by_locality(
+        self,
+        db: Session,
+        *,
+        layer: models.GeoLayer,
+        locality: models.Locality,
+    ) -> models.GeoSetVersion | None:
+        """Retrieves the latest `GeoSetVersion` associated with a locality."""
+        return (
+            db.query(models.GeoSetVersion)
+            .filter(
+                models.GeoSetVersion.valid_to.is_(None),
+                models.GeoSetVersion.layer_id == layer.layer_id,
+                models.GeoSetVersion.loc_id == locality.loc_id,
+            )
+            .first()
+        )
+
 
 geo_layer = CRGeoLayer(models.GeoLayer)

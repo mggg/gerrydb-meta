@@ -312,6 +312,7 @@ class GeoSetMember(Base):
     set_version: Mapped[GeoSetVersion] = relationship(
         "GeoSetVersion", back_populates="members"
     )
+    geo: Mapped["Geography"] = relationship("Geography", lazy="joined")
 
 
 class GeoVersion(Base):
@@ -561,6 +562,129 @@ class ColumnValue(Base):
     val_json: Mapped[Any] = mapped_column(postgresql.JSONB, nullable=True)
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
+
+
+class Plan(Base):
+    __tablename__ = "plan"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    plan_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False, index=True
+    )
+    path: Mapped[int] = mapped_column(Text, nullable=False, index=True)
+    set_version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("geo_set_version.set_version_id"),
+        nullable=False,
+        index=True,
+    )
+    num_districts: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str | None] = mapped_column(String(2048))  # e.g. from Districtr
+    districtr_id: Mapped[str | None] = mapped_column(Text)
+    daves_id: Mapped[str | None] = mapped_column(Text)
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+    # TODO: should plans be versioned?
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+
+
+class PlanAssignment(Base):
+    __tablename__ = "plan_assignment"
+
+    plan_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    geo_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geography.geo_id"), primary_key=True
+    )
+    assignment: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class Graph(Base):
+    __tablename__ = "graph"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    graph_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    set_version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("geo_set_version.set_version_id"),
+        nullable=False,
+        index=True,
+    )
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False, index=True
+    )
+    path: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+
+
+class GraphEdge(Base):
+    __tablename__ = "graph_edge"
+
+    geo_id_1: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geography.geo_id"), primary_key=True
+    )
+    geo_id_2: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geography.geo_id"), primary_key=True
+    )
+
+    geo_1: Mapped[Geography] = relationship("Geography", lazy="joined")
+    geo_2: Mapped[Geography] = relationship("Geography", lazy="joined")
+
+
+class Ensemble(Base):
+    __tablename__ = "ensemble"
+    __table_args__ = (UniqueConstraint("namespace_id", "path"),)
+
+    ensemble_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), nullable=False, index=True
+    )
+    path: Mapped[int] = mapped_column(Text, nullable=False, index=True)
+    graph_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("graph.graph_id"), nullable=False, index=True
+    )
+
+    # Actual ensemble data is stored as a compressed blob in S3 or the like.
+    blob_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    blob_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+
+    pop_col_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("column.col_id"), nullable=True
+    )
+    seed_plan_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("plan.plan_id"), nullable=True
+    )
+    num_districts: Mapped[int] = mapped_column(Integer, nullable=False)
+    num_plans: Mapped[int] = mapped_column(Integer, nullable=False)
+    params: Mapped[dict | None] = mapped_column(postgresql.JSONB, nullable=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+
+    meta_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("meta.meta_id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
 
 class ViewTemplate(Base):

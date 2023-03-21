@@ -6,45 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models, schemas
-from cherrydb_meta.api.base import MsgpackResponse, add_etag, parse_path
+from cherrydb_meta.api.base import (
+    MsgpackResponse,
+    add_etag,
+    namespace_with_read,
+    parse_path,
+)
 from cherrydb_meta.api.deps import can_read_localities, get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
-
-
-def _namespace_with_read(
-    db: Session,
-    scopes: ScopeManager,
-    path: str,
-    base_namespace: Optional[str] = None,
-) -> models.Namespace:
-    """Loads a namespace with read access or raises an HTTP error.
-
-    Also enforces the private join constraint: a view cannot reference
-    private namespaces that are not its own. If `base_namespace` is provided,
-    private namespaces with paths that do not match `base_namespace` are rejected.
-    """
-    namespace_obj = crud.namespace.get(db=db, path=path)
-    if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=(
-                f'Namespace "{path}" not found, or you do not have sufficient '
-                "permissions to read in this namespace."
-            ),
-        )
-    if (
-        base_namespace is not None
-        and not namespace_obj.public
-        and namespace_obj.path != base_namespace
-    ):
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail=(
-                "Cannot join across private namespaces: "
-                f"namespace {namespace_obj.path} is private."
-            ),
-        )
-    return namespace_obj
 
 
 router = APIRouter()
@@ -93,7 +62,7 @@ def create_view(
     }
     namespace_objs = {}
     for namespace_label, resource_namespace in namespaces.items():
-        namespace_objs[namespace_label] = _namespace_with_read(
+        namespace_objs[namespace_label] = namespace_with_read(
             db=db, scopes=scopes, path=resource_namespace, base_namespace=namespace
         )
 
