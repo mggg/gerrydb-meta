@@ -87,10 +87,10 @@ def upgrade() -> None:
     )
     op.create_foreign_key(
         op.f("fk_column_column_ref__canonical_ref_id"),
-        "column_ref",
         "column",
-        ["ref_id"],
+        "column_ref",
         ["canonical_ref_id"],
+        ["ref_id"],
         source_schema="cherrydb",
         referent_schema="cherrydb",
     )

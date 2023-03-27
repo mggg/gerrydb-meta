@@ -70,10 +70,10 @@ def upgrade() -> None:
     )
     op.create_foreign_key(
         op.f("fk_locality_locality_ref__canonical_ref_id"),
-        "locality_ref",
         "locality",
-        ["ref_id"],
+        "locality_ref",
         ["canonical_ref_id"],
+        ["ref_id"],
         source_schema="cherrydb",
         referent_schema="cherrydb",
     )
