@@ -72,7 +72,7 @@ def upgrade() -> None:
         "plan_assignment",
         sa.Column("plan_id", sa.Integer(), nullable=False),
         sa.Column("geo_id", sa.Integer(), nullable=False),
-        sa.Column("assignment", sa.Integer(), nullable=False),
+        sa.Column("assignment", sa.Text(), nullable=False),
         sa.ForeignKeyConstraint(
             ["geo_id"],
             ["cherrydb.geography.geo_id"],
