@@ -1,5 +1,6 @@
 """Generic CR(UD) views and utilities."""
 import inspect
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -16,6 +17,9 @@ from cherrydb_meta import crud, models
 from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes, no_perms
 from cherrydb_meta.crud.base import normalize_path
 from cherrydb_meta.scopes import ScopeManager
+
+log = logging.getLogger()
+
 
 # For path resolution across objects.
 ENDPOINT_TO_CRUD = {
@@ -394,6 +398,7 @@ class MsgpackRoute(APIRoute):
                 request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
             except msgpack.MsgpackDecodeError:
+                log.exception("MessagePack decode failed.")
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
                     detail="Request body is not a valid MessagePack object.",

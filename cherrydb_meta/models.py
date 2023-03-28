@@ -580,6 +580,7 @@ class Plan(Base):
         index=True,
     )
     num_districts: Mapped[int] = mapped_column(Integer, nullable=False)
+    complete: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     description: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str | None] = mapped_column(String(2048))  # e.g. from Districtr
@@ -595,16 +596,24 @@ class Plan(Base):
 
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    set_version: Mapped[GeoSetVersion] = relationship("GeoSetVersion", lazy="joined")
+    assignments: Mapped[list["PlanAssignment"]] = relationship(
+        "PlanAssignment", lazy="joined"
+    )
 
 
 class PlanAssignment(Base):
     __tablename__ = "plan_assignment"
 
-    plan_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("plan.plan_id"), primary_key=True
+    )
     geo_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), primary_key=True
     )
-    assignment: Mapped[int] = mapped_column(Integer, nullable=False)
+    assignment: Mapped[str] = mapped_column(Text, nullable=False)
+
+    geo: Mapped["Geography"] = relationship("Geography", lazy="joined")
 
 
 class Graph(Base):
@@ -644,8 +653,12 @@ class GraphEdge(Base):
         Integer, ForeignKey("geography.geo_id"), primary_key=True
     )
 
-    geo_1: Mapped[Geography] = relationship("Geography", lazy="joined")
-    geo_2: Mapped[Geography] = relationship("Geography", lazy="joined")
+    geo_1: Mapped[Geography] = relationship(
+        "Geography", lazy="joined", foreign_keys="GraphEdge.geo_id_1"
+    )
+    geo_2: Mapped[Geography] = relationship(
+        "Geography", lazy="joined", foreign_keys="GraphEdge.geo_id_2"
+    )
 
 
 class Ensemble(Base):

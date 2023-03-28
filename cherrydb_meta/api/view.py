@@ -15,7 +15,6 @@ from cherrydb_meta.api.base import (
 from cherrydb_meta.api.deps import can_read_localities, get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
 
-
 router = APIRouter()
 
 

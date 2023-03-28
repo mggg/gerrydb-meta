@@ -407,7 +407,7 @@ class PlanCreate(PlanBase):
 
     locality: NamespacedCherryPath
     layer: NamespacedCherryPath
-    assignments: dict[NamespacedCherryPath, int]
+    assignments: dict[NamespacedCherryPath, str]
 
 
 class Plan(PlanBase):
@@ -420,4 +420,29 @@ class Plan(PlanBase):
     created_at: datetime
     num_districts: int
     complete: bool
-    assignments: dict[NamespacedCherryPath, int]
+    assignments: dict[NamespacedCherryPath, str | None]
+
+    @classmethod
+    def from_orm(cls, obj: models.Plan):
+        # TODO: there's probably a performance bottleneck around the resolution
+        # of geography names for assignments with a lot of geographies.
+        base_geos = {member.geo.full_path: None for member in obj.set_version.members}
+        assignments = {
+            assignment.geo.full_path: assignment.assignment
+            for assignment in obj.assignments
+        }
+        return cls(
+            path=obj.path,
+            namespace=obj.namespace.path,
+            description=obj.description,
+            source_url=obj.source_url,
+            districtr_id=obj.districtr_id,
+            daves_id=obj.daves_id,
+            locality=obj.set_version.loc,
+            layer=obj.set_version.layer,
+            meta=obj.meta,
+            created_at=obj.created_at,
+            num_districts=obj.num_districts,
+            complete=obj.complete,
+            assignments={**base_geos, **assignments},
+        )

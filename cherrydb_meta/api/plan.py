@@ -9,9 +9,9 @@ from cherrydb_meta import crud, models, schemas
 from cherrydb_meta.api.base import (
     NamespacedObjectApi,
     add_etag,
-    parse_path,
     geo_set_from_paths,
     geos_from_paths,
+    parse_path,
 )
 from cherrydb_meta.api.deps import can_read_localities, get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
@@ -24,6 +24,7 @@ class PlanApi(NamespacedObjectApi):
             response_model=self.get_schema,
             name=f"Create {self.obj_name_singular}",
             status_code=HTTPStatus.CREATED,
+            dependencies=[Depends(can_read_localities)],
         )
         def create_route(
             *,
@@ -56,13 +57,25 @@ class PlanApi(NamespacedObjectApi):
                 scopes=scopes,
             )
 
-            # Assemble geographies from edges; verify that they exist
+            # Assemble geographies from assignment keys; verify that they exist
             # and are a subset of the geographies in the `GeoSetVersion`.
             plan_geo_paths = list(obj_in.assignments)
             plan_geos = geos_from_paths(
                 paths=plan_geo_paths, namespace=namespace, db=db, scopes=scopes
             )
-            plan_geos_by_path = dict(zip(plan_geo_paths, plan_geos))
+            plan_geo_assignments = dict(zip(plan_geos, obj_in.assignments.values()))
+            # TODO: verify subset property.
+
+            plan, etag = self.crud.create(
+                db=db,
+                obj_in=obj_in,
+                geo_set_version=geo_set_version,
+                assignments=plan_geo_assignments,
+                obj_meta=obj_meta,
+                namespace=plan_namespace_obj,
+            )
+            add_etag(response, etag)
+            return schemas.Plan.from_orm(plan)
 
         return create_route
 

@@ -81,7 +81,6 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     ],
                 )
             )
-
             etag = self._update_etag(db, namespace)
 
         db.flush()
