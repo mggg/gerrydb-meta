@@ -1,5 +1,6 @@
 """Generic CR(UD) views and utilities."""
 import inspect
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -13,9 +14,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from cherrydb_meta import crud, models
-from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
+from cherrydb_meta.api.deps import get_db, get_obj_meta, get_scopes, no_perms
 from cherrydb_meta.crud.base import normalize_path
 from cherrydb_meta.scopes import ScopeManager
+
+log = logging.getLogger()
+
 
 # For path resolution across objects.
 ENDPOINT_TO_CRUD = {
@@ -229,6 +233,42 @@ def from_resource_paths(
     return [obj_by_path[key] for key in parsed_paths]
 
 
+def namespace_with_read(
+    db: Session,
+    scopes: ScopeManager,
+    path: str,
+    base_namespace: str | None = None,
+) -> models.Namespace:
+    """Loads a namespace with read access or raises an HTTP error.
+
+    Also enforces the private join constraint: a view cannot reference
+    private namespaces that are not its own. If `base_namespace` is provided,
+    private namespaces with paths that do not match `base_namespace` are rejected.
+    """
+    namespace_obj = crud.namespace.get(db=db, path=path)
+    if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=(
+                f'Namespace "{path}" not found, or you do not have sufficient '
+                "permissions to read in this namespace."
+            ),
+        )
+    if (
+        base_namespace is not None
+        and not namespace_obj.public
+        and namespace_obj.path != base_namespace
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=(
+                "Cannot join across private namespaces: "
+                f"namespace {namespace_obj.path} is private."
+            ),
+        )
+    return namespace_obj
+
+
 def geos_from_paths(
     paths: list[str], namespace: str, db: Session, scopes: ScopeManager
 ) -> list[models.Geography]:
@@ -259,6 +299,60 @@ def geos_from_paths(
         db=db,
         scopes=scopes,
     )
+
+
+def geo_set_from_paths(
+    locality: str, layer: str, namespace: str, *, db: Session, scopes: ScopeManager
+) -> models.GeoSetVersion:
+    """Returns the latest `GeoSetVersion` corresponding to `locality` and `layer`.
+
+    Raises:
+        HTTPException: If no such `GeoSetVersion` exists, or if the requester
+            does not have permissions to access the GeoSet or its associated
+            geographic layer or locality.
+    """
+    if not scopes.can_read_localities():
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail=no_perms("read localities"),
+        )
+
+    locality_obj = crud.locality.get_by_ref(db=db, path=locality)
+    if locality_obj is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Locality not found."
+        )
+
+    layer_namespace, layer_path = parse_path(layer)
+    layer_namespace_obj = namespace_with_read(
+        db=db,
+        scopes=scopes,
+        path=layer_namespace,
+        base_namespace=namespace,
+    )
+    layer_obj = crud.geo_layer.get(
+        db=db,
+        path=layer_path,
+        namespace=layer_namespace_obj,
+    )
+    if layer_obj is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Geographic layer not found."
+        )
+
+    # Verify that a `GeoSet` currently exists for (locality, layer).
+    geo_set_version = crud.geo_layer.get_set_by_locality(
+        db=db, layer=layer_obj, locality=locality_obj
+    )
+    if geo_set_version is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=(
+                f'No set of geographies in geographic layer "{layer}" '
+                f'at locality "{locality}".'
+            ),
+        )
+    return geo_set_version
 
 
 # see https://fastapi.tiangolo.com/advanced/custom-request-and-route/
@@ -304,6 +398,7 @@ class MsgpackRoute(APIRoute):
                 request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
             except msgpack.MsgpackDecodeError:
+                log.exception("MessagePack decode failed.")
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
                     detail="Request body is not a valid MessagePack object.",
@@ -324,27 +419,75 @@ class NamespacedObjectApi:
     patch_schema: crud.PatchSchemaType | None = None
 
     def _namespace_with_read(
-        self, *, db: Session, scopes: ScopeManager, path: str
+        self,
+        *,
+        db: Session,
+        scopes: ScopeManager,
+        path: str,
+        base_namespace: str | None = None,
     ) -> models.Namespace:
-        """Loads a namespace with read access or raises an HTTP error."""
+        """Loads a namespace with read access or raises an HTTP error.
+
+        Also enforces the private join constraint: a view cannot reference
+        private namespaces that are not its own. If `base_namespace` is provided,
+        private namespaces with paths that do not match `base_namespace` are rejected.
+        """
         namespace_obj = crud.namespace.get(db=db, path=path)
         if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=namespace_read_error_msg(self.obj_name_plural),
             )
+
+        if (
+            base_namespace is not None
+            and not namespace_obj.public
+            and namespace_obj.path != base_namespace
+        ):
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Cannot join across private namespaces: "
+                    f"namespace {namespace_obj.path} is private."
+                ),
+            )
+
         return namespace_obj
 
     def _namespace_with_write(
-        self, *, db: Session, scopes: ScopeManager, path: str
+        self,
+        *,
+        db: Session,
+        scopes: ScopeManager,
+        path: str,
+        base_namespace: str | None = None,
     ) -> models.Namespace:
-        """Loads a namespace with write access or raises an HTTP error."""
+        """Loads a namespace with write access or raises an HTTP error.
+
+        Also enforces the private join constraint: a view cannot reference
+        private namespaces that are not its own. If `base_namespace` is provided,
+        private namespaces with paths that do not match `base_namespace` are rejected.
+        """
         namespace_obj = crud.namespace.get(db=db, path=path)
         if namespace_obj is None or not scopes.can_write_in_namespace(namespace_obj):
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=namespace_write_error_msg(self.obj_name_plural),
             )
+
+        if (
+            base_namespace is not None
+            and not namespace_obj.public
+            and namespace_obj.path != base_namespace
+        ):
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Cannot join across private namespaces: "
+                    f"namespace {namespace_obj.path} is private."
+                ),
+            )
+
         return namespace_obj
 
     def _obj(self, *, db: Session, namespace: models.Namespace, path: str) -> Any:

@@ -373,3 +373,76 @@ class View(ViewBase):
     proj: str | None
     geographies: list[Geography]
     values: dict[str, list]  # keys are columns, values are in order of `geographies`
+
+
+class GraphBase(BaseModel):
+    """Base model for a dual graph."""
+
+    path: CherryPath
+
+
+class GraphCreate(GraphBase):
+    """Dual graph definition received on creation."""
+
+    locality: NamespacedCherryPath
+    layer: NamespacedCherryPath
+    edges: list[tuple[NamespacedCherryPath, NamespacedCherryPath]]
+
+
+# TODO: rendered dual graph
+
+
+class PlanBase(BaseModel):
+    """Base model for a districting plan."""
+
+    path: CherryPath
+    description: str
+    source_url: AnyUrl | None = None
+    districtr_id: str | None = None
+    daves_id: str | None = None
+
+
+class PlanCreate(PlanBase):
+    """Districting plan definition received on creation."""
+
+    locality: NamespacedCherryPath
+    layer: NamespacedCherryPath
+    assignments: dict[NamespacedCherryPath, str]
+
+
+class Plan(PlanBase):
+    """Rendered districting plan."""
+
+    namespace: str
+    locality: Locality
+    layer: GeoLayer
+    meta: ObjectMeta
+    created_at: datetime
+    num_districts: int
+    complete: bool
+    assignments: dict[NamespacedCherryPath, str | None]
+
+    @classmethod
+    def from_orm(cls, obj: models.Plan):
+        # TODO: there's probably a performance bottleneck around the resolution
+        # of geography names for assignments with a lot of geographies.
+        base_geos = {member.geo.full_path: None for member in obj.set_version.members}
+        assignments = {
+            assignment.geo.full_path: assignment.assignment
+            for assignment in obj.assignments
+        }
+        return cls(
+            path=obj.path,
+            namespace=obj.namespace.path,
+            description=obj.description,
+            source_url=obj.source_url,
+            districtr_id=obj.districtr_id,
+            daves_id=obj.daves_id,
+            locality=obj.set_version.loc,
+            layer=obj.set_version.layer,
+            meta=obj.meta,
+            created_at=obj.created_at,
+            num_districts=obj.num_districts,
+            complete=obj.complete,
+            assignments={**base_geos, **assignments},
+        )

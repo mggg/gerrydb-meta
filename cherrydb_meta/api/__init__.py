@@ -10,6 +10,7 @@ from cherrydb_meta.api import (
     locality,
     namespace,
     obj_meta,
+    plan,
     view,
     view_template,
 )
@@ -25,6 +26,7 @@ api_router.include_router(
 )
 api_router.include_router(column_value.router, prefix="/columns", tags=["columns"])
 api_router.include_router(geo_set.router, prefix="/layers", tags=["layers"])
+api_router.include_router(plan.router, prefix="/plans", tags=["plans"])
 api_router.include_router(view.router, prefix="/views", tags=["views"])
 api_router.include_router(
     view_template.router, prefix="/view-templates", tags=["view-templates"]
