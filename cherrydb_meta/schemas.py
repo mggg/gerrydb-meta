@@ -379,6 +379,10 @@ class GraphBase(BaseModel):
     """Base model for a dual graph."""
 
     path: CherryPath
+    description: str
+
+
+WeightedEdge = tuple[NamespacedCherryPath, NamespacedCherryPath, dict | None]
 
 
 class GraphCreate(GraphBase):
@@ -386,10 +390,18 @@ class GraphCreate(GraphBase):
 
     locality: NamespacedCherryPath
     layer: NamespacedCherryPath
-    edges: list[tuple[NamespacedCherryPath, NamespacedCherryPath]]
+    edges: list[WeightedEdge]
 
 
-# TODO: rendered dual graph
+class Graph(GraphBase):
+    """ "Rendered dual graph without node attributes."""
+
+    namespace: str
+    locality: Locality
+    layer: GeoLayer
+    edges: list[WeightedEdge]
+    meta: ObjectMeta
+    created_at: datetime
 
 
 class PlanBase(BaseModel):

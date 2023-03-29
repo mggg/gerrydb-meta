@@ -1,4 +1,4 @@
-"""Endpoints for districting plans."""
+"""Endpoints for districting graphs."""
 from http import HTTPStatus
 from typing import Callable
 
@@ -11,13 +11,12 @@ from cherrydb_meta.api.base import (
     add_etag,
     geo_set_from_paths,
     geos_from_paths,
-    parse_path,
 )
 from cherrydb_meta.api.deps import can_read_localities, get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
 
 
-class PlanApi(NamespacedObjectApi):
+class GraphApi(NamespacedObjectApi):
     def _create(self, router: APIRouter) -> Callable:
         @router.post(
             "/{namespace}",
@@ -29,25 +28,14 @@ class PlanApi(NamespacedObjectApi):
             *,
             response: Response,
             namespace: str,
-            obj_in: schemas.PlanCreate,
+            obj_in: schemas.GraphCreate,
             db: Session = Depends(get_db),
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-            plan_namespace_obj = self._namespace_with_write(
+            namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
-            if plan_namespace_obj is None or not scopes.can_write_in_namespace(
-                plan_namespace_obj
-            ):
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=(
-                        f'Namespace "{namespace}" not found, or you do not have '
-                        "sufficient permissions to write plans in this namespace."
-                    ),
-                )
-
             geo_set_version = geo_set_from_paths(
                 locality=obj_in.locality,
                 layer=obj_in.layer,
@@ -66,30 +54,23 @@ class PlanApi(NamespacedObjectApi):
                 paths=edge_geo_paths, namespace=namespace, db=db, scopes=scopes
             )
             edge_geos_by_path = dict(zip(edge_geo_paths, edge_geos))
-
-            set_geos = [member.geo for member in geo_set_version.members]
-            not_in_geo_set = set(geo.geo_id for geo in edge_geos) - set(
-                geo.geo_id for geo in set_geos
+            graph, etag = self.crud.create(
+                db=db,
+                obj_in=obj_in,
+                geo_set_version=geo_set_version,
+                edge_geos=edge_geos_by_path,
+                obj_meta=obj_meta,
+                namespace=namespace_obj,
             )
-            if not_in_geo_set:
-                bad_geo_paths = [
-                    geo.full_path for geo in edge_geos if geo.geo_id in not_in_geo_set
-                ]
-                raise HTTPException(
-                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-                    detail=(
-                        "Geographies not associated with locality and layer: "
-                        f"{', '.join(bad_geo_paths)}"
-                    ),
-                )
+            add_etag(response, etag)
 
         return create_route
 
 
-router = PlanApi(
-    crud=crud.plan,
-    get_schema=schemas.Plan,
-    create_schema=schemas.PlanCreate,
-    obj_name_singular="Plan",
-    obj_name_plural="Plans",
+router = GraphApi(
+    crud=crud.graph,
+    get_schema=schemas.Graph,
+    create_schema=schemas.GraphCreate,
+    obj_name_singular="Graph",
+    obj_name_plural="Graphs",
 ).router()

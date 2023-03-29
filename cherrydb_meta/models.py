@@ -16,13 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import (
-    DeclarativeBase,
-    Mapped,
-    column_property,
-    mapped_column,
-    relationship,
-)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from cherrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
@@ -273,6 +267,11 @@ class GeoLayer(Base):
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+
+    @property
+    def full_path(self):
+        """Path with namespace prefix."""
+        return f"/{self.namespace.path}/{self.path}"
 
 
 class GeoSetVersion(Base):
@@ -639,6 +638,7 @@ class Graph(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    edges: Mapped[list["GraphEdge"]] = relationship("GraphEdge")
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
@@ -646,13 +646,18 @@ class Graph(Base):
 class GraphEdge(Base):
     __tablename__ = "graph_edge"
 
+    graph_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("graph.graph_id"), primary_key=True
+    )
     geo_id_1: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), primary_key=True
     )
     geo_id_2: Mapped[int] = mapped_column(
         Integer, ForeignKey("geography.geo_id"), primary_key=True
     )
+    weights: Mapped[Any | None] = mapped_column(postgresql.JSONB)
 
+    graph: Mapped[Graph] = relationship("Graph")
     geo_1: Mapped[Geography] = relationship(
         "Geography", lazy="joined", foreign_keys="GraphEdge.geo_id_1"
     )

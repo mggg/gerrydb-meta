@@ -11,7 +11,6 @@ from cherrydb_meta.api.base import (
     add_etag,
     geo_set_from_paths,
     geos_from_paths,
-    parse_path,
 )
 from cherrydb_meta.api.deps import can_read_localities, get_db, get_obj_meta, get_scopes
 from cherrydb_meta.scopes import ScopeManager
