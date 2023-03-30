@@ -7,6 +7,7 @@ from cherrydb_meta.api import (
     geo_import,
     geo_set,
     geography,
+    graph,
     locality,
     namespace,
     obj_meta,
@@ -31,6 +32,7 @@ api_router.include_router(view.router, prefix="/views", tags=["views"])
 api_router.include_router(
     view_template.router, prefix="/view-templates", tags=["view-templates"]
 )
+api_router.include_router(graph.router, prefix="/graphs", tags=["graphs"])
 
 
 api_router.include_router(

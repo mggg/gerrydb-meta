@@ -52,6 +52,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
                 description=obj_in.description,
                 meta_id=obj_meta.meta_id,
             )
+            db.add(graph)
 
             try:
                 db.flush()
@@ -71,9 +72,9 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
                         "graph_id": graph.graph_id,
                         "geo_id_1": edge_geos[geo_path_1].geo_id,
                         "geo_id_2": edge_geos[geo_path_2].geo_id,
-                        # TODO: store perimeter, etc.?
+                        "weights": weights,
                     }
-                    for geo_path_1, geo_path_2 in obj_in.edges
+                    for geo_path_1, geo_path_2, weights in obj_in.edges
                 ],
             )
             etag = self._update_etag(db, namespace)

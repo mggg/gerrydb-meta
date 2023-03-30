@@ -67,6 +67,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         template: models.ViewTemplate,
         locality: models.Locality,
         layer: models.GeoLayer,
+        graph: models.Graph | None = None,
     ) -> Tuple[models.View, uuid.UUID]:
         """Creates a new view."""
         valid_at = (
@@ -84,6 +85,18 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             raise CreateValueError(
                 "Cannot instantiate view: no set of geographies exists "
                 "satisfying locality, layer, and time constraints."
+            )
+
+        if graph is not None and graph.set_version_id != set_version_id:
+            raise CreateValueError(
+                f'Cannot instantiate view: graph "{graph.full_path}" does not match '
+                f'locality "{locality.canonical_ref.path}" and geographic layer '
+                f'"{layer.full_path}".'
+            )
+        if graph is not None and graph.created_at > valid_at:
+            raise CreateValueError(
+                f'Cannot instantiate view: graph "{graph.full_path}" exists '
+                f"in the future relative to view timestamp ({valid_at})."
             )
 
         template_version_id = (
@@ -158,6 +171,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 template_version_id=template_version_id,
                 loc_id=locality.loc_id,
                 layer_id=layer.layer_id,
+                graph_id=None if graph is None else graph.graph_id,
                 at=valid_at,
                 proj=obj_in.proj,
             )
@@ -180,8 +194,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         db.refresh(view)
         return view, etag
 
-    # TODO: patch()
-
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
     ) -> models.View | None:
@@ -202,13 +214,14 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
     def instantiate(
         self, db: Session, *, view: models.View
-    ) -> tuple[list[models.GeoVersion], dict[str, list]]:
+    ) -> tuple[list[models.GeoVersion], dict[str, list], list[models.Plan]]:
         """Retrieves data associated with a view.
 
         Returns:
-            A 2-tuple containing:
+            A 3-tuple containing:
                 (1) A list of versioned geographies associated with the view.
-                (2) TODO...
+                (2) Column values associated with the view.
+                (3) Plans associated with the view.
         """
         set_version_id = _geo_set_version_id(db, view.loc, view.layer, view.at)
         # TODO: bespoke exceptions?
@@ -260,7 +273,28 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             col_paths[col_id]: [v for _, v in sorted(vals_by_geo.items())]
             for col_id, vals_by_geo in col_values_mapped.items()
         }
-        return geo_versions, col_values
+
+        # Find all plans compatible with the `GeoSetVersion` that existed
+        # when the view was created.
+        plans = (
+            db.query(models.Plan)
+            .filter(
+                models.Plan.set_version_id == set_version_id,
+                models.Plan.created_at <= view.at,
+            )
+            .all()
+        )
+        # Apply the public join constraint: don't leak any private plans.
+        visible_plans = [
+            plan
+            for plan in plans
+            if (
+                plan.namespace.public
+                or plan.namespace.namespace_id == view.namespace.namespace_id
+            )
+        ]
+
+        return geo_versions, col_values, visible_plans
 
 
 view = CRView(models.View)

@@ -637,10 +637,17 @@ class Graph(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    proj: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     edges: Mapped[list["GraphEdge"]] = relationship("GraphEdge")
+    set_version: Mapped[GeoSetVersion] = relationship("GeoSetVersion")
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+
+    @property
+    def full_path(self):
+        """Path with namespace prefix."""
+        return f"/{self.namespace.path}/{self.path}"
 
 
 class GraphEdge(Base):
@@ -657,7 +664,7 @@ class GraphEdge(Base):
     )
     weights: Mapped[Any | None] = mapped_column(postgresql.JSONB)
 
-    graph: Mapped[Graph] = relationship("Graph")
+    graph: Mapped[Graph] = relationship("Graph", overlaps="edges")
     geo_1: Mapped[Geography] = relationship(
         "Geography", lazy="joined", foreign_keys="GraphEdge.geo_id_1"
     )
@@ -816,6 +823,9 @@ class View(Base):
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
     )
+    graph_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("graph.graph_id"), nullable=True
+    )
 
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     template: Mapped[ViewTemplate] = relationship("ViewTemplate", lazy="joined")
@@ -825,6 +835,7 @@ class View(Base):
     loc: Mapped[Locality] = relationship("Locality", lazy="joined")
     layer: Mapped[GeoLayer] = relationship("GeoLayer", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
+    graph: Mapped[Graph | None] = relationship("Graph", lazy="joined")
 
 
 class ETag(Base):

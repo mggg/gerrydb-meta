@@ -63,6 +63,7 @@ class GraphApi(NamespacedObjectApi):
                 namespace=namespace_obj,
             )
             add_etag(response, etag)
+            return schemas.Graph.from_orm(graph)
 
         return create_route
 

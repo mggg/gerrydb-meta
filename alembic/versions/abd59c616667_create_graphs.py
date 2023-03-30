@@ -6,6 +6,7 @@ Create Date: 2023-03-23 16:59:16.924503
 
 """
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -24,6 +25,7 @@ def upgrade() -> None:
         sa.Column("namespace_id", sa.Integer(), nullable=False),
         sa.Column("path", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
+        sa.Column("proj", sa.Text(), nullable=True),
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.Column(
             "created_at",
@@ -70,8 +72,14 @@ def upgrade() -> None:
     )
     op.create_table(
         "graph_edge",
+        sa.Column("graph_id", sa.Integer(), nullable=False),
         sa.Column("geo_id_1", sa.Integer(), nullable=False),
         sa.Column("geo_id_2", sa.Integer(), nullable=False),
+        sa.Column("weights", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["graph_id"],
+            ["cherrydb.graph.graph_id"],
+        ),
         sa.ForeignKeyConstraint(
             ["geo_id_1"],
             ["cherrydb.geography.geo_id"],
@@ -80,7 +88,7 @@ def upgrade() -> None:
             ["geo_id_2"],
             ["cherrydb.geography.geo_id"],
         ),
-        sa.PrimaryKeyConstraint("geo_id_1", "geo_id_2"),
+        sa.PrimaryKeyConstraint("graph_id", "geo_id_1", "geo_id_2"),
         schema="cherrydb",
     )
 

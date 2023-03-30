@@ -73,7 +73,7 @@ class ViewTemplateApi(NamespacedObjectApi):
                 namespace=namespace_obj,
             )
             add_etag(response, etag)
-            return template_obj
+            return schemas.ViewTemplate.from_orm(template_obj)
 
         return create_route
 

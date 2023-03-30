@@ -54,10 +54,15 @@ def create_view(
 
     layer_namespace, layer_path = parse_path(obj_in.layer)
     template_namespace, template_path = parse_path(obj_in.template)
+    if obj_in.graph is None:
+        graph_namespace = graph_path = None
+    else:
+        graph_namespace, graph_path = parse_path(obj_in.graph)
 
     namespaces = {
         "layer": namespace if layer_namespace is None else layer_namespace,
         "template": namespace if template_namespace is None else template_namespace,
+        "graph": namespace if graph_namespace is None else graph_namespace,
     }
     namespace_objs = {}
     for namespace_label, resource_namespace in namespaces.items():
@@ -81,6 +86,17 @@ def create_view(
             status_code=HTTPStatus.NOT_FOUND, detail="Geographic layer not found."
         )
 
+    if graph_path is None:
+        graph_obj = None
+    else:
+        graph_obj = crud.graph.get(
+            db, path=graph_path, namespace=namespace_objs["graph"]
+        )
+        if graph_obj is None:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="Dual graph not found."
+            )
+
     view_obj, etag = crud.view.create(
         db=db,
         obj_in=obj_in,
@@ -89,8 +105,9 @@ def create_view(
         template=template_obj,
         locality=locality_obj,
         layer=layer_obj,
+        graph=graph_obj,
     )
-    geo_versions, col_values = crud.view.instantiate(db=db, view=view_obj)
+    geo_versions, col_values, plans = crud.view.instantiate(db=db, view=view_obj)
 
     add_etag(response, etag)
     return MsgpackResponse(
@@ -105,6 +122,10 @@ def create_view(
             proj=view_obj.proj,
             geographies=geo_versions,
             values=col_values,
+            plans=plans,
+            graph=None
+            if view_obj.graph is None
+            else schemas.Graph.from_orm(view_obj.graph),
         ).dict()
     )
 
@@ -144,9 +165,13 @@ def get_view(
         )
 
     etag = crud.view.etag(db, view_namespace_obj)
-    geo_versions, col_values = crud.view.instantiate(db=db, view=view_obj)
+    geo_versions, col_values, plans = crud.view.instantiate(db=db, view=view_obj)
 
     add_etag(response, etag)
+    print(
+        "graph is",
+        None if view_obj.graph is None else schemas.Graph.from_orm(view_obj.graph),
+    )
     return MsgpackResponse(
         schemas.View(
             path=view_obj.path,
@@ -159,5 +184,9 @@ def get_view(
             proj=view_obj.proj,
             geographies=geo_versions,
             values=col_values,
+            plans=plans,
+            graph=None
+            if view_obj.graph is None
+            else schemas.Graph.from_orm(view_obj.graph),
         ).dict()
     )

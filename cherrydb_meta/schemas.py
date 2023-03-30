@@ -81,6 +81,7 @@ class Locality(LocalityBase):
             name=obj.name,
             meta=obj.meta,
             aliases=[ref.path for ref in obj.refs if ref.path != canonical_path],
+            default_proj=obj.default_proj,
         )
 
 
@@ -344,42 +345,12 @@ class ViewTemplate(ViewTemplateBase):
         )
 
 
-class ViewBase(BaseModel):
-    """Base model for a view."""
-
-    path: CherryPath
-
-
-class ViewCreate(ViewBase):
-    """View definition received on creation."""
-
-    template: NamespacedCherryPath
-    locality: NamespacedCherryPath
-    layer: NamespacedCherryPath
-
-    valid_at: datetime | None = None
-    proj: str | None = None
-
-
-class View(ViewBase):
-    """Rendered view."""
-
-    namespace: str
-    template: ViewTemplate
-    locality: Locality
-    layer: GeoLayer
-    meta: ObjectMeta
-    valid_at: datetime
-    proj: str | None
-    geographies: list[Geography]
-    values: dict[str, list]  # keys are columns, values are in order of `geographies`
-
-
 class GraphBase(BaseModel):
     """Base model for a dual graph."""
 
     path: CherryPath
     description: str
+    proj: str | None = None
 
 
 WeightedEdge = tuple[NamespacedCherryPath, NamespacedCherryPath, dict | None]
@@ -394,7 +365,7 @@ class GraphCreate(GraphBase):
 
 
 class Graph(GraphBase):
-    """ "Rendered dual graph without node attributes."""
+    """Rendered dual graph without node attributes."""
 
     namespace: str
     locality: Locality
@@ -402,6 +373,22 @@ class Graph(GraphBase):
     edges: list[WeightedEdge]
     meta: ObjectMeta
     created_at: datetime
+
+    @classmethod
+    def from_orm(cls, obj: models.Graph):
+        return cls(
+            path=obj.path,
+            namespace=obj.namespace.path,
+            description=obj.description,
+            locality=obj.set_version.loc,
+            layer=obj.set_version.layer,
+            meta=obj.meta,
+            created_at=obj.created_at,
+            edges=[
+                (edge.geo_1.full_path, edge.geo_2.full_path, edge.weights)
+                for edge in obj.edges
+            ],
+        )
 
 
 class PlanBase(BaseModel):
@@ -458,3 +445,37 @@ class Plan(PlanBase):
             complete=obj.complete,
             assignments={**base_geos, **assignments},
         )
+
+
+class ViewBase(BaseModel):
+    """Base model for a view."""
+
+    path: CherryPath
+
+
+class ViewCreate(ViewBase):
+    """View definition received on creation."""
+
+    template: NamespacedCherryPath
+    locality: NamespacedCherryPath
+    layer: NamespacedCherryPath
+    graph: NamespacedCherryPath | None = None
+
+    valid_at: datetime | None = None
+    proj: str | None = None
+
+
+class View(ViewBase):
+    """Rendered view."""
+
+    namespace: str
+    template: ViewTemplate
+    locality: Locality
+    layer: GeoLayer
+    meta: ObjectMeta
+    valid_at: datetime
+    proj: str | None
+    geographies: list[Geography]
+    values: dict[str, list]  # keys are columns, values are in order of `geographies`
+    graph: Graph | None
+    plans: list[Plan]
