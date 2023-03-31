@@ -122,7 +122,7 @@ def create_view(
             proj=view_obj.proj,
             geographies=geo_versions,
             values=col_values,
-            plans=plans,
+            plans=[schemas.Plan.from_orm(plan) for plan in plans],
             graph=None
             if view_obj.graph is None
             else schemas.Graph.from_orm(view_obj.graph),
@@ -168,10 +168,6 @@ def get_view(
     geo_versions, col_values, plans = crud.view.instantiate(db=db, view=view_obj)
 
     add_etag(response, etag)
-    print(
-        "graph is",
-        None if view_obj.graph is None else schemas.Graph.from_orm(view_obj.graph),
-    )
     return MsgpackResponse(
         schemas.View(
             path=view_obj.path,
@@ -184,7 +180,7 @@ def get_view(
             proj=view_obj.proj,
             geographies=geo_versions,
             values=col_values,
-            plans=plans,
+            plans=[schemas.Plan.from_orm(plan) for plan in plans],
             graph=None
             if view_obj.graph is None
             else schemas.Graph.from_orm(view_obj.graph),
