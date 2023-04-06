@@ -274,7 +274,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                     col.canonical_path,
                 )
                 raise CreateValueError(
-                    "Failed to create aliases for new column."
+                    "Failed to create aliases for new column. "
                     "(One or more aliases may already exist.)"
                 )
 

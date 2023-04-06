@@ -42,7 +42,7 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                     canonical_path,
                 )
                 raise CreateValueError(
-                    f"Failed to create column set '{canonical_path}'."
+                    f"Failed to create column set '{canonical_path}'. "
                     "(The path may already exist in the namespace.)"
                 )
             db.refresh(column_set)

@@ -7,4 +7,4 @@ COPY pyproject.toml pyproject.toml
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install --no-interaction --no-ansi
 COPY cherrydb_meta cherrydb_meta
 
-CMD ["gunicorn", "-w", "4", "--access-logfile", "-", "-k", "uvicorn.workers.UvicornWorker", "cherrydb_meta.main:app"]
+CMD ["gunicorn", "-w", "4", "--access-logfile", "-", "-k", "uvicorn.workers.UvicornWorker", "cherrydb_meta.main:app", "--timeout", "300"]

@@ -6,6 +6,7 @@ Create Date: 2023-03-23 16:59:16.924503
 
 """
 import sqlalchemy as sa
+from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
@@ -91,9 +92,14 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("graph_id", "geo_id_1", "geo_id_2"),
         schema="cherrydb",
     )
-
+    op.add_column(
+        "view",
+        Column("graph_id", Integer(), ForeignKey("graph.graph_id")),
+        schema="cherrydb",
+    )
 
 def downgrade() -> None:
+    op.drop_column("view", "graph_id", schema="cherrydb")
     op.drop_table("graph_edge", schema="cherrydb")
     op.drop_index(
         op.f("ix_cherrydb_graph_set_version_id"), table_name="graph", schema="cherrydb"

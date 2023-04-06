@@ -185,7 +185,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                     canonical_path,
                 )
                 raise CreateValueError(
-                    f"Failed to create view '{canonical_path}'."
+                    f"Failed to create view '{canonical_path}'. "
                     "(The path may already exist in the namespace.)"
                 )
 

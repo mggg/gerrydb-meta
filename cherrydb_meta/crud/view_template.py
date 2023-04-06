@@ -44,7 +44,7 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
                     canonical_path,
                 )
                 raise CreateValueError(
-                    f"Failed to create view template '{canonical_path}'."
+                    f"Failed to create view template '{canonical_path}'. "
                     "(The path may already exist in the namespace.)"
                 )
             db.refresh(view_template)
