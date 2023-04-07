@@ -6,7 +6,7 @@ Create Date: 2023-03-23 16:59:16.924503
 
 """
 import sqlalchemy as sa
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
@@ -97,6 +97,7 @@ def upgrade() -> None:
         Column("graph_id", Integer(), ForeignKey("graph.graph_id")),
         schema="cherrydb",
     )
+
 
 def downgrade() -> None:
     op.drop_column("view", "graph_id", schema="cherrydb")

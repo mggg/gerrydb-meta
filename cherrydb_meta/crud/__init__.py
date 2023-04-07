@@ -18,5 +18,5 @@ from cherrydb_meta.crud.locality import locality
 from cherrydb_meta.crud.namespace import namespace
 from cherrydb_meta.crud.obj_meta import obj_meta
 from cherrydb_meta.crud.plan import plan
-from cherrydb_meta.crud.view import view
+from cherrydb_meta.crud.view import ViewStream, view
 from cherrydb_meta.crud.view_template import view_template

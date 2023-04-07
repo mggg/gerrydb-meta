@@ -479,3 +479,15 @@ class View(ViewBase):
     values: dict[str, list]  # keys are columns, values are in order of `geographies`
     graph: Graph | None
     plans: list[Plan]
+
+
+class ViewMeta(ViewBase):
+    """Rendered view (metadata fields only)."""
+
+    namespace: str
+    template: ViewTemplate
+    locality: Locality
+    layer: GeoLayer
+    meta: ObjectMeta
+    valid_at: datetime
+    proj: str | None

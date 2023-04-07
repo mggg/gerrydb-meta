@@ -1,12 +1,13 @@
-"""CRUD operations and transformations for view templates."""
+"""CRUD operations and transformations for views."""
 import logging
 import uuid
-from collections import defaultdict
+from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Iterator, Tuple
 
 from sqlalchemy import exc, func, label, or_, select, union
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from cherrydb_meta import models, schemas
 from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
@@ -14,6 +15,10 @@ from cherrydb_meta.crud.column import COLUMN_TYPE_TO_VALUE_COLUMN
 from cherrydb_meta.exceptions import CreateValueError
 
 log = logging.getLogger()
+
+# Server-side cursor configuration.
+GEO_BATCH_SIZE = 5000
+COLUMN_VALUE_BATCH_SIZE = 50000
 
 
 def _geo_set_version_id(
@@ -38,10 +43,10 @@ def _geo_set_version_id(
 def _view_columns(db: Session, template_version_id: int) -> list[models.DataColumn]:
     """Gets the unique columns associated with a `ViewTemplateVersion`."""
     column_ref_ids = select(models.ViewTemplateColumnMember.ref_id).filter(
-        models.ViewTemplateVersion.template_version_id == template_version_id
+        models.ViewTemplateColumnMember.template_version_id == template_version_id
     )
     column_set_ids = select(models.ViewTemplateColumnSetMember.set_id).filter(
-        models.ViewTemplateVersion.template_version_id == template_version_id
+        models.ViewTemplateColumnSetMember.template_version_id == template_version_id
     )
     column_set_ref_ids = select(models.ColumnSetMember.ref_id).filter(
         models.ColumnSetMember.set_id.in_(column_set_ids)
@@ -54,6 +59,16 @@ def _view_columns(db: Session, template_version_id: int) -> list[models.DataColu
         .filter(models.DataColumn.col_id.in_(column_ids))
         .all()
     )
+
+
+@dataclass(frozen=True)
+class ViewStream:
+    """Iterables for instantiated view data."""
+
+    geo_count: int
+    geographies: Iterator
+    column_values: dict[str, Iterator]
+    plans: list[models.Plan]
 
 
 class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
@@ -212,67 +227,60 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .first()
         )
 
-    def instantiate(
-        self, db: Session, *, view: models.View
-    ) -> tuple[list[models.GeoVersion], dict[str, list], list[models.Plan]]:
-        """Retrieves data associated with a view.
-
-        Returns:
-            A 3-tuple containing:
-                (1) A list of versioned geographies associated with the view.
-                (2) Column values associated with the view.
-                (3) Plans associated with the view.
-        """
+    def instantiate(self, db: Session, *, view: models.View) -> ViewStream:
+        """Retrieves iterators for data associated with a view."""
         set_version_id = _geo_set_version_id(db, view.loc, view.layer, view.at)
-        # TODO: bespoke exceptions?
         if set_version_id is None:
             raise ValueError("Invalid view: versioned geographies not found.")
 
         columns = _view_columns(db, view.template_version_id)
+
         geo_set_members = select(models.GeoSetMember.geo_id).filter(
             models.GeoSetMember.set_version_id == set_version_id
         )
-        geo_versions = (
-            db.query(models.GeoVersion)
-            .filter(
-                models.GeoVersion.geo_id.in_(geo_set_members),
-                models.GeoVersion.valid_from <= view.at,
-                (
-                    (models.GeoVersion.valid_to.is_(None))
-                    | (models.GeoVersion.valid_to <= view.at)
-                ),
+        geo_count = db.execute(
+            select(func.count(models.GeoSetMember.geo_id)).filter(
+                models.GeoSetMember.set_version_id == set_version_id
             )
-            .order_by(models.GeoVersion.geo_id)
-            .all()
+        ).first()[0]
+        geo_query = (
+            db.scalars(
+                db.query(models.GeoVersion)
+                .filter(
+                    models.GeoVersion.geo_id.in_(geo_set_members),
+                    models.GeoVersion.valid_from <= view.at,
+                    (
+                        (models.GeoVersion.valid_to.is_(None))
+                        | (models.GeoVersion.valid_to <= view.at)
+                    ),
+                )
+                .order_by(models.GeoVersion.geo_id)
+            )
+            .yield_per(GEO_BATCH_SIZE)
+            .partitions()
         )
 
-        # Convert column values into the form
-        # {<column path>: <values in order of `geo_versions`>}.
-        col_paths = {col.col_id: col.canonical_ref.full_path for col in columns}
-        col_types = {col.col_id: col.type for col in columns}
-        col_values_raw = (
-            db.query(models.ColumnValue)
-            .filter(
-                models.ColumnValue.geo_id.in_(geo_set_members),
-                models.ColumnValue.col_id.in_(col.col_id for col in columns),
-                models.ColumnValue.valid_from <= view.at,
-                or_(
-                    models.ColumnValue.valid_to.is_(None),
-                    models.ColumnValue.valid_to >= view.at,
-                ),
+        # Create generators for each column.
+        col_queries = {}
+        for col in columns:
+            value_col = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
+            col_queries[col.canonical_ref.full_path] = (
+                db.scalars(
+                    db.query(getattr(models.ColumnValue, value_col).label("val"))
+                    .filter(
+                        models.ColumnValue.geo_id.in_(geo_set_members),
+                        models.ColumnValue.col_id == col.col_id,
+                        models.ColumnValue.valid_from <= view.at,
+                        or_(
+                            models.ColumnValue.valid_to.is_(None),
+                            models.ColumnValue.valid_to >= view.at,
+                        ),
+                    )
+                    .order_by(models.ColumnValue.geo_id)
+                )
+                .yield_per(COLUMN_VALUE_BATCH_SIZE)
+                .partitions()
             )
-            .all()
-        )
-
-        col_values_mapped = defaultdict(dict)
-        for value in col_values_raw:
-            value_col = COLUMN_TYPE_TO_VALUE_COLUMN[col_types[value.col_id]]
-            col_values_mapped[value.col_id][value.geo_id] = getattr(value, value_col)
-
-        col_values = {
-            col_paths[col_id]: [v for _, v in sorted(vals_by_geo.items())]
-            for col_id, vals_by_geo in col_values_mapped.items()
-        }
 
         # Find all plans compatible with the `GeoSetVersion` that existed
         # when the view was created.
@@ -293,8 +301,12 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 or plan.namespace.namespace_id == view.namespace.namespace_id
             )
         ]
-
-        return geo_versions, col_values, visible_plans
+        return ViewStream(
+            geo_count=geo_count,
+            geographies=geo_query,
+            column_values=col_queries,
+            plans=visible_plans,
+        )
 
 
 view = CRView(models.View)
