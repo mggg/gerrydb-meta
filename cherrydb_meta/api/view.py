@@ -24,6 +24,8 @@ from cherrydb_meta.scopes import ScopeManager
 router = APIRouter()
 BUF_SIZE = 32 * 1024**2
 
+import yappi
+
 
 @router.post(
     "/{namespace}",
@@ -41,6 +43,7 @@ def create_view(
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if view_namespace_obj is None or not scopes.can_write_derived_in_namespace(
         view_namespace_obj
@@ -116,6 +119,10 @@ def create_view(
     )
     view_stream = crud.view.instantiate(db=db, view=view_obj)
     add_etag(response, etag)
+    
+    #print("profile before response:", yappi.get_func_stats().print_all())
+    #yappi.convert2pstats(yappi.get_func_stats()).dump_stats("pre_stream.prof")
+    
     return StreamingResponse(
         io.BufferedReader(
             ViewMsgpackStream(view=view_obj, stream=view_stream),
@@ -200,6 +207,8 @@ def _strip_array(dump: bytes) -> bytes:
     raise ValueError("Not a Msgpack array dump.")
 
 
+prof_idx = 0
+
 class ViewMsgpackStream(io.RawIOBase):
     """Renders database-streamed view data as a Msgpack stream."""
 
@@ -246,7 +255,7 @@ class ViewMsgpackStream(io.RawIOBase):
             [
                 (ViewStreamChunkType.GEO, None),
                 (ViewStreamChunkType.GRAPH, None),
-                (ViewStreamChunkType.COLUMN_VALUE, None),  # section markers
+                (ViewStreamChunkType.COLUMN_VALUE, None),  # section marker
             ]
             + [(ViewStreamChunkType.COLUMN_VALUE, col) for col in stream.column_values]
             + [(ViewStreamChunkType.PLAN, None)]  # section marker
@@ -357,4 +366,5 @@ class ViewMsgpackStream(io.RawIOBase):
         chunk_size = min(len(buf), len(self._buf))
         buf[:chunk_size] = self._buf[:chunk_size]
         self._buf = self._buf[chunk_size:]
+       
         return chunk_size
