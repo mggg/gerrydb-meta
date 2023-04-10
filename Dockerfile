@@ -22,6 +22,8 @@ COPY pyproject.toml pyproject.toml
 # https://stackoverflow.com/a/54763270
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install --no-interaction --no-ansi
 COPY cherrydb_meta cherrydb_meta
+COPY serve.sh serve.sh
+RUN chmod +x serve.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--"] 
 CMD ["/app/serve.sh"]
