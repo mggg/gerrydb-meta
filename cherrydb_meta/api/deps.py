@@ -31,6 +31,10 @@ def get_db() -> Generator:
         engine.dispose()
 
 
+def get_db_url() -> str:
+    return db_url
+
+
 def get_user(
     db: Session = Depends(get_db), x_api_key: str | None = Header(default=None)
 ) -> models.User:

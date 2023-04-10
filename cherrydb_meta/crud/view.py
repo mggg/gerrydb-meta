@@ -1,24 +1,23 @@
 """CRUD operations and transformations for views."""
 import logging
+import re
 import uuid
-from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterator, Tuple
+from typing import Tuple
 
 from sqlalchemy import exc, func, label, or_, select, union
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import Session
 
 from cherrydb_meta import models, schemas
 from cherrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from cherrydb_meta.crud.column import COLUMN_TYPE_TO_VALUE_COLUMN
 from cherrydb_meta.exceptions import CreateValueError
 
-log = logging.getLogger()
+_ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
 
-# Server-side cursor configuration.
-GEO_BATCH_SIZE = 5000
-COLUMN_VALUE_BATCH_SIZE = 50000
+log = logging.getLogger()
 
 
 def _geo_set_version_id(
@@ -62,13 +61,10 @@ def _view_columns(db: Session, template_version_id: int) -> list[models.DataColu
 
 
 @dataclass(frozen=True)
-class ViewStream:
-    """Iterables for instantiated view data."""
+class ViewRenderContext:
+    """Context for rendering a view's data and metadata."""
 
-    geo_count: int
-    geographies: Iterator
-    column_values: dict[str, Iterator]
-    plans: list[models.Plan]
+    query: str
 
 
 class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
@@ -186,6 +182,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 template_version_id=template_version_id,
                 loc_id=locality.loc_id,
                 layer_id=layer.layer_id,
+                set_version_id=set_version_id,
                 graph_id=None if graph is None else graph.graph_id,
                 at=valid_at,
                 proj=obj_in.proj,
@@ -227,85 +224,89 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .first()
         )
 
-    def instantiate(self, db: Session, *, view: models.View) -> ViewStream:
-        """Retrieves iterators for data associated with a view."""
-        set_version_id = _geo_set_version_id(db, view.loc, view.layer, view.at)
-        if set_version_id is None:
-            raise ValueError("Invalid view: versioned geographies not found.")
+    def render(self, db: Session, *, view: models.View) -> ViewRenderContext:
+        """Generates a query to retrieve tabular view data.
 
+        Used for bulk exports via `ogr2ogr`.
+        """
         columns = _view_columns(db, view.template_version_id)
-
-        geo_set_members = select(models.GeoSetMember.geo_id).filter(
-            models.GeoSetMember.set_version_id == set_version_id
-        )
-        geo_count = db.execute(
-            select(func.count(models.GeoSetMember.geo_id)).filter(
-                models.GeoSetMember.set_version_id == set_version_id
+        members_sub = (
+            select(
+                models.GeoSetMember.set_version_id,
+                models.GeoSetMember.geo_id,
             )
-        ).first()[0]
-        geo_query = (
-            db.scalars(
-                db.query(models.GeoVersion)
-                .filter(
-                    models.GeoVersion.geo_id.in_(geo_set_members),
-                    models.GeoVersion.valid_from <= view.at,
-                    (
-                        (models.GeoVersion.valid_to.is_(None))
-                        | (models.GeoVersion.valid_to <= view.at)
-                    ),
-                )
-                .order_by(models.GeoVersion.geo_id)
-            )
-            .yield_per(GEO_BATCH_SIZE)
-            .partitions()
+            .filter(models.GeoSetMember.set_version_id == view.set_version_id)
+            .subquery()
         )
+        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
 
-        # Create generators for each column.
-        col_queries = {}
+        # Generate subqueries for joining tabular data.
+        column_subs = []
+        column_labels = []
         for col in columns:
             value_col = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
-            col_queries[col.canonical_ref.full_path] = (
-                db.scalars(
-                    db.query(getattr(models.ColumnValue, value_col).label("val"))
-                    .filter(
-                        models.ColumnValue.geo_id.in_(geo_set_members),
-                        models.ColumnValue.col_id == col.col_id,
-                        models.ColumnValue.valid_from <= view.at,
-                        or_(
-                            models.ColumnValue.valid_to.is_(None),
-                            models.ColumnValue.valid_to >= view.at,
-                        ),
-                    )
-                    .order_by(models.ColumnValue.geo_id)
+            # TODO: use preferred path.
+            # TODO: make sure that labels are always valid and unique (slashes, etc.?)
+            column_sub = (
+                select(
+                    models.ColumnValue.geo_id,
+                    getattr(models.ColumnValue, value_col).label(
+                        col.canonical_ref.path
+                    ),
                 )
-                .yield_per(COLUMN_VALUE_BATCH_SIZE)
-                .partitions()
+                .filter(
+                    models.ColumnValue.col_id == col.col_id,
+                    models.ColumnValue.valid_from <= view.at,
+                    or_(
+                        models.ColumnValue.valid_to.is_(None),
+                        models.ColumnValue.valid_to >= view.at,
+                    ),
+                )
+                .subquery()
+            )
+            column_subs.append(column_sub)
+            column_labels.append(column_sub.c[col.canonical_ref.path])
+
+        query = (
+            select(
+                geo_sub.c.path,
+                models.GeoVersion.geography,
+                # TODO: internal points
+                *column_labels,
+            )
+            .join(
+                members_sub,
+                members_sub.c.geo_id == models.GeoVersion.geo_id,
+            )
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+        )
+
+        for column_sub in column_subs:
+            query = query.join(
+                column_sub, column_sub.c.geo_id == models.GeoVersion.geo_id
             )
 
-        # Find all plans compatible with the `GeoSetVersion` that existed
-        # when the view was created.
-        plans = (
-            db.query(models.Plan)
-            .filter(
-                models.Plan.set_version_id == set_version_id,
-                models.Plan.created_at <= view.at,
-            )
-            .all()
+        query = query.where(
+            models.GeoVersion.valid_from <= view.at,
+            or_(
+                models.GeoVersion.valid_to.is_(None),
+                models.GeoVersion.valid_to >= view.at,
+            ),
         )
-        # Apply the public join constraint: don't leak any private plans.
-        visible_plans = [
-            plan
-            for plan in plans
-            if (
-                plan.namespace.public
-                or plan.namespace.namespace_id == view.namespace.namespace_id
+
+        # Query generation: substitute in literals and remove the
+        # ST_AsBinary() calls added by GeoAlchemy2.
+        return ViewRenderContext(
+            query=re.sub(
+                _ST_ASBINARY_REGEX,
+                r"\1",
+                str(
+                    query.compile(
+                        dialect=postgresql.dialect(),
+                        compile_kwargs={"literal_binds": True},
+                    )
+                ),
             )
-        ]
-        return ViewStream(
-            geo_count=geo_count,
-            geographies=geo_query,
-            column_values=col_queries,
-            plans=visible_plans,
         )
 
 

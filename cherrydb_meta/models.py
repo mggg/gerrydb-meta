@@ -816,6 +816,10 @@ class View(Base):
     layer_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geo_layer.layer_id"), nullable=False
     )
+    # Technically redundant with (loc_id, layer_id) but very handy.
+    set_version_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_set_version.set_version_id"), nullable=False
+    )
     at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

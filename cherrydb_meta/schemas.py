@@ -364,15 +364,32 @@ class GraphCreate(GraphBase):
     edges: list[WeightedEdge]
 
 
-class Graph(GraphBase):
-    """Rendered dual graph without node attributes."""
+class GraphMeta(GraphBase):
+    """Dual graph metadata."""
 
     namespace: str
     locality: Locality
     layer: GeoLayer
-    edges: list[WeightedEdge]
     meta: ObjectMeta
     created_at: datetime
+
+    @classmethod
+    def from_orm(cls, obj: models.Graph):
+        return cls(
+            path=obj.path,
+            namespace=obj.namespace.path,
+            description=obj.description,
+            locality=obj.set_version.loc,
+            layer=obj.set_version.layer,
+            meta=obj.meta,
+            created_at=obj.created_at,
+        )
+
+
+class Graph(GraphMeta):
+    """Rendered dual graph without node attributes."""
+
+    edges: list[WeightedEdge]
 
     @classmethod
     def from_orm(cls, obj: models.Graph):
@@ -409,8 +426,8 @@ class PlanCreate(PlanBase):
     assignments: dict[NamespacedCherryPath, str]
 
 
-class Plan(PlanBase):
-    """Rendered districting plan."""
+class PlanMeta(PlanBase):
+    """Rendered districting plan (metadata only)."""
 
     namespace: str
     locality: Locality
@@ -419,6 +436,28 @@ class Plan(PlanBase):
     created_at: datetime
     num_districts: int
     complete: bool
+
+    @classmethod
+    def from_orm(cls, obj: models.Plan):
+        return cls(
+            path=obj.path,
+            namespace=obj.namespace.path,
+            description=obj.description,
+            source_url=obj.source_url,
+            districtr_id=obj.districtr_id,
+            daves_id=obj.daves_id,
+            locality=obj.set_version.loc,
+            layer=obj.set_version.layer,
+            meta=obj.meta,
+            created_at=obj.created_at,
+            num_districts=obj.num_districts,
+            complete=obj.complete,
+        )
+
+
+class Plan(PlanMeta):
+    """Rendered districting plan."""
+
     assignments: dict[NamespacedCherryPath, str | None]
 
     @classmethod
@@ -465,24 +504,8 @@ class ViewCreate(ViewBase):
     proj: str | None = None
 
 
-class View(ViewBase):
-    """Rendered view."""
-
-    namespace: str
-    template: ViewTemplate
-    locality: Locality
-    layer: GeoLayer
-    meta: ObjectMeta
-    valid_at: datetime
-    proj: str | None
-    geographies: list[Geography]
-    values: dict[str, list]  # keys are columns, values are in order of `geographies`
-    graph: Graph | None
-    plans: list[Plan]
-
-
 class ViewMeta(ViewBase):
-    """Rendered view (metadata fields only)."""
+    """View metadata."""
 
     namespace: str
     template: ViewTemplate
@@ -491,3 +514,19 @@ class ViewMeta(ViewBase):
     meta: ObjectMeta
     valid_at: datetime
     proj: str | None
+    graph: GraphMeta | None
+    # TODO: add plans and geography paths?
+
+    @classmethod
+    def from_orm(cls, obj: models.View):
+        return cls(
+            path=obj.path,
+            namespace=obj.namespace.path,
+            template=ViewTemplate.from_orm(obj.template_version),
+            locality=obj.loc,
+            layer=obj.layer,
+            meta=obj.meta,
+            valid_at=obj.at,
+            proj=obj.proj,
+            graph=obj.graph,
+        )
