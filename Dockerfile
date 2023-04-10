@@ -4,7 +4,7 @@ FROM python:3.10-slim
 # https://cloud.google.com/run/docs/tutorials/network-filesystems-fuse
 RUN set -e; \
     apt-get update -y && apt-get install -y \
-    tini \
+    tini gnupg2 curl \
     lsb-release; \
     gcsFuseRepo=gcsfuse-`lsb_release -c -s`; \
     echo "deb http://packages.cloud.google.com/apt $gcsFuseRepo main" | \
