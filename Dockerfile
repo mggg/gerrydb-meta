@@ -15,7 +15,7 @@ RUN set -e; \
     apt-get install -y gcsfuse \
     && apt-get clean
 ENV MNT_DIR /mnt/gcs
-i
+
 WORKDIR /app
 RUN pip3 install poetry
 COPY pyproject.toml pyproject.toml
