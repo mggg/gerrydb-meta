@@ -15,8 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index("geo_version_geo_id", "geo_version", ["geo_id"], schema="cherrydb")
+    op.create_index("geo_version_geo_id", "geo_version", ["geo_id"], schema="gerrydb")
 
 
 def downgrade() -> None:
-    op.drop_index("geo_version_geo_id", schema="cherrydb")
+    op.drop_index("geo_version_geo_id", schema="gerrydb")

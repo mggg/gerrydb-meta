@@ -25,11 +25,11 @@ def upgrade() -> None:
         sa.Column("etag", sa.UUID(), nullable=False),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("etag_id"),
         sa.UniqueConstraint("namespace_id", "table"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "view_template",
@@ -40,29 +40,29 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("template_id"),
         sa.UniqueConstraint("namespace_id", "path"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_view_template_namespace_id"),
+        op.f("ix_gerrydb_view_template_namespace_id"),
         "view_template",
         ["namespace_id"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_view_template_path"),
+        op.f("ix_gerrydb_view_template_path"),
         "view_template",
         ["path"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "view_template_version",
@@ -73,14 +73,14 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["template_id"],
-            ["cherrydb.view_template.template_id"],
+            ["gerrydb.view_template.template_id"],
         ),
         sa.PrimaryKeyConstraint("template_version_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "view",
@@ -101,41 +101,41 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["layer_id"],
-            ["cherrydb.geo_layer.layer_id"],
+            ["gerrydb.geo_layer.layer_id"],
         ),
         sa.ForeignKeyConstraint(
             ["loc_id"],
-            ["cherrydb.locality.loc_id"],
+            ["gerrydb.locality.loc_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.ForeignKeyConstraint(
             ["template_id"],
-            ["cherrydb.view_template.template_id"],
+            ["gerrydb.view_template.template_id"],
         ),
         sa.ForeignKeyConstraint(
             ["template_version_id"],
-            ["cherrydb.view_template_version.template_version_id"],
+            ["gerrydb.view_template_version.template_version_id"],
         ),
         sa.PrimaryKeyConstraint("view_id"),
         sa.UniqueConstraint("namespace_id", "path"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_view_namespace_id"),
+        op.f("ix_gerrydb_view_namespace_id"),
         "view",
         ["namespace_id"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_view_path"), "view", ["path"], unique=False, schema="cherrydb"
+        op.f("ix_gerrydb_view_path"), "view", ["path"], unique=False, schema="gerrydb"
     )
     op.create_table(
         "view_template_column_member",
@@ -144,14 +144,14 @@ def upgrade() -> None:
         sa.Column("order", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["ref_id"],
-            ["cherrydb.column_ref.ref_id"],
+            ["gerrydb.column_ref.ref_id"],
         ),
         sa.ForeignKeyConstraint(
             ["template_version_id"],
-            ["cherrydb.view_template_version.template_version_id"],
+            ["gerrydb.view_template_version.template_version_id"],
         ),
         sa.PrimaryKeyConstraint("template_version_id", "ref_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "view_template_column_set_member",
@@ -160,36 +160,36 @@ def upgrade() -> None:
         sa.Column("order", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["set_id"],
-            ["cherrydb.column_set.set_id"],
+            ["gerrydb.column_set.set_id"],
         ),
         sa.ForeignKeyConstraint(
             ["template_version_id"],
-            ["cherrydb.view_template_version.template_version_id"],
+            ["gerrydb.view_template_version.template_version_id"],
         ),
         sa.PrimaryKeyConstraint("template_version_id", "set_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("view_template_column_set_member", schema="cherrydb")
-    op.drop_table("view_template_column_member", schema="cherrydb")
-    op.drop_index(op.f("ix_cherrydb_view_path"), table_name="view", schema="cherrydb")
+    op.drop_table("view_template_column_set_member", schema="gerrydb")
+    op.drop_table("view_template_column_member", schema="gerrydb")
+    op.drop_index(op.f("ix_gerrydb_view_path"), table_name="view", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_view_namespace_id"), table_name="view", schema="cherrydb"
+        op.f("ix_gerrydb_view_namespace_id"), table_name="view", schema="gerrydb"
     )
-    op.drop_table("view", schema="cherrydb")
-    op.drop_table("view_template_version", schema="cherrydb")
+    op.drop_table("view", schema="gerrydb")
+    op.drop_table("view_template_version", schema="gerrydb")
 
     op.drop_index(
-        op.f("ix_cherrydb_view_template_path"),
+        op.f("ix_gerrydb_view_template_path"),
         table_name="view_template",
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.drop_index(
-        op.f("ix_cherrydb_view_template_namespace_id"),
+        op.f("ix_gerrydb_view_template_namespace_id"),
         table_name="view_template",
-        schema="cherrydb",
+        schema="gerrydb",
     )
-    op.drop_table("view_template", schema="cherrydb")
-    op.drop_table("etag", schema="cherrydb")
+    op.drop_table("view_template", schema="gerrydb")
+    op.drop_table("etag", schema="gerrydb")

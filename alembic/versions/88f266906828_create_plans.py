@@ -37,36 +37,36 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.ForeignKeyConstraint(
             ["set_version_id"],
-            ["cherrydb.geo_set_version.set_version_id"],
+            ["gerrydb.geo_set_version.set_version_id"],
         ),
         sa.PrimaryKeyConstraint("plan_id"),
         sa.UniqueConstraint("namespace_id", "path"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_plan_namespace_id"),
+        op.f("ix_gerrydb_plan_namespace_id"),
         "plan",
         ["namespace_id"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_plan_path"), "plan", ["path"], unique=False, schema="cherrydb"
+        op.f("ix_gerrydb_plan_path"), "plan", ["path"], unique=False, schema="gerrydb"
     )
     op.create_index(
-        op.f("ix_cherrydb_plan_set_version_id"),
+        op.f("ix_gerrydb_plan_set_version_id"),
         "plan",
         ["set_version_id"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "plan_assignment",
@@ -75,20 +75,20 @@ def upgrade() -> None:
         sa.Column("assignment", sa.Text(), nullable=False),
         sa.ForeignKeyConstraint(
             ["geo_id"],
-            ["cherrydb.geography.geo_id"],
+            ["gerrydb.geography.geo_id"],
         ),
         sa.PrimaryKeyConstraint("plan_id", "geo_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("plan_assignment", schema="cherrydb")
+    op.drop_table("plan_assignment", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_plan_set_version_id"), table_name="plan", schema="cherrydb"
+        op.f("ix_gerrydb_plan_set_version_id"), table_name="plan", schema="gerrydb"
     )
-    op.drop_index(op.f("ix_cherrydb_plan_path"), table_name="plan", schema="cherrydb")
+    op.drop_index(op.f("ix_gerrydb_plan_path"), table_name="plan", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_plan_namespace_id"), table_name="plan", schema="cherrydb"
+        op.f("ix_gerrydb_plan_namespace_id"), table_name="plan", schema="gerrydb"
     )
-    op.drop_table("plan", schema="cherrydb")
+    op.drop_table("plan", schema="gerrydb")

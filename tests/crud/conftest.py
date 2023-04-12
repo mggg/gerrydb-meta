@@ -1,7 +1,7 @@
-"""Tests for CherryDB CRUD operations."""
+"""Tests for GerryDB CRUD operations."""
 import pytest
 
-from cherrydb_meta import models
+from gerrydb_meta import models
 
 
 @pytest.fixture

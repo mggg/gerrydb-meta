@@ -4,11 +4,11 @@ from typing import Generator
 import pytest
 from fastapi.testclient import TestClient
 
-from cherrydb_meta import models
-from cherrydb_meta.admin import CherryAdmin
-from cherrydb_meta.api.deps import get_db
-from cherrydb_meta.enums import NamespaceGroup, ScopeType
-from cherrydb_meta.main import app
+from gerrydb_meta import models
+from gerrydb_meta.admin import GerryAdmin
+from gerrydb_meta.api.deps import get_db
+from gerrydb_meta.enums import NamespaceGroup, ScopeType
+from gerrydb_meta.main import app
 
 from .scopes import grant_scope
 
@@ -31,7 +31,7 @@ def db_and_client_with_user_no_scopes(db):
     def get_test_db() -> Generator:
         yield db
 
-    admin = CherryAdmin(db)
+    admin = GerryAdmin(db)
     user = admin.user_create(name="Test User", email="test@example.com")
     api_key = admin.key_create(user)
     db.flush()
@@ -66,7 +66,7 @@ def db_and_client_with_meta_no_scopes(db):
         yield db
 
     # TODO: replace with `crud` calls.
-    admin = CherryAdmin(db)
+    admin = GerryAdmin(db)
     user = admin.user_create(name="Test User", email="test@example.com")
     api_key = admin.key_create(user)
     db.flush()
@@ -78,7 +78,7 @@ def db_and_client_with_meta_no_scopes(db):
 
     app.dependency_overrides[get_db] = get_test_db
     client = TestClient(app)
-    client.headers = {"X-API-Key": api_key, "X-Cherry-Meta-Id": str(meta.uuid)}
+    client.headers = {"X-API-Key": api_key, "X-Gerry-Meta-Id": str(meta.uuid)}
     yield db, client, meta
 
 

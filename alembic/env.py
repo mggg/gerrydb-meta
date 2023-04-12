@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from cherrydb_meta.models import Base
+from gerrydb_meta.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

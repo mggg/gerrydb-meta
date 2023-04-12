@@ -1,11 +1,11 @@
-"""Tests for CherryDB REST API locality endpoints."""
+"""Tests for GerryDB REST API locality endpoints."""
 from http import HTTPStatus
 
 import pytest
 
-from cherrydb_meta import crud, schemas
-from cherrydb_meta.enums import ScopeType
-from cherrydb_meta.main import API_PREFIX
+from gerrydb_meta import crud, schemas
+from gerrydb_meta.enums import ScopeType
+from gerrydb_meta.main import API_PREFIX
 
 from .scopes import grant_scope
 

@@ -28,21 +28,21 @@ def upgrade() -> None:
         sa.CheckConstraint("parent_id <> loc_id"),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["parent_id"],
-            ["cherrydb.locality.loc_id"],
+            ["gerrydb.locality.loc_id"],
         ),
         sa.PrimaryKeyConstraint("loc_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_locality_canonical_ref_id"),
+        op.f("ix_gerrydb_locality_canonical_ref_id"),
         "locality",
         ["canonical_ref_id"],
         unique=True,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "locality_ref",
@@ -52,21 +52,21 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["loc_id"],
-            ["cherrydb.locality.loc_id"],
+            ["gerrydb.locality.loc_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.PrimaryKeyConstraint("ref_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_locality_ref_path"),
+        op.f("ix_gerrydb_locality_ref_path"),
         "locality_ref",
         ["path"],
         unique=True,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_foreign_key(
         op.f("fk_locality_locality_ref__canonical_ref_id"),
@@ -74,21 +74,21 @@ def upgrade() -> None:
         "locality_ref",
         ["canonical_ref_id"],
         ["ref_id"],
-        source_schema="cherrydb",
-        referent_schema="cherrydb",
+        source_schema="gerrydb",
+        referent_schema="gerrydb",
     )
 
 
 def downgrade() -> None:
     op.drop_index(
-        op.f("ix_cherrydb_locality_ref_path"),
+        op.f("ix_gerrydb_locality_ref_path"),
         table_name="locality_ref",
-        schema="cherrydb",
+        schema="gerrydb",
     )
-    op.drop_table("locality_ref", schema="cherrydb")
+    op.drop_table("locality_ref", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_locality_canonical_ref_id"),
+        op.f("ix_gerrydb_locality_canonical_ref_id"),
         table_name="locality",
-        schema="cherrydb",
+        schema="gerrydb",
     )
-    op.drop_table("locality", schema="cherrydb")
+    op.drop_table("locality", schema="gerrydb")

@@ -1,11 +1,11 @@
-"""Tests for CherryDB REST API object metadata endpoints."""
+"""Tests for GerryDB REST API object metadata endpoints."""
 from http import HTTPStatus
 
 from sqlalchemy.orm import Session
 
-from cherrydb_meta import crud, models, schemas
-from cherrydb_meta.enums import ScopeType
-from cherrydb_meta.main import API_PREFIX
+from gerrydb_meta import crud, models, schemas
+from gerrydb_meta.enums import ScopeType
+from gerrydb_meta.main import API_PREFIX
 
 from .scopes import grant_scope
 

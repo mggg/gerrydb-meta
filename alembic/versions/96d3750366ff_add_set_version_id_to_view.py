@@ -22,11 +22,11 @@ def upgrade() -> None:
         Column(
             "set_version_id",
             Integer(),
-            ForeignKey("cherrydb.geo_set_version.set_version_id"),
+            ForeignKey("gerrydb.geo_set_version.set_version_id"),
         ),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
-    op.drop_column("view", "set_version_id", schema="cherrydb")
+    op.drop_column("view", "set_version_id", schema="gerrydb")

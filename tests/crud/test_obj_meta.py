@@ -1,5 +1,5 @@
-"""Tests for CherryDB CRUD operations on object metadata."""
-from cherrydb_meta import crud, schemas
+"""Tests for GerryDB CRUD operations on object metadata."""
+from gerrydb_meta import crud, schemas
 
 
 def test_crud_object_meta_create_read(db_with_user):

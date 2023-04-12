@@ -46,21 +46,21 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("col_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_column_canonical_ref_id"),
+        op.f("ix_gerrydb_column_canonical_ref_id"),
         "column",
         ["canonical_ref_id"],
         unique=True,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "column_ref",
@@ -71,19 +71,19 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["col_id"],
-            ["cherrydb.column.col_id"],
+            ["gerrydb.column.col_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("ref_id"),
         sa.UniqueConstraint("namespace_id", "path"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_foreign_key(
         op.f("fk_column_column_ref__canonical_ref_id"),
@@ -91,15 +91,15 @@ def upgrade() -> None:
         "column_ref",
         ["canonical_ref_id"],
         ["ref_id"],
-        source_schema="cherrydb",
-        referent_schema="cherrydb",
+        source_schema="gerrydb",
+        referent_schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_column_ref_path"),
+        op.f("ix_gerrydb_column_ref_path"),
         "column_ref",
         ["path"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "column_relation",
@@ -110,15 +110,15 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("relation_id"),
         sa.UniqueConstraint("namespace_id", "name"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "column_relation_member",
@@ -126,14 +126,14 @@ def upgrade() -> None:
         sa.Column("member_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["member_id"],
-            ["cherrydb.column.col_id"],
+            ["gerrydb.column.col_id"],
         ),
         sa.ForeignKeyConstraint(
             ["relation_id"],
-            ["cherrydb.column_relation.relation_id"],
+            ["gerrydb.column_relation.relation_id"],
         ),
         sa.PrimaryKeyConstraint("relation_id", "member_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "column_set",
@@ -144,15 +144,15 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("set_id"),
         sa.UniqueConstraint("path", "namespace_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "column_set_member",
@@ -161,14 +161,14 @@ def upgrade() -> None:
         sa.Column("order", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["ref_id"],
-            ["cherrydb.column_ref.ref_id"],
+            ["gerrydb.column_ref.ref_id"],
         ),
         sa.ForeignKeyConstraint(
             ["set_id"],
-            ["cherrydb.column_set.set_id"],
+            ["gerrydb.column_set.set_id"],
         ),
         sa.PrimaryKeyConstraint("set_id", "ref_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "column_value",
@@ -185,37 +185,37 @@ def upgrade() -> None:
         sa.Column("val_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.ForeignKeyConstraint(
             ["col_id"],
-            ["cherrydb.column.col_id"],
+            ["gerrydb.column.col_id"],
         ),
         sa.ForeignKeyConstraint(
             ["geo_id"],
-            ["cherrydb.geography.geo_id"],
+            ["gerrydb.geography.geo_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.PrimaryKeyConstraint("val_id"),
         sa.UniqueConstraint("col_id", "geo_id", "valid_from"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("column_value", schema="cherrydb")
-    op.drop_table("column_set_member", schema="cherrydb")
-    op.drop_table("column_set", schema="cherrydb")
-    op.drop_table("column_relation_member", schema="cherrydb")
-    op.drop_table("column_relation", schema="cherrydb")
+    op.drop_table("column_value", schema="gerrydb")
+    op.drop_table("column_set_member", schema="gerrydb")
+    op.drop_table("column_set", schema="gerrydb")
+    op.drop_table("column_relation_member", schema="gerrydb")
+    op.drop_table("column_relation", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_column_ref_path"), table_name="column_ref", schema="cherrydb"
+        op.f("ix_gerrydb_column_ref_path"), table_name="column_ref", schema="gerrydb"
     )
-    op.drop_table("column_ref", schema="cherrydb")
+    op.drop_table("column_ref", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_column_canonical_ref_id"),
+        op.f("ix_gerrydb_column_canonical_ref_id"),
         table_name="column",
-        schema="cherrydb",
+        schema="gerrydb",
     )
-    op.drop_table("column", schema="cherrydb")
+    op.drop_table("column", schema="gerrydb")
     op.execute("DROP TYPE columnkind")
     op.execute("DROP TYPE columntype")

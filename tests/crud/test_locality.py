@@ -1,6 +1,6 @@
-"""Tests for CherryDB CRUD operations on locality metadata."""
-from cherrydb_meta import crud, schemas
-from cherrydb_meta.crud.locality import normalize_path
+"""Tests for GerryDB CRUD operations on locality metadata."""
+from gerrydb_meta import crud, schemas
+from gerrydb_meta.crud.locality import normalize_path
 
 
 def test_normalize_path_flat():

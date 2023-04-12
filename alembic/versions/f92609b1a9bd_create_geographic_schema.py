@@ -26,14 +26,14 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("geo_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "geo_import",
@@ -50,25 +50,25 @@ def upgrade() -> None:
         sa.Column("created_by", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["created_by"],
-            ["cherrydb.user.user_id"],
+            ["gerrydb.user.user_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("import_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_geo_import_uuid"),
+        op.f("ix_gerrydb_geo_import_uuid"),
         "geo_import",
         ["uuid"],
         unique=True,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "geo_version",
@@ -95,14 +95,14 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(
             ["geo_id"],
-            ["cherrydb.geography.geo_id"],
+            ["gerrydb.geography.geo_id"],
         ),
         sa.ForeignKeyConstraint(
             ["import_id"],
-            ["cherrydb.geo_import.import_id"],
+            ["gerrydb.geo_import.import_id"],
         ),
         sa.PrimaryKeyConstraint("import_id", "geo_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "geo_layer",
@@ -114,15 +114,15 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("layer_id"),
         sa.UniqueConstraint("path", "namespace_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "geo_hierarchy",
@@ -132,18 +132,18 @@ def upgrade() -> None:
         sa.CheckConstraint("parent_id <> child_id"),
         sa.ForeignKeyConstraint(
             ["child_id"],
-            ["cherrydb.geography.geo_id"],
+            ["gerrydb.geography.geo_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["parent_id"],
-            ["cherrydb.geography.geo_id"],
+            ["gerrydb.geography.geo_id"],
         ),
         sa.PrimaryKeyConstraint("parent_id", "child_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "geo_set_version",
@@ -160,18 +160,18 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["layer_id"],
-            ["cherrydb.geo_layer.layer_id"],
+            ["gerrydb.geo_layer.layer_id"],
         ),
         sa.ForeignKeyConstraint(
             ["loc_id"],
-            ["cherrydb.locality.loc_id"],
+            ["gerrydb.locality.loc_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.PrimaryKeyConstraint("set_version_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "geo_set_member",
@@ -179,37 +179,37 @@ def upgrade() -> None:
         sa.Column("geo_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["geo_id"],
-            ["cherrydb.geography.geo_id"],
+            ["gerrydb.geography.geo_id"],
         ),
         sa.ForeignKeyConstraint(
             ["set_version_id"],
-            ["cherrydb.geo_set_version.set_version_id"],
+            ["gerrydb.geo_set_version.set_version_id"],
         ),
         sa.PrimaryKeyConstraint("set_version_id", "geo_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("geo_set_member", schema="cherrydb")
-    op.drop_table("geo_set_version", schema="cherrydb")
-    op.drop_table("geo_hierarchy", schema="cherrydb")
-    op.drop_table("geo_layer", schema="cherrydb")
+    op.drop_table("geo_set_member", schema="gerrydb")
+    op.drop_table("geo_set_version", schema="gerrydb")
+    op.drop_table("geo_hierarchy", schema="gerrydb")
+    op.drop_table("geo_layer", schema="gerrydb")
     op.drop_index(
         "idx_geo_version_internal_point",
         table_name="geo_version",
-        schema="cherrydb",
+        schema="gerrydb",
         postgresql_using="gist",
     )
     op.drop_index(
         "idx_geo_version_geography",
         table_name="geo_version",
-        schema="cherrydb",
+        schema="gerrydb",
         postgresql_using="gist",
     )
-    op.drop_table("geo_version", schema="cherrydb")
+    op.drop_table("geo_version", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_geo_import_uuid"), table_name="geo_import", schema="cherrydb"
+        op.f("ix_gerrydb_geo_import_uuid"), table_name="geo_import", schema="gerrydb"
     )
-    op.drop_table("geo_import", schema="cherrydb")
-    op.drop_table("geography", schema="cherrydb")
+    op.drop_table("geo_import", schema="gerrydb")
+    op.drop_table("geography", schema="gerrydb")

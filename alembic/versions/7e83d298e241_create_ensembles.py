@@ -41,61 +41,61 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(
             ["graph_id"],
-            ["cherrydb.graph.graph_id"],
+            ["gerrydb.graph.graph_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.ForeignKeyConstraint(
             ["pop_col_id"],
-            ["cherrydb.column.col_id"],
+            ["gerrydb.column.col_id"],
         ),
         sa.ForeignKeyConstraint(
             ["seed_plan_id"],
-            ["cherrydb.plan.plan_id"],
+            ["gerrydb.plan.plan_id"],
         ),
         sa.PrimaryKeyConstraint("ensemble_id"),
         sa.UniqueConstraint("namespace_id", "path"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_ensemble_graph_id"),
+        op.f("ix_gerrydb_ensemble_graph_id"),
         "ensemble",
         ["graph_id"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_ensemble_namespace_id"),
+        op.f("ix_gerrydb_ensemble_namespace_id"),
         "ensemble",
         ["namespace_id"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_ensemble_path"),
+        op.f("ix_gerrydb_ensemble_path"),
         "ensemble",
         ["path"],
         unique=False,
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
     op.drop_index(
-        op.f("ix_cherrydb_ensemble_path"), table_name="ensemble", schema="cherrydb"
+        op.f("ix_gerrydb_ensemble_path"), table_name="ensemble", schema="gerrydb"
     )
     op.drop_index(
-        op.f("ix_cherrydb_ensemble_namespace_id"),
+        op.f("ix_gerrydb_ensemble_namespace_id"),
         table_name="ensemble",
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.drop_index(
-        op.f("ix_cherrydb_ensemble_graph_id"), table_name="ensemble", schema="cherrydb"
+        op.f("ix_gerrydb_ensemble_graph_id"), table_name="ensemble", schema="gerrydb"
     )
-    op.drop_table("ensemble", schema="cherrydb")
+    op.drop_table("ensemble", schema="gerrydb")

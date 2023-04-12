@@ -30,14 +30,14 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("user_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_user_email"),
+        op.f("ix_gerrydb_user_email"),
         "user",
         ["email"],
         unique=True,
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
     # Create metadata model (dependency for group models, etc.)
@@ -55,13 +55,13 @@ def upgrade() -> None:
         sa.Column("created_by", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["created_by"],
-            ["cherrydb.user.user_id"],
+            ["gerrydb.user.user_id"],
         ),
         sa.PrimaryKeyConstraint("meta_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_meta_uuid"), "meta", ["uuid"], unique=True, schema="cherrydb"
+        op.f("ix_gerrydb_meta_uuid"), "meta", ["uuid"], unique=True, schema="gerrydb"
     )
 
     # Create user group models.
@@ -73,10 +73,10 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.PrimaryKeyConstraint("group_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "user_group_member",
@@ -85,18 +85,18 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["group_id"],
-            ["cherrydb.user_group.group_id"],
+            ["gerrydb.user_group.group_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],
-            ["cherrydb.user.user_id"],
+            ["gerrydb.user.user_id"],
         ),
         sa.PrimaryKeyConstraint("user_id", "group_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
     # Create namespace model (dependency for scope models).
@@ -109,17 +109,17 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.PrimaryKeyConstraint("namespace_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_index(
-        op.f("ix_cherrydb_namespace_path"),
+        op.f("ix_gerrydb_namespace_path"),
         "namespace",
         ["path"],
         unique=True,
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
     # Create scope models.
@@ -152,19 +152,19 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],
-            ["cherrydb.user.user_id"],
+            ["gerrydb.user.user_id"],
         ),
         sa.PrimaryKeyConstraint("user_perm_id"),
         sa.UniqueConstraint("user_id", "scope", "namespace_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
     op.create_table(
         "user_group_scope",
@@ -195,19 +195,19 @@ def upgrade() -> None:
         sa.Column("meta_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
             ["group_id"],
-            ["cherrydb.user_group.group_id"],
+            ["gerrydb.user_group.group_id"],
         ),
         sa.ForeignKeyConstraint(
             ["meta_id"],
-            ["cherrydb.meta.meta_id"],
+            ["gerrydb.meta.meta_id"],
         ),
         sa.ForeignKeyConstraint(
             ["namespace_id"],
-            ["cherrydb.namespace.namespace_id"],
+            ["gerrydb.namespace.namespace_id"],
         ),
         sa.PrimaryKeyConstraint("group_perm_id"),
         sa.UniqueConstraint("group_id", "scope", "namespace_id"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
     # Create API key model.
@@ -224,26 +224,26 @@ def upgrade() -> None:
         sa.Column("active", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(
             ["user_id"],
-            ["cherrydb.user.user_id"],
+            ["gerrydb.user.user_id"],
         ),
         sa.PrimaryKeyConstraint("key_hash"),
-        schema="cherrydb",
+        schema="gerrydb",
     )
 
 
 def downgrade() -> None:
-    op.drop_table("api_key", schema="cherrydb")
-    op.drop_table("user_group_scope", schema="cherrydb")
-    op.drop_table("user_scope", schema="cherrydb")
+    op.drop_table("api_key", schema="gerrydb")
+    op.drop_table("user_group_scope", schema="gerrydb")
+    op.drop_table("user_scope", schema="gerrydb")
     op.drop_index(
-        op.f("ix_cherrydb_namespace_path"), table_name="namespace", schema="cherrydb"
+        op.f("ix_gerrydb_namespace_path"), table_name="namespace", schema="gerrydb"
     )
-    op.drop_table("namespace", schema="cherrydb")
-    op.drop_table("user_group_member", schema="cherrydb")
-    op.drop_table("user_group", schema="cherrydb")
-    op.drop_index(op.f("ix_cherrydb_meta_uuid"), table_name="meta", schema="cherrydb")
-    op.drop_table("meta", schema="cherrydb")
-    op.drop_index(op.f("ix_cherrydb_user_email"), table_name="user", schema="cherrydb")
-    op.drop_table("user", schema="cherrydb")
+    op.drop_table("namespace", schema="gerrydb")
+    op.drop_table("user_group_member", schema="gerrydb")
+    op.drop_table("user_group", schema="gerrydb")
+    op.drop_index(op.f("ix_gerrydb_meta_uuid"), table_name="meta", schema="gerrydb")
+    op.drop_table("meta", schema="gerrydb")
+    op.drop_index(op.f("ix_gerrydb_user_email"), table_name="user", schema="gerrydb")
+    op.drop_table("user", schema="gerrydb")
     op.execute("DROP TYPE scopetype")
     op.execute("DROP TYPE namespacegroup")
