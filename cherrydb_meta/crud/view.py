@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Tuple
 
-from sqlalchemy import exc, func, label, or_, select, union
+from sqlalchemy import ScalarResult, Sequence, exc, func, label, or_, select, union
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,9 @@ from cherrydb_meta.exceptions import CreateValueError
 _ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
 
 log = logging.getLogger()
+
+PLAN_BATCH_SIZE = 10000
+GRAPH_BATCH_SIZE = 100000
 
 
 def _geo_set_version_id(
@@ -64,7 +67,12 @@ def _view_columns(db: Session, template_version_id: int) -> list[models.DataColu
 class ViewRenderContext:
     """Context for rendering a view's data and metadata."""
 
-    query: str
+    view: models.View
+    plans: list[models.Plan]
+    plan_assignments: ScalarResult
+    graph_edges: Sequence | None
+    geo_query: str
+    internal_point_query: str
 
 
 class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
@@ -137,7 +145,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         value_counts = (
             db.query(
                 models.ColumnValue.col_id,
-                label("geo_count", func.count(models.ColumnValue.geo_id)),
+                label("num_geos", func.count(models.ColumnValue.geo_id)),
             )
             .filter(
                 models.ColumnValue.geo_id.in_(
@@ -154,7 +162,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .all()
         )
 
-        value_counts_by_col = {group.col_id: group.geo_count for group in value_counts}
+        value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
         bad_cols = []
         for column in columns:
             value_count = value_counts_by_col.get(column.col_id, 0)
@@ -186,6 +194,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 graph_id=None if graph is None else graph.graph_id,
                 at=valid_at,
                 proj=obj_in.proj,
+                num_geos=num_geos,
             )
             db.add(view)
 
@@ -267,11 +276,18 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             column_subs.append(column_sub)
             column_labels.append(column_sub.c[col.canonical_ref.path])
 
-        query = (
+        timestamp_clauses = [
+            models.GeoVersion.valid_from <= view.at,
+            or_(
+                models.GeoVersion.valid_to.is_(None),
+                models.GeoVersion.valid_to >= view.at,
+            ),
+        ]
+
+        geo_query = (
             select(
                 geo_sub.c.path,
                 models.GeoVersion.geography,
-                # TODO: internal points
                 *column_labels,
             )
             .join(
@@ -281,32 +297,130 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
         )
 
+        # Join tabular data.
         for column_sub in column_subs:
-            query = query.join(
+            geo_query = geo_query.join(
                 column_sub, column_sub.c.geo_id == models.GeoVersion.geo_id
             )
+        geo_query = geo_query.where(*timestamp_clauses)
 
-        query = query.where(
-            models.GeoVersion.valid_from <= view.at,
-            or_(
-                models.GeoVersion.valid_to.is_(None),
-                models.GeoVersion.valid_to >= view.at,
-            ),
+        internal_point_query = (
+            select(
+                geo_sub.c.path,
+                models.GeoVersion.internal_point,
+            )
+            .join(
+                members_sub,
+                members_sub.c.geo_id == models.GeoVersion.geo_id,
+            )
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .where(*timestamp_clauses)
         )
 
-        # Query generation: substitute in literals and remove the
-        # ST_AsBinary() calls added by GeoAlchemy2.
+        # Get plans that existed when the view was created.
+        plans = (
+            db.query(models.Plan)
+            .filter(
+                models.Plan.set_version_id == view.set_version_id,
+                models.Plan.created_at <= view.at,
+            )
+            .all()
+        )
+        # Apply the public join constraint: don't leak any private plans.
+        visible_plans = [
+            plan
+            for plan in plans
+            if (
+                plan.namespace.public
+                or plan.namespace.namespace_id == view.namespace.namespace_id
+            )
+        ]
+
+        # Get plan assignments as a table.
+        plan_assignment_query = (
+            select(geo_sub.c.path)
+            .join(
+                members_sub,
+                members_sub.c.geo_id == models.GeoVersion.geo_id,
+            )
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+        )
+        for plan in visible_plans:
+            plan_sub = (
+                select(
+                    models.PlanAssignment.geo_id,
+                    models.PlanAssignment.assignment.label(
+                        f"{plan.namespace.path}__{plan.path}"
+                    ),
+                )
+                .where(
+                    models.PlanAssignment.plan_id == plan.plan_id,
+                )
+                .subquery()
+            )
+            plan_assignment_query = plan_assignment_query.outer_join(
+                plan_sub,
+                plan_sub.c.geo_id == models.Geography.geo_id,
+            ).yield_per(10000)
+        plan_assignments = db.scalars(plan_assignment_query)
+
+        # Get graph edges by path.
+        if view.graph_id is None:
+            graph_edges = None
+        else:
+            path_sub_1 = select(
+                models.Geography.geo_id, models.Geography.path
+            ).subquery()
+            path_sub_2 = select(
+                models.Geography.geo_id, models.Geography.path
+            ).subquery()
+            graph_edges_query = (
+                select(
+                    path_sub_1.c.path.label("path_1"),
+                    path_sub_2.c.path.label("path_2"),
+                    models.GraphEdge.weights,
+                )
+                .join(
+                    path_sub_1,
+                    path_sub_1.c.geo_id == models.GraphEdge.geo_id_1,
+                )
+                .join(
+                    path_sub_2,
+                    path_sub_2.c.geo_id == models.GraphEdge.geo_id_2,
+                )
+                .where(
+                    models.GraphEdge.graph_id == view.graph_id,
+                )
+            )
+            graph_edges = db.execute(graph_edges_query).fetchall()
+
         return ViewRenderContext(
-            query=re.sub(
+            view=view,
+            plans=visible_plans,
+            plan_assignments=plan_assignments,
+            graph_edges=graph_edges,
+            # Query generation: substitute in literals and remove the
+            # ST_AsBinary() calls added by GeoAlchemy2.
+            geo_query=re.sub(
                 _ST_ASBINARY_REGEX,
                 r"\1",
                 str(
-                    query.compile(
+                    geo_query.compile(
                         dialect=postgresql.dialect(),
                         compile_kwargs={"literal_binds": True},
                     )
                 ),
-            )
+            ),
+            internal_point_query=re.sub(
+                _ST_ASBINARY_REGEX,
+                r"\1",
+                str(
+                    internal_point_query.compile(
+                        dialect=postgresql.dialect(),
+                        compile_kwargs={"literal_binds": True},
+                    )
+                ),
+            ),
         )
 
 

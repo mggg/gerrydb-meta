@@ -830,6 +830,8 @@ class View(Base):
     graph_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("graph.graph_id"), nullable=True
     )
+    # Essentially a checksum.
+    num_geos: Mapped[int] = mapped_column(Integer, nullable=False)
 
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     template: Mapped[ViewTemplate] = relationship("ViewTemplate", lazy="joined")

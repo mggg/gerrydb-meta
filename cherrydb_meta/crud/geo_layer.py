@@ -80,6 +80,13 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
     ) -> None:
         """Maps a set of `geographies` to `layer` in `locality`."""
         now = datetime.now(timezone.utc)
+
+        if len(set(geo.namespace_id for geo in geographies)) > 1:
+            raise CreateValueError(
+                "Cannot map geographies in multiple namespaces "
+                "to a geographic layer."
+            )
+
         with db.begin(nested=True):
             # Deprecate old version if present.
             db.execute(
