@@ -528,5 +528,5 @@ class ViewMeta(ViewBase):
             meta=obj.meta,
             valid_at=obj.at,
             proj=obj.proj,
-            graph=obj.graph,
+            graph=None if obj.graph is None else GraphMeta.from_orm(obj.graph),
         )

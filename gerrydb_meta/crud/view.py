@@ -2,6 +2,7 @@
 import logging
 import re
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Tuple
@@ -42,8 +43,10 @@ def _geo_set_version_id(
     )
 
 
-def _view_columns(db: Session, template_version_id: int) -> list[models.DataColumn]:
-    """Gets the unique columns associated with a `ViewTemplateVersion`."""
+def _view_columns(
+    db: Session, template_version_id: int
+) -> dict[str, models.DataColumn]:
+    """Gets the unique columns associated with a `ViewTemplateVersion` by alias."""
     column_ref_ids = select(models.ViewTemplateColumnMember.ref_id).filter(
         models.ViewTemplateColumnMember.template_version_id == template_version_id
     )
@@ -53,14 +56,40 @@ def _view_columns(db: Session, template_version_id: int) -> list[models.DataColu
     column_set_ref_ids = select(models.ColumnSetMember.ref_id).filter(
         models.ColumnSetMember.set_id.in_(column_set_ids)
     )
-    column_ids = select(models.ColumnRef.col_id).filter(
-        models.ColumnRef.ref_id.in_(union(column_set_ref_ids, column_ref_ids))
-    )
-    return (
+
+    column_ids_with_paths = db.execute(
+        select(
+            models.ColumnRef.path,
+            models.Namespace.path.label("namespace"),
+            models.ColumnRef.col_id,
+        )
+        .join(
+            models.Namespace,
+            models.Namespace.namespace_id == models.ColumnRef.namespace_id,
+        )
+        .where(models.ColumnRef.ref_id.in_(union(column_set_ref_ids, column_ref_ids)))
+    ).all()
+    column_ids = [row.col_id for row in column_ids_with_paths]
+
+    # Determine the shortest unambiguous alias for each plan.
+    namespaces_by_path = defaultdict(set)
+    for row in column_ids_with_paths:
+        namespaces_by_path[row.path].add(row.namespace)
+    col_id_to_alias = {}
+    for row in column_ids_with_paths:
+        alias = (
+            f"{row.namespace}__{row.path}"
+            if len(namespaces_by_path[row.path]) > 1
+            else row.path
+        )
+        col_id_to_alias[row.col_id] = alias
+
+    raw_columns = (
         db.query(models.DataColumn)
         .filter(models.DataColumn.col_id.in_(column_ids))
         .all()
     )
+    return {col_id_to_alias[col.col_id]: col for col in raw_columns}
 
 
 @dataclass(frozen=True)
@@ -68,9 +97,15 @@ class ViewRenderContext:
     """Context for rendering a view's data and metadata."""
 
     view: models.View
+    columns: dict[str, models.DataColumn]
     plans: list[models.Plan]
-    plan_assignments: ScalarResult
+    plan_labels: list[str]
+    plan_assignments: Sequence | None
     graph_edges: Sequence | None
+    geo_meta: dict[int, models.ObjectMeta]
+    geo_meta_ids: dict[str, int]  # by path
+
+    # Bulk queries for `ogr2ogr`.
     geo_query: str
     internal_point_query: str
 
@@ -151,7 +186,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 models.ColumnValue.geo_id.in_(
                     member.geo_id for member in geo_set_members
                 ),
-                models.ColumnValue.col_id.in_(col.col_id for col in columns),
+                models.ColumnValue.col_id.in_(col.col_id for col in columns.values()),
                 models.ColumnValue.valid_from <= valid_at,
                 (
                     (models.ColumnValue.valid_to.is_(None))
@@ -164,7 +199,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
         bad_cols = []
-        for column in columns:
+        for column in columns.values():
             value_count = value_counts_by_col.get(column.col_id, 0)
             if value_count < num_geos:
                 bad_cols.append((column.canonical_ref.full_path, value_count))
@@ -234,7 +269,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         )
 
     def render(self, db: Session, *, view: models.View) -> ViewRenderContext:
-        """Generates a query to retrieve tabular view data.
+        """Generates queries to retrieve view data.
 
         Used for bulk exports via `ogr2ogr`.
         """
@@ -252,16 +287,12 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         # Generate subqueries for joining tabular data.
         column_subs = []
         column_labels = []
-        for col in columns:
+        for alias, col in columns.items():
             value_col = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
-            # TODO: use preferred path.
-            # TODO: make sure that labels are always valid and unique (slashes, etc.?)
             column_sub = (
                 select(
                     models.ColumnValue.geo_id,
-                    getattr(models.ColumnValue, value_col).label(
-                        col.canonical_ref.path
-                    ),
+                    getattr(models.ColumnValue, value_col).label(alias),
                 )
                 .filter(
                     models.ColumnValue.col_id == col.col_id,
@@ -317,88 +348,18 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .where(*timestamp_clauses)
         )
 
-        # Get plans that existed when the view was created.
-        plans = (
-            db.query(models.Plan)
-            .filter(
-                models.Plan.set_version_id == view.set_version_id,
-                models.Plan.created_at <= view.at,
-            )
-            .all()
-        )
-        # Apply the public join constraint: don't leak any private plans.
-        visible_plans = [
-            plan
-            for plan in plans
-            if (
-                plan.namespace.public
-                or plan.namespace.namespace_id == view.namespace.namespace_id
-            )
-        ]
-
-        # Get plan assignments as a table.
-        plan_assignment_query = (
-            select(geo_sub.c.path)
-            .join(
-                members_sub,
-                members_sub.c.geo_id == models.GeoVersion.geo_id,
-            )
-            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
-        )
-        for plan in visible_plans:
-            plan_sub = (
-                select(
-                    models.PlanAssignment.geo_id,
-                    models.PlanAssignment.assignment.label(
-                        f"{plan.namespace.path}__{plan.path}"
-                    ),
-                )
-                .where(
-                    models.PlanAssignment.plan_id == plan.plan_id,
-                )
-                .subquery()
-            )
-            plan_assignment_query = plan_assignment_query.outer_join(
-                plan_sub,
-                plan_sub.c.geo_id == models.Geography.geo_id,
-            ).yield_per(10000)
-        plan_assignments = db.scalars(plan_assignment_query)
-
-        # Get graph edges by path.
-        if view.graph_id is None:
-            graph_edges = None
-        else:
-            path_sub_1 = select(
-                models.Geography.geo_id, models.Geography.path
-            ).subquery()
-            path_sub_2 = select(
-                models.Geography.geo_id, models.Geography.path
-            ).subquery()
-            graph_edges_query = (
-                select(
-                    path_sub_1.c.path.label("path_1"),
-                    path_sub_2.c.path.label("path_2"),
-                    models.GraphEdge.weights,
-                )
-                .join(
-                    path_sub_1,
-                    path_sub_1.c.geo_id == models.GraphEdge.geo_id_1,
-                )
-                .join(
-                    path_sub_2,
-                    path_sub_2.c.geo_id == models.GraphEdge.geo_id_2,
-                )
-                .where(
-                    models.GraphEdge.graph_id == view.graph_id,
-                )
-            )
-            graph_edges = db.execute(graph_edges_query).fetchall()
+        plans, plan_labels, plan_assignments = self._plans(db, view)
+        geo_meta_ids, geo_meta = self._geo_meta(db, view)
 
         return ViewRenderContext(
             view=view,
-            plans=visible_plans,
+            columns=columns,
+            plans=plans,
+            plan_labels=plan_labels,
             plan_assignments=plan_assignments,
-            graph_edges=graph_edges,
+            graph_edges=self._graph_edges(db, view),
+            geo_meta=geo_meta,
+            geo_meta_ids=geo_meta_ids,
             # Query generation: substitute in literals and remove the
             # ST_AsBinary() calls added by GeoAlchemy2.
             geo_query=re.sub(
@@ -422,6 +383,149 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 ),
             ),
         )
+
+    def _geo_meta(
+        self, db: Session, view: models.View
+    ) -> tuple[dict[str, int], dict[int, models.ObjectMeta]]:
+        """Gets object metadata associated with a view's geographies.
+
+        Returns:
+            (1) Mapping from geography paths to metadata IDs.
+            (2) Mapping from metadata IDs to metadata objects.
+        """
+        members_sub = (
+            select(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id == view.set_version_id)
+            .subquery()
+        )
+        raw_geo_meta_ids = db.execute(
+            select(models.Geography.path, models.Geography.meta_id).join(
+                members_sub, members_sub.c.geo_id == models.Geography.geo_id
+            )
+        ).fetchall()
+        geo_meta_ids = {row.path: row.meta_id for row in raw_geo_meta_ids}
+
+        distinct_meta_ids = set(geo_meta_ids.values())
+        raw_distinct_meta = (
+            db.query(models.ObjectMeta)
+            .where(models.ObjectMeta.meta_id.in_(distinct_meta_ids))
+            .all()
+        )
+        distinct_meta = {meta.meta_id: meta for meta in raw_distinct_meta}
+
+        return geo_meta_ids, distinct_meta
+
+    def _plans(
+        self, db: Session, view: models.View
+    ) -> tuple[list[models.Plan], list[str], Sequence | None]:
+        """Gets plans associated with a view.
+
+        Returns:
+            (1) A list of plans compatible with the view.
+                (These plans also satisfy the view's public join constraint.)
+            (2) A list of column labels for the plans.
+            (3) A database iterator for the plan assignments, if any assignments
+                are available.
+        """
+        # Get plans that existed when the view was created.
+        plans = (
+            db.query(models.Plan)
+            .filter(
+                models.Plan.set_version_id == view.set_version_id,
+                models.Plan.created_at <= view.at,
+            )
+            .all()
+        )
+        # Apply the public join constraint: don't leak any private plans.
+        visible_plans = [
+            plan
+            for plan in plans
+            if (
+                plan.namespace.public
+                or plan.namespace.namespace_id == view.namespace.namespace_id
+            )
+        ]
+
+        # Get plan assignments as a table.
+        plan_labels = []
+        if visible_plans:
+            # Determine the shortest unambiguous alias for each plan.
+            namespaces_by_path = defaultdict(set)
+            for plan in visible_plans:
+                namespaces_by_path[plan.path].add(plan.namespace.path)
+
+            # Generate query clauses for each plan.
+            plan_subs = []
+            for plan in visible_plans:
+                label = (
+                    f"{plan.namespace.path}__{plan.path}"
+                    if len(namespaces_by_path[plan.path]) > 1
+                    else plan.path
+                )
+                plan_labels.append(label)
+                plan_subs.append(
+                    select(
+                        models.PlanAssignment.geo_id, models.PlanAssignment.assignment
+                    )
+                    .where(
+                        models.PlanAssignment.plan_id == plan.plan_id,
+                    )
+                    .subquery()
+                )
+
+            geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
+            members_sub = (
+                select(models.GeoSetMember.geo_id)
+                .filter(models.GeoSetMember.set_version_id == view.set_version_id)
+                .subquery()
+            )
+            plan_cols = [
+                plan_sub.c.assignment.label(plan_label)
+                for plan_sub, plan_label in zip(plan_subs, plan_labels)
+            ]
+            plan_assignment_query = (
+                select(models.GeoVersion.geo_id, geo_sub.c.path, *plan_cols)
+                .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+                .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
+            )
+            for plan_sub in plan_subs:
+                plan_assignment_query = plan_assignment_query.outerjoin(
+                    plan_sub,
+                    plan_sub.c.geo_id == models.GeoVersion.geo_id,
+                )
+            plan_assignments = db.execute(plan_assignment_query).fetchall()
+        else:
+            plan_assignments = None
+
+        return visible_plans, plan_labels, plan_assignments
+
+    def _graph_edges(self, db: Session, view: models.View) -> Sequence | None:
+        """Gets graph edges by path, if applicable."""
+        if view.graph_id is None:
+            return None
+
+        path_sub_1 = select(models.Geography.geo_id, models.Geography.path).subquery()
+        path_sub_2 = select(models.Geography.geo_id, models.Geography.path).subquery()
+        graph_edges_query = (
+            select(
+                path_sub_1.c.path.label("path_1"),
+                path_sub_2.c.path.label("path_2"),
+                models.GraphEdge.weights,
+            )
+            .join(
+                path_sub_1,
+                path_sub_1.c.geo_id == models.GraphEdge.geo_id_1,
+            )
+            .join(
+                path_sub_2,
+                path_sub_2.c.geo_id == models.GraphEdge.geo_id_2,
+            )
+            .where(
+                models.GraphEdge.graph_id == view.graph_id,
+            )
+        )
+
+        return db.execute(graph_edges_query).fetchall()
 
 
 view = CRView(models.View)

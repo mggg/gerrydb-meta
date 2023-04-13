@@ -7,7 +7,10 @@ import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import orjson as json
+
 from gerrydb_meta.crud.view import ViewRenderContext
+from gerrydb_meta.schemas import ObjectMeta, ViewMeta
 
 # For bulk exports, we wrap the command-line utility `ogr2ogr` (distributed with GDAL)
 # to generate a GeoPackage with geographies and tabular data directly from the
@@ -26,8 +29,7 @@ class RenderError(Exception):
     """Raised when rendering a view fails."""
 
 
-def _init_base_gpkg_extensions(conn: sqlite3.Connection) -> None:
-    # gpkg_extensions table definition: http://www.geopackage.org/spec/#_gpkg_extensions
+def _init_base_gpkg_extensions(conn: sqlite3.Connection, layer_name: str) -> None:
     conn.execute(
         """
         CREATE TABLE gerrydb_view_meta (
@@ -39,11 +41,38 @@ def _init_base_gpkg_extensions(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE gerrydb_geo_meta (
-            uuid  BLOB PRIMARY KEY,
-            value TEXT NOT NULL
+            meta_id INTEGER PRIMARY KEY,
+            value   TEXT    NOT NULL
         )
         """
     )
+    conn.execute(
+        f"""
+        CREATE TABLE gerrydb_geo_meta_xref (
+            path    TEXT PRIMARY KEY REFERENCES {layer_name}(path),
+            meta_id BLOB NOT NULL    REFERENCES gerrydb_geo_meta(meta_id)
+        )
+        """
+    )
+
+    # gpkg_data_columns_sql table definition:
+    # https://www.geopackage.org/spec/#gpkg_data_columns_sql
+    conn.execute(
+        """
+        CREATE TABLE gpkg_data_columns (
+            table_name TEXT NOT NULL,
+            column_name TEXT NOT NULL,
+            name TEXT,
+            title TEXT,
+            description TEXT,
+            mime_type TEXT,
+            constraint_name TEXT,
+            CONSTRAINT pk_gdc PRIMARY KEY (table_name, column_name),
+            CONSTRAINT gdc_tn UNIQUE (table_name, name)
+        )
+        """
+    )
+    # gpkg_extensions table definition: http://www.geopackage.org/spec/#_gpkg_extensions
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS gpkg_extensions (
@@ -77,19 +106,28 @@ def _init_base_gpkg_extensions(conn: sqlite3.Connection) -> None:
                 "gerrydb_geo_meta",
                 None,
                 "mggg_gerrydb",
-                "JSON-formatted metadata for the view's geographies." "read-write",
+                "JSON-formatted metadata for the view's geographies.",
+                "read-write",
+            ),
+            (
+                "gerrydb_geo_meta_xref",
+                None,
+                "mggg_gerrydb",
+                "Mapping between geographies and metadata objects.",
+                "read-write",
             ),
         ],
     )
+    conn.commit()
 
 
-def _init_gpkg_graph_extension(conn: sqlite3.Connection):
+def _init_gpkg_graph_extension(conn: sqlite3.Connection, layer_name: str):
     """Initializes a graph edge table in a GeoPackage."""
     conn.execute(
-        """
+        f"""
         CREATE TABLE gerrydb_graph_edge (
-            path_1  TEXT NOT NULL, 
-            path_2  TEXT NOT NULL,
+            path_1  TEXT NOT NULL REFERENCES {layer_name}(path),
+            path_2  TEXT NOT NULL REFERENCES {layer_name}(path),
             weights TEXT,
             CONSTRAINT unique_edges UNIQUE (path_1, path_2)
         )
@@ -109,6 +147,40 @@ def _init_gpkg_graph_extension(conn: sqlite3.Connection):
             "read-write",
         ),
     )
+    conn.commit()
+
+
+def _init_gpkg_plans_extension(
+    conn: sqlite3.Connection, layer_name: str, columns: list[str]
+):
+    """Initializes a plan assignments table in a GeoPackage."""
+    table_columns = " TEXT,\n".join(columns) + " TEXT\n"
+    conn.execute(
+        f"""
+        CREATE TABLE gerrydb_plan_assignment (
+            path TEXT PRIMARY KEY REFERENCES {layer_name}(path),
+            {table_columns} 
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO gpkg_extensions
+        (table_name, column_name, extension_name, definition, scope)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            "gerrydb_plan_assignment",
+            None,
+            "mggg_gerrydb",
+            (
+                "District assignments by geography for "
+                "districting plans associated with the view."
+            ),
+            "read-write",
+        ),
+    )
+    conn.commit()
 
 
 def view_to_gpkg(
@@ -156,7 +228,6 @@ def view_to_gpkg(
         raise RenderError("Failed to render view: geography query failed.")
 
     conn = sqlite3.connect(gpkg_path)
-
     try:
         geo_row_count = conn.execute(
             f"SELECT COUNT(*) FROM {geo_layer_name}"
@@ -211,17 +282,75 @@ def view_to_gpkg(
             f"in layer, got {geo_row_count} geographies."
         )
 
-    # Add extended (non-geographic) data.
-    _init_base_gpkg_extensions(conn)
+    # Create indices and references on paths.
+    conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
+    conn.execute(
+        "CREATE UNIQUE INDEX idx_internal_point_path "
+        f"ON {internal_point_layer_name}(path)"
+    )
+
+    ## Add extended (non-geographic) data.
+    _init_base_gpkg_extensions(conn, geo_layer_name)
+
+    conn.executemany(
+        "INSERT INTO gerrydb_view_meta (key, value) VALUES (?, ?)",
+        (
+            (key, json.dumps(value).decode("utf-8"))
+            for key, value in ViewMeta.from_orm(context.view).dict().items()
+        ),
+    )
+    conn.executemany(
+        (
+            "INSERT INTO gpkg_data_columns (table_name, column_name, description) "
+            "VALUES (?, ?, ?)"
+        ),
+        (
+            (geo_layer_name, alias, col.description)
+            for alias, col in context.columns.items()
+        ),
+    )
+
+    # Insert geographic metadata objects.
+    db_meta_id_to_gpkg_meta_id = {}
+    for db_id, meta in context.geo_meta.items():
+        cur = conn.execute(
+            "INSERT INTO gerrydb_geo_meta (value) VALUES (?)",
+            (json.dumps(ObjectMeta.from_orm(meta).dict()).decode("utf-8"),),
+        )
+        db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
+
+    conn.executemany(
+        "INSERT INTO gerrydb_geo_meta_xref (path, meta_id) VALUES (?, ?)",
+        (
+            (path, db_meta_id_to_gpkg_meta_id[db_id])
+            for path, db_id in context.geo_meta_ids.items()
+        ),
+    )
 
     if context.graph_edges is not None:
-        _init_gpkg_graph_extension(conn)
+        _init_gpkg_graph_extension(conn, geo_layer_name)
         conn.executemany(
             "INSERT INTO gerrydb_graph_edge (path_1, path_2, weights) VALUES (?, ?, ?)",
-            ((edge.path_1, edge.path_2, edge.weights) for edge in context.graph_edges),
+            (
+                (edge.path_1, edge.path_2, json.dumps(edge.weights).decode("utf-8"))
+                for edge in context.graph_edges
+            ),
         )
 
-    # if context.plans:
-    #    _init_gpkg_plans_extension(conn)
+    if context.plan_assignments is not None:
+        _init_gpkg_plans_extension(conn, geo_layer_name, context.plan_labels)
+        cols = ["path", *context.plan_labels]
+        placeholders = ", ".join(["?"] * len(cols))
+
+        conn.executemany(
+            (
+                f"INSERT INTO gerrydb_plan_assignment ({', '.join(cols)}) "
+                f"VALUES ({placeholders})"
+            ),
+            ([getattr(row, col) for col in cols] for row in context.plan_assignments),
+        )
+
+    conn.commit()
+    conn.close()
 
     return render_uuid, gpkg_path, temp_dir
