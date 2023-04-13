@@ -7,7 +7,19 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Tuple
 
-from sqlalchemy import ScalarResult, Sequence, exc, func, label, or_, select, union
+from geoalchemy2 import Geometry
+from geoalchemy2 import func as geo_func
+from sqlalchemy import (
+    ScalarResult,
+    Sequence,
+    cast,
+    exc,
+    func,
+    label,
+    or_,
+    select,
+    union,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
@@ -101,6 +113,7 @@ class ViewRenderContext:
     plans: list[models.Plan]
     plan_labels: list[str]
     plan_assignments: Sequence | None
+    graph_areas: Sequence | None
     graph_edges: Sequence | None
     geo_meta: dict[int, models.ObjectMeta]
     geo_meta_ids: dict[str, int]  # by path
@@ -357,6 +370,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             plans=plans,
             plan_labels=plan_labels,
             plan_assignments=plan_assignments,
+            graph_areas=self._graph_areas(db, view),
             graph_edges=self._graph_edges(db, view),
             geo_meta=geo_meta,
             geo_meta_ids=geo_meta_ids,
@@ -526,6 +540,46 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         )
 
         return db.execute(graph_edges_query).fetchall()
+
+    def _graph_areas(self, db: Session, view: models.View) -> Sequence | None:
+        """Gets projected graph node areas by path, if applicable."""
+        if view.graph_id is None:
+            return None
+
+        # Prefer the most specific projection for area calculations.
+        proj_crs_candidates = (view.graph.proj, view.proj, view.loc.default_proj)
+        try:
+            target_crs = next(proj for proj in proj_crs_candidates if proj is not None)
+            geo_col = geo_func.ST_Transform(
+                cast(models.GeoVersion.geography, Geometry), target_crs
+            )
+        except StopIteration:
+            geo_col = models.GeoVersion.geography
+
+        members_sub = (
+            select(
+                models.GeoSetMember.set_version_id,
+                models.GeoSetMember.geo_id,
+            )
+            .filter(models.GeoSetMember.set_version_id == view.set_version_id)
+            .subquery()
+        )
+        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
+
+        area_query = (
+            select(
+                geo_sub.c.path,
+                geo_func.ST_Area(geo_col).label("area"),
+            )
+            .join(
+                members_sub,
+                members_sub.c.geo_id == models.GeoVersion.geo_id,
+            )
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+        )
+        print(area_query)
+
+        return db.execute(area_query).fetchall()
 
 
 view = CRView(models.View)

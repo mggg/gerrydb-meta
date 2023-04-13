@@ -157,7 +157,6 @@ def get_view(
 )
 def render_view(
     *,
-    response: Response,
     namespace: str,
     path: str,
     db: Session = Depends(get_db),
@@ -184,12 +183,14 @@ def render_view(
         )
 
     etag = crud.view.etag(db, view_namespace_obj)
-    add_etag(response, etag)  # TODO: relevant for GCS?
-
     render_ctx = crud.view.render(db=db, view=view_obj)
     render_uuid, gpkg_path, temp_dir = view_to_gpkg(context=render_ctx, db_url=db_url)
-    response.headers["X-Gerry-View-Render-ID"] = render_uuid.hex
+
     return StreamingResponse(
         open(gpkg_path, "rb"),
         media_type="application/geopackage+sqlite3",
+        headers={
+            "ETag": etag.hex,
+            "X-GerryDB-View-Render-ID": render_uuid.hex,
+        },
     )

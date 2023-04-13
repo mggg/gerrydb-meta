@@ -78,7 +78,7 @@ def db_and_client_with_meta_no_scopes(db):
 
     app.dependency_overrides[get_db] = get_test_db
     client = TestClient(app)
-    client.headers = {"X-API-Key": api_key, "X-Gerry-Meta-Id": str(meta.uuid)}
+    client.headers = {"X-API-Key": api_key, "X-GerryDB-Meta-Id": str(meta.uuid)}
     yield db, client, meta
 
 

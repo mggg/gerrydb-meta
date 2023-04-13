@@ -1,4 +1,4 @@
-"""GeoJSON/Extended GeoPackage rendering of views."""
+"""Extended GeoPackage rendering of views."""
 import logging
 import sqlite3
 import subprocess
@@ -134,18 +134,36 @@ def _init_gpkg_graph_extension(conn: sqlite3.Connection, layer_name: str):
         """
     )
     conn.execute(
+        f"""
+        CREATE TABLE gerrydb_graph_node_area (
+            path  TEXT PRIMARY KEY REFERENCES {layer_name}(path),
+            area  REAL NOT NULL
+        )
+        """
+    )
+
+    conn.executemany(
         """
         INSERT INTO gpkg_extensions
         (table_name, column_name, extension_name, definition, scope)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (
-            "gerrydb_graph_edge",
-            None,
-            "mggg_gerrydb",
-            "Edges in a dual graph (adjacency graph) of the view's geographies.",
-            "read-write",
-        ),
+        [
+            (
+                "gerrydb_graph_edge",
+                None,
+                "mggg_gerrydb",
+                "Edges of a dual graph (adjacency graph) of the view's geographies.",
+                "read-write",
+            ),
+            (
+                "gerrydb_graph_node_area",
+                None,
+                "mggg_gerrydb",
+                "Node areas of a dual graph (adjacency graph) of the view's geographies.",
+                "read-write",
+            ),
+        ],
     )
     conn.commit()
 
@@ -335,6 +353,10 @@ def view_to_gpkg(
                 (edge.path_1, edge.path_2, json.dumps(edge.weights).decode("utf-8"))
                 for edge in context.graph_edges
             ),
+        )
+        conn.executemany(
+            "INSERT INTO gerrydb_graph_node_area (path, area) VALUES (?, ?)",
+            ((node.path, node.area) for node in context.graph_areas),
         )
 
     if context.plan_assignments is not None:
