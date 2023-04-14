@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from gerrydb_meta import crud, models
-from gerrydb_meta.db import db_url
+from gerrydb_meta.db import db_url, ogr2ogr_db_config
 from gerrydb_meta.enums import ScopeType
 from gerrydb_meta.scopes import ScopeManager
 
@@ -31,8 +31,8 @@ def get_db() -> Generator:
         engine.dispose()
 
 
-def get_db_url() -> str:
-    return db_url
+def get_ogr2ogr_db_config() -> str:
+    return ogr2ogr_db_config
 
 
 def get_user(

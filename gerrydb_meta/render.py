@@ -111,7 +111,7 @@ def _init_base_gpkg_extensions(conn: sqlite3.Connection, layer_name: str) -> Non
                 "read-write",
             ),
             (
-                "gerrydb_geo_meta_attrs",
+                "gerrydb_geo_attrs",
                 None,
                 "mggg_gerrydb",
                 (
@@ -206,7 +206,7 @@ def _init_gpkg_plans_extension(
 
 
 def view_to_gpkg(
-    context: ViewRenderContext, db_url: str
+    context: ViewRenderContext, db_config: str
 ) -> tuple[uuid.UUID, Path, TemporaryDirectory]:
     """Renders a view (with metadata) to a GeoPackage."""
     render_uuid = uuid.uuid4()
@@ -227,7 +227,7 @@ def view_to_gpkg(
         "-f",
         "GPKG",
         str(gpkg_path),
-        f"PG:{db_url}",
+        db_config,
         *proj_args,
     ]
 
@@ -344,7 +344,7 @@ def view_to_gpkg(
         db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
 
     conn.executemany(
-        "INSERT INTO gerrydb_geo_meta_attrs (path, meta_id) VALUES (?, ?)",
+        "INSERT INTO gerrydb_geo_attrs (path, meta_id) VALUES (?, ?)",
         (
             (path, db_meta_id_to_gpkg_meta_id[db_id])
             for path, db_id in context.geo_meta_ids.items()

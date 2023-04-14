@@ -10,8 +10,8 @@ from gerrydb_meta.api.base import add_etag, namespace_with_read, parse_path
 from gerrydb_meta.api.deps import (
     can_read_localities,
     get_db,
-    get_db_url,
     get_obj_meta,
+    get_ogr2ogr_db_config,
     get_scopes,
 )
 from gerrydb_meta.render import view_to_gpkg
@@ -160,7 +160,7 @@ def render_view(
     namespace: str,
     path: str,
     db: Session = Depends(get_db),
-    db_url: str = Depends(get_db_url),
+    db_config: str = Depends(get_ogr2ogr_db_config),
     scopes: ScopeManager = Depends(get_scopes),
 ):
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
@@ -184,7 +184,9 @@ def render_view(
 
     etag = crud.view.etag(db, view_namespace_obj)
     render_ctx = crud.view.render(db=db, view=view_obj)
-    render_uuid, gpkg_path, temp_dir = view_to_gpkg(context=render_ctx, db_url=db_url)
+    render_uuid, gpkg_path, temp_dir = view_to_gpkg(
+        context=render_ctx, db_config=db_config
+    )
 
     return StreamingResponse(
         open(gpkg_path, "rb"),
