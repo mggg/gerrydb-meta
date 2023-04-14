@@ -48,9 +48,10 @@ def _init_base_gpkg_extensions(conn: sqlite3.Connection, layer_name: str) -> Non
     )
     conn.execute(
         f"""
-        CREATE TABLE gerrydb_geo_meta_xref (
-            path    TEXT PRIMARY KEY REFERENCES {layer_name}(path),
-            meta_id BLOB NOT NULL    REFERENCES gerrydb_geo_meta(meta_id)
+        CREATE TABLE gerrydb_geo_attrs (
+            path        TEXT PRIMARY KEY REFERENCES {layer_name}(path),
+            meta_id     BLOB NOT NULL    REFERENCES gerrydb_geo_meta(meta_id),
+            valid_from  TEXT
         )
         """
     )
@@ -110,10 +111,13 @@ def _init_base_gpkg_extensions(conn: sqlite3.Connection, layer_name: str) -> Non
                 "read-write",
             ),
             (
-                "gerrydb_geo_meta_xref",
+                "gerrydb_geo_meta_attrs",
                 None,
                 "mggg_gerrydb",
-                "Mapping between geographies and metadata objects.",
+                (
+                    "Mapping between geographies and metadata objects, "
+                    "plus additional geography-level metadata attributes."
+                ),
                 "read-write",
             ),
         ],
@@ -338,7 +342,7 @@ def view_to_gpkg(
         db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
 
     conn.executemany(
-        "INSERT INTO gerrydb_geo_meta_xref (path, meta_id) VALUES (?, ?)",
+        "INSERT INTO gerrydb_geo_meta_attrs (path, meta_id) VALUES (?, ?)",
         (
             (path, db_meta_id_to_gpkg_meta_id[db_id])
             for path, db_id in context.geo_meta_ids.items()
