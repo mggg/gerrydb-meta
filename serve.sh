@@ -5,7 +5,7 @@ set -eo pipefail
 # from environment variables to a connection service file so that
 # they're less likely to be leaked in application logs.
 echo "[gerrydb]
-host=${INSTANCE_CONNECTION_NAME}
+host=/cloudsql/${INSTANCE_CONNECTION_NAME}
 user=${DB_USER}
 dbname=${DB_NAME}
 password=${DB_PASS}
