@@ -230,7 +230,6 @@ def view_to_gpkg(
         f"PG:{db_url}",
         *proj_args,
     ]
-    print("geo query:", context.geo_query)
 
     try:
         subprocess.run(
@@ -245,9 +244,11 @@ def view_to_gpkg(
             check=True,
             capture_output=True,
         )
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as ex:
         # Watch out for accidentally leaking credentials via logging here.
         log.error("Failed to export view with ogr2ogr. Query: %s", context.geo_query)
+        log.error("stdout: %s", ex.stdout.encode("utf-8"))
+        log.error("stderr: %s", ex.stderr.encode("utf-8"))
         raise RenderError("Failed to render view: geography query failed.")
 
     conn = sqlite3.connect(gpkg_path)
