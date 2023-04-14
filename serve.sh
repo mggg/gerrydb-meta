@@ -14,5 +14,5 @@ password=${DB_PASS}
 gunicorn -w 4 \
     --access-logfile - \
     -k uvicorn.workers.UvicornWorker \
-    errydb_meta.main:app \
+    gerrydb_meta.main:app \
     --timeout 300
