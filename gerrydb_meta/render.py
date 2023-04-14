@@ -230,6 +230,7 @@ def view_to_gpkg(
         f"PG:{db_url}",
         *proj_args,
     ]
+    print("geo query:", context.geo_query)
 
     try:
         subprocess.run(
