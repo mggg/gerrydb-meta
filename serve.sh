@@ -9,9 +9,9 @@ host=${INSTANCE_CONNECTION_NAME}
 user=${DB_USER}
 dbname=${DB_NAME}
 password=${DB_PASS}
-" >> $HOME/.pg_service.conf
+" >> /app/.pg_service.conf
 
-gunicorn -w 4 \
+PGSERVICEFILE=/app/.pg_service.conf gunicorn -w 4 \
     --access-logfile - \
     -k uvicorn.workers.UvicornWorker \
     gerrydb_meta.main:app \
