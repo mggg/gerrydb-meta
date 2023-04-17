@@ -1,5 +1,4 @@
 """Endpoints for views."""
-import google.auth
 import gzip
 import logging
 import os
@@ -9,6 +8,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Generator
 
+import google.auth
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
 from google.cloud import storage
@@ -203,6 +203,7 @@ def render_view(
     if bucket_name is not None:
         try:
             credentials, project_id = google.auth.default()
+
             storage_client = storage.Client(project=project_id, credentials=credentials)
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
@@ -221,6 +222,9 @@ def render_view(
                 version="v4",
                 expiration=timedelta(minutes=15),
                 method="GET",
+                # see https://stackoverflow.com/a/64245028
+                service_account_email=credentials.service_account_email,
+                access_token=credentials.token,
             )
             return RedirectResponse(
                 url=redirect_url,
