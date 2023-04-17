@@ -844,6 +844,40 @@ class View(Base):
     graph: Mapped[Graph | None] = relationship("Graph", lazy="joined")
 
 
+"""
+class ViewRender(Base):
+    __tablename__ = "view_render"
+
+    render_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), primary_key=True) 
+    view_id: Mapped[int] = mapped_column(Integer, ForeignKey("view.view_id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    ) 
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.user_id"), nullable=False
+    )
+    # e.g. local filesystem, S3, ...
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    #job_status: Mapped[]
+    
+    
+class ViewSet(Base):
+    __tablename__ = "view_set"
+
+    render_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), primary_key=True) 
+    view_id: Mapped[int] = mapped_column(Integer, ForeignKey("view.view_id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    ) 
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.user_id"), nullable=False
+    )
+    # e.g. local filesystem, S3, ...
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    #job_status: Mapped[]
+"""
+
+
 class ETag(Base):
     __tablename__ = "etag"
     __table_args__ = (UniqueConstraint("namespace_id", "table"),)

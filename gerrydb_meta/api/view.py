@@ -1,8 +1,16 @@
 """Endpoints for views."""
+import gzip
+import logging
+import os
+import subprocess
+from datetime import timedelta
 from http import HTTPStatus
+from pathlib import Path
+from typing import Generator
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
+from google.cloud import storage
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import crud, models, schemas
@@ -17,7 +25,11 @@ from gerrydb_meta.api.deps import (
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
 
+log = logging.getLogger()
+
 router = APIRouter()
+CHUNK_SIZE = 32 * 1024 * 1024  # for gzipping rendered views
+GPKG_MEDIA_TYPE = "application/geopackage+sqlite3"
 
 
 @router.post(
@@ -184,15 +196,52 @@ def render_view(
 
     etag = crud.view.etag(db, view_namespace_obj)
     render_ctx = crud.view.render(db=db, view=view_obj)
-    render_uuid, gpkg_path, temp_dir = view_to_gpkg(
-        context=render_ctx, db_config=db_config
-    )
+    render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
+
+    bucket_name = os.getenv("GCS_BUCKET")
+    if bucket_name is not None:
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(bucket_name)
+            gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
+            subprocess.run(["gzip", str(gpkg_path)], check=True)
+
+            blob = bucket.blob(f"{render_uuid.hex}.gpkg.gz")
+            blob.metadata = {
+                "cache-control": "public, max-age=604800",  # 1 week
+                "content-encoding": "gzip",
+                "content-type": GPKG_MEDIA_TYPE,
+                "x-gerrydb-view-render-id": render_uuid.hex,
+            }
+
+            blob.upload_from_filename(gzipped_path)
+            redirect_url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(minutes=15),
+                method="GET",
+            )
+            return RedirectResponse(
+                url=redirect_url,
+                status_code=HTTPStatus.PERMANENT_REDIRECT,
+            )
+        except Exception:
+            log.exception(
+                "Failed to serve rendered view via Google Cloud Storage. "
+                "Falling back to direct streaming."
+            )
 
     return StreamingResponse(
-        open(gpkg_path, "rb"),
-        media_type="application/geopackage+sqlite3",
+        _async_read_and_delete(gpkg_path),
+        media_type=GPKG_MEDIA_TYPE,
         headers={
             "ETag": etag.hex,
             "X-GerryDB-View-Render-ID": render_uuid.hex,
         },
     )
+
+
+async def _async_read_and_delete(path: Path) -> Generator[bytes, None, None]:
+    """Asynchronously reads a temporary file, then deletes it."""
+    with open(path, "rb") as fp:
+        yield fp.read()
+    path.unlink()

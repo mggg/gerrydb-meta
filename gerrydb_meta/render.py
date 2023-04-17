@@ -6,7 +6,6 @@ import tempfile
 import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from time import time
 
 import orjson as json
 
@@ -206,13 +205,11 @@ def _init_gpkg_plans_extension(
     conn.commit()
 
 
-def view_to_gpkg(
-    context: ViewRenderContext, db_config: str
-) -> tuple[uuid.UUID, Path, TemporaryDirectory]:
+def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID, Path]:
     """Renders a view (with metadata) to a GeoPackage."""
     render_uuid = uuid.uuid4()
-    temp_dir = tempfile.TemporaryDirectory()
-    gpkg_path = Path(temp_dir.name) / f"{render_uuid.hex}.gpkg"
+    temp_dir = Path(tempfile.mkdtemp())
+    gpkg_path = Path(temp_dir) / f"{render_uuid.hex}.gpkg"
 
     geo_layer_name = context.view.path
     internal_point_layer_name = f"{geo_layer_name}__internal_points"
@@ -232,7 +229,6 @@ def view_to_gpkg(
         *proj_args,
     ]
 
-    tic = time()
     try:
         subprocess.run(
             [
@@ -246,12 +242,13 @@ def view_to_gpkg(
             check=True,
             capture_output=True,
         )
-        log.info("Primary view export completed in %.2f sec.", time() - tic)
     except subprocess.CalledProcessError as ex:
         # Watch out for accidentally leaking credentials via logging here.
         # Production deployments should use a PostgreSQL connection service file
         # to pass credentials to ogr2ogr instead of passing a raw connection string.
-        log.exception("Failed to export view with ogr2ogr. Query: %s", context.geo_query)
+        log.exception(
+            "Failed to export view with ogr2ogr. Query: %s", context.geo_query
+        )
         log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
         log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
         raise RenderError("Failed to render view: geography query failed.")
@@ -272,7 +269,6 @@ def view_to_gpkg(
             f"in layer, got {geo_row_count} geographies."
         )
 
-    tic = time()
     try:
         subprocess.run(
             [
@@ -289,7 +285,6 @@ def view_to_gpkg(
             check=True,
             capture_output=True,
         )
-        log.info("Internal point export completed in %.2f sec.", time() - tic)
     except subprocess.CalledProcessError:
         # Watch out for accidentally leaking credentials via logging here.
         # Production deployments should use a PostgreSQL connection service file
@@ -392,4 +387,4 @@ def view_to_gpkg(
     conn.commit()
     conn.close()
 
-    return render_uuid, gpkg_path, temp_dir
+    return render_uuid, gpkg_path
