@@ -210,14 +210,9 @@ def render_view(
             subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
 
             blob = bucket.blob(f"{render_uuid.hex}.gpkg.gz")
-            blob.metadata = {
-                "cache-control": "public, max-age=604800",  # 1 week
-                "content-encoding": "gzip",
-                "content-type": GPKG_MEDIA_TYPE,
-                "x-gerrydb-view-render-id": render_uuid.hex,
-            }
-
-            blob.upload_from_filename(gzipped_path)
+            blob.content_encoding = "gzip"
+            blob.metadata = {"gerrydb-view-render-id": render_uuid.hex}
+            blob.upload_from_filename(gzipped_path, content_type=GPKG_MEDIA_TYPE)
             redirect_url = blob.generate_signed_url(
                 version="v4",
                 expiration=timedelta(minutes=15),
