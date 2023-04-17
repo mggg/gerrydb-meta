@@ -8,10 +8,10 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Generator
 
-import google.auth
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
 from google.cloud import storage
+from google.oauth2.service_account import Credentials
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import crud, models, schemas
@@ -200,11 +200,11 @@ def render_view(
     render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
 
     bucket_name = os.getenv("GCS_BUCKET")
-    if bucket_name is not None:
+    key_path = os.getenv("GCS_KEY_PATH")
+    if bucket_name is not None and key_path is not None:
         try:
-            credentials, project_id = google.auth.default()
-
-            storage_client = storage.Client(project=project_id, credentials=credentials)
+            credentials = Credentials.from_service_account_file(key_path)
+            storage_client = storage.Client(credentials=credentials)
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
             subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
