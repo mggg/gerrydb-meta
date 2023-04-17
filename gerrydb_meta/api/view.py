@@ -204,7 +204,7 @@ def render_view(
             storage_client = storage.Client()
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
-            subprocess.run(["gzip", str(gpkg_path)], check=True)
+            subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
 
             blob = bucket.blob(f"{render_uuid.hex}.gpkg.gz")
             blob.metadata = {
@@ -224,11 +224,12 @@ def render_view(
                 url=redirect_url,
                 status_code=HTTPStatus.PERMANENT_REDIRECT,
             )
-        except Exception:
+        except Exception as ex:
             log.exception(
                 "Failed to serve rendered view via Google Cloud Storage. "
                 "Falling back to direct streaming."
             )
+            raise ex
 
     return StreamingResponse(
         _async_read_and_delete(gpkg_path),

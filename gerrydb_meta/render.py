@@ -5,7 +5,6 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import orjson as json
 
