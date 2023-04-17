@@ -1,4 +1,5 @@
 """Endpoints for views."""
+import google.auth
 import gzip
 import logging
 import os
@@ -201,7 +202,8 @@ def render_view(
     bucket_name = os.getenv("GCS_BUCKET")
     if bucket_name is not None:
         try:
-            storage_client = storage.Client()
+            credentials, project_id = google.auth.default()
+            storage_client = storage.Client(project=project_id, credentials=credentials)
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
             subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
