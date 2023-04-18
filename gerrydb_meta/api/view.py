@@ -1,5 +1,4 @@
 """Endpoints for views."""
-import gzip
 import logging
 import os
 import subprocess
@@ -7,6 +6,7 @@ from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
 from typing import Generator
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -22,6 +22,7 @@ from gerrydb_meta.api.deps import (
     get_obj_meta,
     get_ogr2ogr_db_config,
     get_scopes,
+    get_user,
 )
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
@@ -174,6 +175,7 @@ def render_view(
     path: str,
     db: Session = Depends(get_db),
     db_config: str = Depends(get_ogr2ogr_db_config),
+    user: models.User = Depends(get_user),
     scopes: ScopeManager = Depends(get_scopes),
 ):
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
@@ -195,31 +197,71 @@ def render_view(
             detail=f"View not found in namespace.",
         )
 
-    etag = crud.view.etag(db, view_namespace_obj)
-    render_ctx = crud.view.render(db=db, view=view_obj)
-    render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
-
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
     if bucket_name is not None and key_path is not None:
         try:
-            credentials = Credentials.from_service_account_file(key_path)
-            storage_client = storage.Client(credentials=credentials)
-            bucket = storage_client.bucket(bucket_name)
-            gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
-            subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
+            storage_credentials = Credentials.from_service_account_file(key_path)
+            storage_client = storage.Client(credentials=storage_credentials)
+        except Exception as ex:
+            log.exception("Failed to initialize Google Cloud Storage context.")
+            storage_credentials = storage_client = None
+    has_gcs_context = storage_client is not None
 
-            blob = bucket.blob(f"{render_uuid.hex}.gpkg.gz")
-            blob.content_encoding = "gzip"
-            blob.metadata = {"gerrydb-view-render-id": render_uuid.hex}
-            blob.upload_from_filename(gzipped_path, content_type=GPKG_MEDIA_TYPE)
+    cached_render_meta = crud.view.get_cached_render(db=db, view=view_obj)
+    if cached_render_meta is not None and has_gcs_context:
+        render_path = urlparse(cached_render_meta.path)
+        try:
+            bucket = storage_client.bucket(render_path.netloc)
+            blob = bucket.blob(render_path.path[1:])
             redirect_url = blob.generate_signed_url(
                 version="v4",
                 expiration=timedelta(minutes=15),
                 method="GET",
                 # see https://stackoverflow.com/a/64245028
-                service_account_email=credentials.service_account_email,
-                access_token=credentials.token,
+                service_account_email=storage_credentials.service_account_email,
+                access_token=storage_credentials.token,
+            )
+            return RedirectResponse(
+                url=redirect_url,
+                status_code=HTTPStatus.PERMANENT_REDIRECT,
+            )
+        except Exception as ex:
+            log.exception(
+                "Failed to serve rendered view via Google Cloud Storage. "
+                "Falling back to direct streaming."
+            )
+
+    etag = crud.view.etag(db, view_namespace_obj)
+    render_ctx = crud.view.render(db=db, view=view_obj)
+    render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
+
+    if has_gcs_context:
+        try:
+            bucket = storage_client.bucket(bucket_name)
+            gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
+            subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
+
+            blob_path = f"{render_uuid.hex}.gpkg.gz"
+            blob = bucket.blob(blob_path)
+            blob.content_encoding = "gzip"
+            blob.metadata = {"gerrydb-view-render-id": render_uuid.hex}
+            blob.upload_from_filename(gzipped_path, content_type=GPKG_MEDIA_TYPE)
+            crud.view.cache_render(
+                db=db,
+                view=view_obj,
+                created_by=user,
+                render_id=render_uuid,
+                path=f"gs://{bucket_name}/{blob_path}",
+            )
+
+            redirect_url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(minutes=15),
+                method="GET",
+                # see https://stackoverflow.com/a/64245028
+                service_account_email=storage_credentials.service_account_email,
+                access_token=storage_credentials.token,
             )
             return RedirectResponse(
                 url=redirect_url,

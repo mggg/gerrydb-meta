@@ -5,6 +5,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Tuple
 
 from geoalchemy2 import Geometry
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.crud.column import COLUMN_TYPE_TO_VALUE_COLUMN
+from gerrydb_meta.enums import ViewRenderStatus
 from gerrydb_meta.exceptions import CreateValueError
 
 _ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
@@ -278,6 +280,81 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 models.View.namespace_id == namespace.namespace_id,
                 models.View.path == normalize_path(path),
             )
+            .first()
+        )
+
+    def _create_render(
+        self,
+        db: Session,
+        *,
+        view: models.View,
+        created_by: models.User,
+        render_id: uuid.UUID,
+        path: Path | str,
+        status: ViewRenderStatus,
+    ) -> models.ViewRender:
+        """Creates view render metadata."""
+        render = models.ViewRender(
+            view_id=view.view_id,
+            render_id=render_id,
+            created_by=created_by.user_id,
+            path=path,
+            status=status,
+        )
+        db.add(render)
+        db.flush()
+        db.refresh(render)
+        return render
+
+    def cache_render(
+        self,
+        db: Session,
+        *,
+        view: models.View,
+        created_by: models.User,
+        render_id: uuid.UUID,
+        path: Path | str,
+    ) -> models.ViewRender:
+        """Saves metadata for a successful render."""
+        return self._create_render(
+            db=db,
+            view=view,
+            created_by=created_by,
+            render_id=render_id,
+            path=path,
+            status=ViewRenderStatus.SUCCEEDED,
+        )
+
+    def queue_render(
+        self,
+        db: Session,
+        *,
+        view: models.View,
+        created_by: models.User,
+        render_id: uuid.UUID,
+        path: Path | str,
+    ) -> models.ViewRender:
+        """Adds a render to the job queue."""
+        return self._create_render(
+            db=db,
+            view=view,
+            created_by=created_by,
+            render_id=render_id,
+            path=path,
+            status=ViewRenderStatus.PENDING,
+        )
+
+    def get_cached_render(
+        self, db: Session, *, view: models.View
+    ) -> models.ViewRender | None:
+        """Retrieves metadata for a cached view render, if available."""
+        return (
+            db.query(models.ViewRender)
+            .filter(
+                models.ViewRender.view_id == view.view_id,
+                models.ViewRender.status == ViewRenderStatus.SUCCEEDED,
+            )
+            .order_by(models.ViewRender.created_at.desc())
             .first()
         )
 
@@ -577,8 +654,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             )
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
         )
-        print(area_query)
-
         return db.execute(area_query).fetchall()
 
 

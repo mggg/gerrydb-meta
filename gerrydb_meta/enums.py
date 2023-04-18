@@ -52,3 +52,12 @@ class NamespaceGroup(str, Enum):
     PUBLIC = "public"
     PRIVATE = "private"
     ALL = "all"
+
+
+class ViewRenderStatus(str, Enum):
+    """Job queue status of a rendered view."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"

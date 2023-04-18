@@ -19,7 +19,13 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from gerrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
+from gerrydb_meta.enums import (
+    ColumnKind,
+    ColumnType,
+    NamespaceGroup,
+    ScopeType,
+    ViewRenderStatus,
+)
 
 metadata_obj = MetaData(schema="gerrydb")
 
@@ -844,37 +850,47 @@ class View(Base):
     graph: Mapped[Graph | None] = relationship("Graph", lazy="joined")
 
 
-"""
 class ViewRender(Base):
     __tablename__ = "view_render"
 
-    render_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), primary_key=True) 
-    view_id: Mapped[int] = mapped_column(Integer, ForeignKey("view.view_id"), nullable=False)
+    render_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), primary_key=True
+    )
+    view_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view.view_id"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
-    ) 
+    )
     created_by: Mapped[int] = mapped_column(
         Integer, ForeignKey("user.user_id"), nullable=False
     )
     # e.g. local filesystem, S3, ...
     path: Mapped[str] = mapped_column(Text, nullable=False)
-    #job_status: Mapped[]
-    
-    
+    status: Mapped[ViewRenderStatus] = mapped_column(
+        SqlEnum(ViewRenderStatus), nullable=False
+    )
+
+
+"""
 class ViewSet(Base):
     __tablename__ = "view_set"
 
-    render_id: Mapped[uuid.UUID] = mapped_column(postgresql.UUID(as_uuid=True), primary_key=True) 
-    view_id: Mapped[int] = mapped_column(Integer, ForeignKey("view.view_id"), nullable=False)
+    render_id: Mapped[uuid.UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), primary_key=True
+    )
+    view_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view.view_id"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
-    ) 
+    )
     created_by: Mapped[int] = mapped_column(
         Integer, ForeignKey("user.user_id"), nullable=False
     )
     # e.g. local filesystem, S3, ...
     path: Mapped[str] = mapped_column(Text, nullable=False)
-    #job_status: Mapped[]
+    # job_status: Mapped[]
 """
 
 
