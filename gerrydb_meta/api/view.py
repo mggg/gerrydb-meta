@@ -213,7 +213,7 @@ def render_view(
         render_path = urlparse(cached_render_meta.path)
         try:
             bucket = storage_client.bucket(render_path.netloc)
-            blob = bucket.blob(render_path.path[1:])
+            blob = bucket.get_blob(render_path.path[1:])
             redirect_url = blob.generate_signed_url(
                 version="v4",
                 expiration=timedelta(minutes=15),
