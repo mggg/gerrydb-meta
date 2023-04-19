@@ -27,16 +27,16 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
             for obj_in in objs_in
             if obj_in.parent_path is not None
         }
-        parent_refs = (
-            db.query(models.LocalityRef)
-            .filter(models.LocalityRef.path.in_(parent_paths))
+        parent_ref_loc_ids = dict(
+            db.query(models.LocalityRef.path, models.LocalityRef.loc_id)
+            .filter(
+                models.LocalityRef.path.in_(parent_paths),
+            )
             .all()
         )
-        parent_ref_loc_ids = {ref.path: ref.loc_id for ref in parent_refs}
+
         if len(parent_ref_loc_ids) < len(parent_paths):
-            missing = ", ".join(
-                set(ref.path for ref in parent_refs) - set(parent_ref_loc_ids)
-            )
+            missing = ", ".join(parent_paths - set(parent_ref_loc_ids))
             raise CreateValueError(f"Reference to unknown parent locations {missing}.")
         if None in parent_ref_loc_ids.values():
             raise CreateValueError("Dangling locality reference found.")

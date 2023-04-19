@@ -75,10 +75,10 @@ class GerryAdmin:
         self.session.refresh(user)
 
         # TODO: don't grant broad privileges by default!
-        grant_scope(self.session, user, ScopeType.ALL, namespace_group=None)
-        grant_scope(
-            self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
-        )
+        # grant_scope(self.session, user, ScopeType.ALL, namespace_group=None)
+        # grant_scope(
+        #    self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
+        # )
 
         return user
 
