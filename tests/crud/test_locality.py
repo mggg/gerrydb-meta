@@ -18,53 +18,61 @@ def test_normalize_extra_slashes():
 def test_crud_locality_create_no_parent_no_aliases(db_with_meta):
     name = "Lost City of Atlantis"
     db, meta = db_with_meta
-    loc, _ = crud.locality.create(
+    loc, _ = crud.locality.create_bulk(
         db=db,
-        obj_in=schemas.LocalityCreate(
-            canonical_path="atlantis",
-            parent_path=None,
-            name=name,
-            aliases=None,
-        ),
+        objs_in=[
+            schemas.LocalityCreate(
+                canonical_path="atlantis",
+                parent_path=None,
+                name=name,
+                aliases=None,
+            ),
+        ],
         obj_meta=meta,
     )
-    assert loc.loc_id is not None
-    assert loc.name == name
+    assert loc[0].loc_id is not None
+    assert loc[0].name == name
 
 
 def test_crud_locality_get_by_ref(db_with_meta):
     name = "Lost City of Atlantis"
     db, meta = db_with_meta
-    loc, _ = crud.locality.create(
+    loc, _ = crud.locality.create_bulk(
         db=db,
-        obj_in=schemas.LocalityCreate(
-            canonical_path="atlantis",
-            parent_path=None,
-            name=name,
-            aliases=["greece/atlantis"],
-        ),
+        objs_in=[
+            schemas.LocalityCreate(
+                canonical_path="atlantis",
+                parent_path=None,
+                name=name,
+                aliases=["greece/atlantis"],
+            ),
+        ],
         obj_meta=meta,
     )
-    assert crud.locality.get_by_ref(db=db, path="atlantis").loc_id == loc.loc_id
-    assert crud.locality.get_by_ref(db=db, path="greece/atlantis").loc_id == loc.loc_id
+    assert crud.locality.get_by_ref(db=db, path="atlantis").loc_id == loc[0].loc_id
+    assert (
+        crud.locality.get_by_ref(db=db, path="greece/atlantis").loc_id == loc[0].loc_id
+    )
 
 
 def test_crud_locality_patch(db_with_meta):
     name = "Lost City of Atlantis"
     db, meta = db_with_meta
-    loc, _ = crud.locality.create(
+    loc, _ = crud.locality.create_bulk(
         db=db,
-        obj_in=schemas.LocalityCreate(
-            canonical_path="atlantis",
-            parent_path=None,
-            name=name,
-            aliases=None,
-        ),
+        objs_in=[
+            schemas.LocalityCreate(
+                canonical_path="atlantis",
+                parent_path=None,
+                name=name,
+                aliases=None,
+            ),
+        ],
         obj_meta=meta,
     )
     loc_with_aliases, _ = crud.locality.patch(
         db=db,
-        obj=loc,
+        obj=loc[0],
         obj_meta=meta,
         patch=schemas.LocalityPatch(aliases=["greece/atlantis"]),
     )

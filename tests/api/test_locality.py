@@ -35,9 +35,9 @@ def client_with_locality_read_only(db_and_client_with_meta_no_scopes):
     db, client, meta = db_and_client_with_meta_no_scopes
     grant_scope(db, meta, ScopeType.LOCALITY_READ)
 
-    crud.locality.create(
+    crud.locality.create_bulk(
         db=db,
-        obj_in=schemas.LocalityCreate(name="Greece", canonical_path=canonical_path),
+        objs_in=[schemas.LocalityCreate(name="Greece", canonical_path=canonical_path)],
         obj_meta=meta,
     )
     yield client, canonical_path
@@ -50,10 +50,10 @@ def test_api_locality_create_read__no_parent_no_aliases(client_with_meta_localit
 
     # Create new locality.
     create_response = client.post(
-        f"{LOCALITIES_ROOT}/", json={"name": name, "canonical_path": path}
+        f"{LOCALITIES_ROOT}/", json=[{"name": name, "canonical_path": path}]
     )
     assert create_response.status_code == HTTPStatus.CREATED
-    create_body = schemas.Locality(**create_response.json())
+    create_body = schemas.Locality(**create_response.json()[0])
     assert create_body.name == name
     assert create_body.canonical_path == path
     assert create_body.parent_path is None
@@ -75,22 +75,24 @@ def test_api_locality_create_read__parent_and_aliases(client_with_meta_locality)
 
     # Create parent locality.
     create_parent_response = client.post(
-        f"{LOCALITIES_ROOT}/", json={"name": "Greece", "canonical_path": parent_path}
+        f"{LOCALITIES_ROOT}/", json=[{"name": "Greece", "canonical_path": parent_path}]
     )
     assert create_parent_response.status_code == HTTPStatus.CREATED
 
     # Create child locality with aliases.
     create_child_response = client.post(
         f"{LOCALITIES_ROOT}/",
-        json={
-            "name": name,
-            "canonical_path": path,
-            "parent_path": parent_path,
-            "aliases": aliases,
-        },
+        json=[
+            {
+                "name": name,
+                "canonical_path": path,
+                "parent_path": parent_path,
+                "aliases": aliases,
+            }
+        ],
     )
     assert create_child_response.status_code == HTTPStatus.CREATED
-    create_child_body = schemas.Locality(**create_child_response.json())
+    create_child_body = schemas.Locality(**create_child_response.json()[0])
     assert create_child_body.name == name
     assert create_child_body.canonical_path == path
     assert create_child_body.aliases == aliases
@@ -113,7 +115,7 @@ def test_api_locality_create_read__with_redirects(client_with_meta_locality):
     # Create child locality with aliases.
     create_response = client.post(
         f"{LOCALITIES_ROOT}/",
-        json={"name": name, "canonical_path": path, "aliases": [alias]},
+        json=[{"name": name, "canonical_path": path, "aliases": [alias]}],
     )
     assert create_response.status_code == HTTPStatus.CREATED
 
@@ -126,7 +128,7 @@ def test_api_locality_create__with_no_meta(db_and_client_with_user_no_scopes):
     grant_scope(db, user, ScopeType.LOCALITY_WRITE)
 
     create_response = client.post(
-        f"{LOCALITIES_ROOT}/", json={"name": "Greece", "canonical_path": "greece"}
+        f"{LOCALITIES_ROOT}/", json=[{"name": "Greece", "canonical_path": "greece"}]
     )
     assert create_response.status_code == HTTPStatus.BAD_REQUEST
     assert "metadata" in create_response.json()["detail"]
@@ -137,7 +139,7 @@ def test_api_locality_create__scope_read_only(db_and_client_with_meta_no_scopes)
     grant_scope(db, user, ScopeType.LOCALITY_READ)
 
     create_response = client.post(
-        f"{LOCALITIES_ROOT}/", json={"name": "Greece", "canonical_path": "greece"}
+        f"{LOCALITIES_ROOT}/", json=[{"name": "Greece", "canonical_path": "greece"}]
     )
     assert create_response.status_code == HTTPStatus.FORBIDDEN
     assert "permissions to write" in create_response.json()["detail"]
@@ -148,7 +150,7 @@ def test_api_locality_create_read__scope_write_only(db_and_client_with_meta_no_s
     grant_scope(db, user, ScopeType.LOCALITY_WRITE)
 
     create_response = client.post(
-        f"{LOCALITIES_ROOT}/", json={"name": "Greece", "canonical_path": "greece"}
+        f"{LOCALITIES_ROOT}/", json=[{"name": "Greece", "canonical_path": "greece"}]
     )
     assert create_response.status_code == HTTPStatus.CREATED
 
@@ -163,11 +165,13 @@ def test_api_locality_create__bad_parent_path(client_with_meta_locality):
     # Create child locality with aliases.
     create_response = client.post(
         f"{LOCALITIES_ROOT}/",
-        json={
-            "name": "Lost City of Atlantis",
-            "canonical_path": "greece/atlantis",
-            "parent_path": "greece",
-        },
+        json=[
+            {
+                "name": "Lost City of Atlantis",
+                "canonical_path": "greece/atlantis",
+                "parent_path": "greece",
+            },
+        ],
     )
     assert create_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert "parent" in create_response.json()["detail"]
@@ -175,10 +179,12 @@ def test_api_locality_create__bad_parent_path(client_with_meta_locality):
 
 def test_api_locality__create_twice(client_with_meta_locality):
     client, _ = client_with_meta_locality
-    body = {
-        "name": "Lost City of Atlantis",
-        "canonical_path": "greece/atlantis",
-    }
+    body = [
+        {
+            "name": "Lost City of Atlantis",
+            "canonical_path": "greece/atlantis",
+        }
+    ]
 
     create_response = client.post(f"{LOCALITIES_ROOT}/", json=body)
     assert create_response.status_code == HTTPStatus.CREATED
@@ -199,7 +205,7 @@ def test_api_locality_patch__add_aliases(client_with_meta_locality):
 
     create_response = client.post(
         f"{LOCALITIES_ROOT}/",
-        json={"name": "Lost City of Atlantis", "canonical_path": path},
+        json=[{"name": "Lost City of Atlantis", "canonical_path": path}],
     )
     assert create_response.status_code == HTTPStatus.CREATED
 
