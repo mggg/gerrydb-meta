@@ -47,10 +47,18 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                 )
             db.refresh(column_set)
 
-            for idx, column_path in enumerate(obj_in.columns):
+            refs = []
+            for column_path in obj_in.columns:
                 ref_obj = crud_column.get_ref(db, path=column_path, namespace=namespace)
                 if ref_obj is None:
                     raise CreateValueError(f"Failed to resolve column '{column_path}'.")
+                refs.append(ref_obj)
+
+            col_ids = [ref_obj.col_id for ref_obj in refs]
+            if len(col_ids) > len(set(col_ids)):
+                raise CreateValueError("Columns in a column set must be unique.")
+
+            for idx, ref_obj in enumerate(refs):
                 db.add(
                     models.ColumnSetMember(
                         set_id=column_set.set_id,
@@ -59,7 +67,7 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
                     )
                 )
 
-                etag = self._update_etag(db, namespace)
+            etag = self._update_etag(db, namespace)
 
         db.refresh(column_set)
         return column_set, etag

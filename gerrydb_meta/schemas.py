@@ -110,7 +110,6 @@ class ColumnBase(BaseModel):
     """Base model for locality metadata."""
 
     canonical_path: GerryPath
-    namespace: str
     description: str
     source_url: AnyUrl | None
     kind: enums.ColumnKind
@@ -132,6 +131,7 @@ class ColumnPatch(BaseModel):
 class Column(ColumnBase):
     """A locality returned by the database."""
 
+    namespace: str
     aliases: list[GerryPath]
     meta: ObjectMeta
 
@@ -150,6 +150,7 @@ class Column(ColumnBase):
             aliases=[ref.path for ref in root_obj.refs if ref.path != canonical_path],
             kind=root_obj.kind,
             type=root_obj.type,
+            source_url=root_obj.source_url,
         )
 
 
@@ -273,7 +274,7 @@ class ColumnSetBase(BaseModel):
 class ColumnSetCreate(ColumnSetBase):
     """Column grouping data received on creation."""
 
-    columns: list[NamespacedGerryPath]
+    columns: list[GerryPath]
 
 
 class ColumnSet(ColumnSetBase):
