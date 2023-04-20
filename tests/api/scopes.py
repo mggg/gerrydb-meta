@@ -35,6 +35,36 @@ def grant_scope(
     db.refresh(user)
 
 
+def grant_namespaced_scope(
+    db: Session,
+    user_or_meta: models.User | models.ObjectMeta,
+    namespace: models.Namespace,
+    scope: enums.ScopeType,
+) -> None:
+    """Grants a namespaced scope to a test user."""
+    if isinstance(user_or_meta, models.ObjectMeta):
+        user = user_or_meta.user
+        meta = user_or_meta
+    else:
+        user = user_or_meta
+        meta = models.ObjectMeta(
+            created_by=user.user_id, notes="Used for authorization configuration only."
+        )
+        db.add(meta)
+        db.flush()
+
+    scope = models.UserScope(
+        user_id=user.user_id,
+        scope=scope,
+        namespace_group=None,
+        namespace_id=namespace.namespace_id,
+        meta_id=meta.meta_id,
+    )
+    db.add(scope)
+    db.flush()
+    db.refresh(user)
+
+
 def revoke_scope_type(
     db: Session,
     user_or_meta: models.User | models.ObjectMeta,
