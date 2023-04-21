@@ -50,6 +50,22 @@ def test_api_column_create_read__get_by_alias(
     assert read_body == create_body
 
 
+def test_api_column_create__twice(ctx_public_namespace_read_write, pop_column_meta):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+    create_response = ctx.client.post(
+        f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
+    )
+    assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
+
+    create_twice_response = ctx.client.post(
+        f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
+    )
+    assert (
+        create_twice_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    ), create_twice_response.json()
+
+
 def test_api_column_create_patch(ctx_public_namespace_read_write, pop_column_meta):
     namespace = ctx_public_namespace_read_write.namespace.path
     create_response = ctx_public_namespace_read_write.client.post(

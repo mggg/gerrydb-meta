@@ -13,9 +13,9 @@ class CreateValueError(GerryValueError):
 class BulkCreateError(GerryValueError):
     """`ValueError` raised when object(s) already exist."""
 
-    paths: list[str]
+    paths: list[str] | None
 
-    def __init__(self, message: str, paths: list[str]):
+    def __init__(self, message: str, paths: list[str] | None = None):
         self.paths = paths
         super().__init__(message)
 
@@ -23,9 +23,9 @@ class BulkCreateError(GerryValueError):
 class BulkPatchError(GerryValueError):
     """`ValueError` raised when patched object(s) do not exist."""
 
-    paths: list[str]
+    paths: list[str] | None
 
-    def __init__(self, message: str, paths: list[str]):
+    def __init__(self, message: str, paths: list[str] | None = None):
         self.paths = paths
         super().__init__(message)
 

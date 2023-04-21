@@ -40,7 +40,7 @@ def column_value_type_error(request: Request, exc: ColumnValueTypeError):
 def bulk_create_error(request: Request, exc: BulkCreateError):
     """Handles (bulk) creation conflicts."""
     return JSONResponse(
-        status_code=HTTPStatus.CONFLICT,
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         content={
             "detail": f"Object creation failed. Reason: {exc}",
             "paths": exc.paths,

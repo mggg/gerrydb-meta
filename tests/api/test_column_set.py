@@ -172,6 +172,28 @@ def test_api_column_set_create__missing_column(ctx_public_namespace_read_write):
     ), create_response.json()
 
 
+def test_api_column_set_create__twice(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+
+    create_column(ctx, "test")
+    body = {
+        "path": "cols",
+        "description": "A column set that we'll attempt to create twice.",
+        "columns": ["test"],
+    }
+
+    create_response = ctx.client.post(f"{COLUMN_SETS_ROOT}/{namespace}", json=body)
+    assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
+
+    create_twice_response = ctx.client.post(
+        f"{COLUMN_SETS_ROOT}/{namespace}", json=body
+    )
+    assert (
+        create_twice_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    ), create_twice_response.json()
+
+
 def test_api_column_set_create_read__private_namespace(
     ctx_public_namespace_read_write,
     ctx_private_namespace_read_write,

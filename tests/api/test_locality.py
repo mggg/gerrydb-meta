@@ -148,7 +148,7 @@ def test_api_locality_create__bad_parent_path(ctx_locality_read_write):
     assert "parent" in create_response.json()["detail"]
 
 
-def test_api_locality__create_twice(ctx_locality_read_write):
+def test_api_locality_create__twice(ctx_locality_read_write):
     ctx = ctx_locality_read_write
     body = [
         {

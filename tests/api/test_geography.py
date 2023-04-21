@@ -8,7 +8,6 @@ from shapely import box
 from shapely.geometry import Point
 
 from gerrydb_meta import crud, schemas
-from gerrydb_meta.enums import ScopeType
 from gerrydb_meta.main import API_PREFIX
 
 GEOS_ROOT = f"{API_PREFIX}/geographies"
@@ -152,6 +151,43 @@ def test_api_geography_create__missing_geos(ctx_public_namespace_read_write):
     create_body = schemas.Geography(**msgpack.loads(create_response.content)[0])
     assert create_body.internal_point is None
     assert create_body.geography is None
+
+
+def test_api_geography_create__malformed_wkb(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+
+    create_response = ctx.client.post(
+        f"{GEOS_ROOT}/{namespace}",
+        headers=headers(ctx),
+        content=msgpack.dumps(
+            [{"path": "box", "geography": b"123"}]  # not a valid WKB-encoded geometry
+        ),
+    )
+    assert (
+        create_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    ), create_response.json()
+
+
+def test_api_geography_create__twice(ctx_public_namespace_read_write, unit_box_msgpack):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+
+    create_response = ctx.client.post(
+        f"{GEOS_ROOT}/{namespace}",
+        headers=headers(ctx),
+        content=unit_box_msgpack,
+    )
+    assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
+
+    create_twice_response = ctx.client.post(
+        f"{GEOS_ROOT}/{namespace}",
+        headers=headers(ctx),
+        content=unit_box_msgpack,
+    )
+    assert (
+        create_twice_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    ), create_twice_response.json()
 
 
 def test_api_geography_create_patch(ctx_public_namespace_read_write, unit_box_msgpack):

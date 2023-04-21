@@ -7,6 +7,7 @@ from typing import Collection
 
 from geoalchemy2.elements import WKBElement
 from sqlalchemy import and_, insert, or_, update
+from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models, schemas
@@ -58,29 +59,39 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     ],
                 )
             )
-            geo_versions = list(
-                db.scalars(
-                    insert(models.GeoVersion).returning(models.GeoVersion),
-                    [
-                        {
-                            "import_id": geo_import.import_id,
-                            "geo_id": geo.geo_id,
-                            "geography": (
-                                None
-                                if obj_in.geography is None
-                                else WKBElement(obj_in.geography, srid=4269)
-                            ),
-                            "internal_point": (
-                                None
-                                if obj_in.internal_point is None
-                                else WKBElement(obj_in.internal_point, srid=4269)
-                            ),
-                            "valid_from": now,
-                        }
-                        for geo, obj_in in zip(geos, objs_in)
-                    ],
+
+            try:
+                geo_versions = list(
+                    db.scalars(
+                        insert(models.GeoVersion).returning(models.GeoVersion),
+                        [
+                            {
+                                "import_id": geo_import.import_id,
+                                "geo_id": geo.geo_id,
+                                "geography": (
+                                    None
+                                    if obj_in.geography is None
+                                    else WKBElement(obj_in.geography, srid=4269)
+                                ),
+                                "internal_point": (
+                                    None
+                                    if obj_in.internal_point is None
+                                    else WKBElement(obj_in.internal_point, srid=4269)
+                                ),
+                                "valid_from": now,
+                            }
+                            for geo, obj_in in zip(geos, objs_in)
+                        ],
+                    )
                 )
-            )
+            except StatementError as ex:
+                log.exception(
+                    "Geography insert failed, likely due to invalid geometries."
+                )
+                raise BulkCreateError(
+                    "Failed to insert geometries. Geometries must be encoded in WKB format."
+                ) from ex
+
             etag = self._update_etag(db, namespace)
 
         db.flush()
@@ -126,27 +137,37 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 )
                 .values(valid_to=now)
             )
-            geo_versions = db.scalars(
-                insert(models.GeoVersion).returning(models.GeoVersion),
-                [
-                    {
-                        "import_id": geo_import.import_id,
-                        "geo_id": geo.geo_id,
-                        "geography": (
-                            None
-                            if obj_in.geography is None
-                            else WKBElement(obj_in.geography, srid=4269)
-                        ),
-                        "internal_point": (
-                            None
-                            if obj_in.internal_point is None
-                            else WKBElement(obj_in.internal_point, srid=4269)
-                        ),
-                        "valid_from": now,
-                    }
-                    for geo, obj_in in zip(geos_ordered, objs_in)
-                ],
-            )
+
+            try:
+                geo_versions = db.scalars(
+                    insert(models.GeoVersion).returning(models.GeoVersion),
+                    [
+                        {
+                            "import_id": geo_import.import_id,
+                            "geo_id": geo.geo_id,
+                            "geography": (
+                                None
+                                if obj_in.geography is None
+                                else WKBElement(obj_in.geography, srid=4269)
+                            ),
+                            "internal_point": (
+                                None
+                                if obj_in.internal_point is None
+                                else WKBElement(obj_in.internal_point, srid=4269)
+                            ),
+                            "valid_from": now,
+                        }
+                        for geo, obj_in in zip(geos_ordered, objs_in)
+                    ],
+                )
+            except StatementError as ex:
+                log.exception(
+                    "Geography patching failed, likely due to invalid geometries."
+                )
+                raise BulkPatchError(
+                    "Failed to patch geometries. Geometries must be encoded in WKB format."
+                ) from ex
+
             etag = self._update_etag(db, namespace)
 
         db.flush()
