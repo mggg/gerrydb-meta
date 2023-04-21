@@ -1,7 +1,7 @@
 name: GerryDB metadata server tests
 on: [push, pull_request]
 jobs:
-  run:
+  runner-job:
     runs-on: ${{ matrix.os }}
     # Postgres configuration: see
     # https://docs.github.com/en/actions/using-containerized-services/creating-postgresql-service-containers#running-jobs-in-containers
@@ -22,6 +22,7 @@ jobs:
         ports:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
+
     strategy:
       matrix:
         python-version: ['3.11']
