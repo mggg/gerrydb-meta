@@ -1,7 +1,7 @@
 name: GerryDB metadata server tests
 on: [push, pull_request]
 jobs:
-  runner-job:
+  run:
     runs-on: ${{ matrix.os }}
     # Postgres configuration: see
     # https://docs.github.com/en/actions/using-containerized-services/creating-postgresql-service-containers#running-jobs-in-containers
@@ -51,7 +51,7 @@ jobs:
       run: |
         pytest --cov=./ --cov-report=xml
       env:
-        GERRYDB_DATABASE_URI: postgresql://postgres:postgres@localhost:5432/postgres
+        GERRYDB_TEST_DATABASE_URI: postgresql://postgres:postgres@localhost:5432/postgres
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
