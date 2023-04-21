@@ -17,7 +17,7 @@ def test_api_geo_import_create_read(ctx_public_namespace_read_write):
 
     read_response = ctx.client.get(f"{GEO_IMPORTS_ROOT}/{namespace}/{create_body.uuid}")
     assert read_response.status_code == HTTPStatus.OK, read_response.json()
-    read_body = schemas.GeoImport(**create_response.json())
+    read_body = schemas.GeoImport(**read_response.json())
 
     assert create_body == read_body
 
