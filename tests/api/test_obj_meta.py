@@ -27,60 +27,56 @@ def create_new_user_meta(db: Session) -> models.ObjectMeta:
     )
 
 
-def test_api_object_meta_create_read(db_and_client_with_user_no_scopes):
-    db, client, user = db_and_client_with_user_no_scopes
+def test_api_object_meta_create_read(ctx_no_scopes):
+    ctx = ctx_no_scopes
     notes = "test"
-    grant_scope(db, user, ScopeType.META_WRITE)
+    grant_scope(ctx.db, ctx.user, ScopeType.META_WRITE)
 
     # Create new metadata.
-    create_response = client.post(f"{META_ROOT}/", json={"notes": notes})
+    create_response = ctx.client.post(f"{META_ROOT}/", json={"notes": notes})
     assert create_response.status_code == HTTPStatus.CREATED
     create_body = schemas.ObjectMeta(**create_response.json())
     assert create_body.notes == notes
-    assert create_body.created_by == user.email
+    assert create_body.created_by == ctx.user.email
 
     # Read it back.
-    read_response = client.get(f"{META_ROOT}/{create_body.uuid}")
+    read_response = ctx.client.get(f"{META_ROOT}/{create_body.uuid}")
     assert read_response.status_code == HTTPStatus.OK
     read_body = schemas.ObjectMeta(**read_response.json())
     assert read_body == create_body
 
 
-def test_api_object_meta_create__no_scopes(db_and_client_with_user_no_scopes):
-    db, client, _ = db_and_client_with_user_no_scopes
-
-    create_response = client.post(f"{META_ROOT}/", json={"notes": ""})
+def test_api_object_meta_create__no_scopes(ctx_no_scopes):
+    create_response = ctx_no_scopes.client.post(f"{META_ROOT}/", json={"notes": ""})
     assert create_response.status_code == HTTPStatus.FORBIDDEN
     assert "permissions to write metadata" in create_response.json()["detail"]
 
 
-def test_api_object_meta_create__read_only(db_and_client_with_user_no_scopes):
-    db, client, meta = db_and_client_with_user_no_scopes
-    grant_scope(db, meta, ScopeType.META_READ)
+def test_api_object_meta_create__read_only(ctx_no_scopes):
+    ctx = ctx_no_scopes
+    grant_scope(ctx.db, ctx.meta, ScopeType.META_READ)
 
-    create_response = client.post(f"{META_ROOT}/", json={"notes": ""})
+    create_response = ctx.client.post(f"{META_ROOT}/", json={"notes": ""})
     assert create_response.status_code == HTTPStatus.FORBIDDEN
     assert "permissions to write metadata" in create_response.json()["detail"]
 
 
-def test_api_object_meta_read__other_user_no_read_scope(
-    db_and_client_with_user_no_scopes,
-):
-    db, client, user = db_and_client_with_user_no_scopes
-    grant_scope(db, user, ScopeType.META_WRITE)
-    other_user_meta = create_new_user_meta(db)
+def test_api_object_meta_read__other_user_no_read_scope(ctx_no_scopes):
+    ctx = ctx_no_scopes
+    grant_scope(ctx.db, ctx.user, ScopeType.META_WRITE)
+    other_user_meta = create_new_user_meta(ctx.db)
 
     # Read metadata created by the other user.
-    read_response = client.get(f"{META_ROOT}/{other_user_meta.uuid}")
+    read_response = ctx.client.get(f"{META_ROOT}/{other_user_meta.uuid}")
     assert read_response.status_code == HTTPStatus.FORBIDDEN
     assert "permissions to read metadata" in read_response.json()["detail"]
 
 
-def test_api_object_meta_read__other_user_read_scope(db_and_client_with_user_no_scopes):
-    db, client, user = db_and_client_with_user_no_scopes
-    grant_scope(db, user, ScopeType.META_READ)
-    other_user_meta = create_new_user_meta(db)
+def test_api_object_meta_read__other_user_read_scope(ctx_no_scopes):
+    ctx = ctx_no_scopes
+    grant_scope(ctx.db, ctx.user, ScopeType.META_READ)
+    other_user_meta = create_new_user_meta(ctx.db)
 
     # Read metadata created by the other user.
-    read_response = client.get(f"{META_ROOT}/{other_user_meta.uuid}")
+    read_response = ctx.client.get(f"{META_ROOT}/{other_user_meta.uuid}")
     assert read_response.status_code == HTTPStatus.OK

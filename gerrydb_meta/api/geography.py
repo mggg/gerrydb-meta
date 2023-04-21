@@ -49,14 +49,23 @@ class GeographyApi(NamespacedObjectApi):
             response_geos = [
                 schemas.Geography(
                     path=geo.path,
-                    geography=bytes(geo_version.geography.data),
+                    geography=(
+                        None
+                        if geo_version.geography is None
+                        else bytes(geo_version.geography.data)
+                    ),
+                    internal_point=(
+                        None
+                        if geo_version.internal_point is None
+                        else bytes(geo_version.internal_point.data)
+                    ),
                     namespace=namespace,
                     meta=obj_meta,
                     valid_from=geo_version.valid_from,
                 ).dict()
                 for geo, geo_version in geos
             ]
-            return MsgpackResponse(response_geos)
+            return MsgpackResponse(response_geos, status_code=HTTPStatus.CREATED)
 
         return create_route
 
@@ -83,7 +92,6 @@ class GeographyApi(NamespacedObjectApi):
             geos, etag = self.crud.patch_bulk(
                 db=db,
                 objs_in=raw_geographies,
-                obj_meta=obj_meta,
                 geo_import=geo_import,
                 namespace=namespace_obj,
             )
@@ -91,7 +99,16 @@ class GeographyApi(NamespacedObjectApi):
             response_geos = [
                 schemas.Geography(
                     path=geo.path,
-                    geography=bytes(geo_version.geography.data),
+                    geography=(
+                        None
+                        if geo_version.geography is None
+                        else bytes(geo_version.geography.data)
+                    ),
+                    internal_point=(
+                        None
+                        if geo_version.internal_point is None
+                        else bytes(geo_version.internal_point.data)
+                    ),
                     namespace=namespace,
                     meta=obj_meta,
                     valid_from=geo_version.valid_from,
@@ -102,8 +119,6 @@ class GeographyApi(NamespacedObjectApi):
 
         return patch_route
 
-    # TODO: msgpack serialization for get(), all() (?)
-
     def router(self) -> APIRouter:
         """Generates a router with basic CR operations for geographies."""
         router = APIRouter()
@@ -112,13 +127,14 @@ class GeographyApi(NamespacedObjectApi):
         self._create(msgpack_router)
         self._patch(msgpack_router)
         self._get(router)
+        self._all(router)
         router.include_router(msgpack_router)
         return router
 
 
 router = GeographyApi(
     crud=crud.geography,
-    get_schema=schemas.Geography,
+    get_schema=schemas.GeographyMeta,
     create_schema=None,
     obj_name_singular="Geography",
     obj_name_plural="Geographies",

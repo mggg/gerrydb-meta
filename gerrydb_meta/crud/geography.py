@@ -118,6 +118,14 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         geos_ordered = [geos_by_path[normalize_path(geo.path)] for geo in objs_in]
 
         with db.begin(nested=True):
+            db.execute(
+                update(models.GeoVersion)
+                .where(
+                    models.GeoVersion.geo_id.in_(geo.geo_id for geo in existing_geos),
+                    models.GeoVersion.valid_to.is_(None),
+                )
+                .values(valid_to=now)
+            )
             geo_versions = db.scalars(
                 insert(models.GeoVersion).returning(models.GeoVersion),
                 [
@@ -138,14 +146,6 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     }
                     for geo, obj_in in zip(geos_ordered, objs_in)
                 ],
-            )
-            db.execute(
-                update(models.GeoVersion)
-                .where(
-                    models.GeoVersion.geo_id.in_(geo.geo_id for geo in existing_geos),
-                    models.GeoVersion.valid_to.is_(None),
-                )
-                .values(valid_to=now)
             )
             etag = self._update_etag(db, namespace)
 

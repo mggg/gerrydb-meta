@@ -228,10 +228,8 @@ class GeographyCreate(GeographyBase):
     """Geographic unit data received on creation (geography as raw WKB bytes)."""
 
 
-class GeographyPatch(BaseModel):
+class GeographyPatch(GeographyBase):
     """Geographic unit data received on PATCH."""
-
-    geography: bytes | None
 
 
 class Geography(GeographyBase):
@@ -256,6 +254,21 @@ class Geography(GeographyBase):
             meta=obj.parent.meta,
             valid_from=obj.valid_from,
         )
+
+
+class GeographyMeta(BaseModel):
+    """Geographic unit metadata returned by the database."""
+
+    namespace: str
+    path: str
+    meta: ObjectMeta
+
+    class Config:
+        orm_mode = True
+
+    @classmethod
+    def from_orm(cls, obj: models.Geography):
+        return cls(namespace=obj.namespace.path, path=obj.path, meta=obj.meta)
 
 
 class GeoSetCreate(BaseModel):

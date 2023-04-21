@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import crud, models
 from gerrydb_meta.api.deps import get_db, get_obj_meta, get_scopes, no_perms
 from gerrydb_meta.crud.base import normalize_path
+from gerrydb_meta.exceptions import GerryValueError
 from gerrydb_meta.scopes import ScopeManager
 
 log = logging.getLogger()
@@ -397,6 +398,11 @@ class MsgpackRoute(APIRoute):
             try:
                 request = MsgpackRequest(request.scope, request.receive)
                 return await original_route_handler(request)
+            except GerryValueError as ex:
+                # `MsgpackDecodeError` behaves like an alias of `ValueError`,
+                # so we need to explicitly avoid the `MsgpackDecodeError` handler
+                # below when dealing with `ValueError`s raised by database operations.
+                raise ex
             except msgpack.MsgpackDecodeError:
                 log.exception("MessagePack decode failed.")
                 raise HTTPException(
@@ -432,7 +438,20 @@ class NamespacedObjectApi:
         private namespaces that are not its own. If `base_namespace` is provided,
         private namespaces with paths that do not match `base_namespace` are rejected.
         """
+        print(
+            "scopes:",
+            scopes._global_scopes,
+            scopes._namespace_group_scopes,
+            scopes._namespace_scopes,
+        )
         namespace_obj = crud.namespace.get(db=db, path=path)
+        print(
+            "namespace path:",
+            path,
+            namespace_obj.namespace_id,
+            namespace_obj.public,
+            scopes.can_read_in_namespace(namespace_obj),
+        )
         if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,

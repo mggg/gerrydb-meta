@@ -81,7 +81,7 @@ def upgrade() -> None:
             geoalchemy2.types.Geography(
                 srid=4269, from_text="ST_GeogFromText", name="geography"
             ),
-            nullable=False,
+            nullable=True,
         ),
         sa.Column(
             "internal_point",

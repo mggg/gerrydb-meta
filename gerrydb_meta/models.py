@@ -1,7 +1,7 @@
 """SQL table definitions for GerryDB."""
-import uuid
 from datetime import datetime
 from typing import Any
+from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography as SqlGeography
 from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime
@@ -175,7 +175,7 @@ class ObjectMeta(Base):
         index=True,
         unique=True,
         nullable=False,
-        default=uuid.uuid4,
+        default=uuid4,
     )
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
@@ -333,8 +333,10 @@ class GeoVersion(Base):
         DateTime(timezone=True), nullable=False
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    geography = mapped_column(SqlGeography(srid=4269), nullable=False)
-    internal_point = mapped_column(SqlGeography(geometry_type="POINT", srid=4269))
+    geography = mapped_column(SqlGeography(srid=4269), nullable=True)
+    internal_point = mapped_column(
+        SqlGeography(geometry_type="POINT", srid=4269), nullable=True
+    )
 
     parent: Mapped["Geography"] = relationship(
         "Geography", back_populates="versions", lazy="joined"
@@ -367,12 +369,12 @@ class GeoImport(Base):
     __tablename__ = "geo_import"
 
     import_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    uuid = mapped_column(
+    uuid: Mapped[UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
         index=True,
         unique=True,
         nullable=False,
-        default=uuid.uuid4,
+        default=uuid4,
     )
     namespace_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("namespace.namespace_id"), nullable=False
@@ -853,7 +855,7 @@ class View(Base):
 class ViewRender(Base):
     __tablename__ = "view_render"
 
-    render_id: Mapped[uuid.UUID] = mapped_column(
+    render_id: Mapped[UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), primary_key=True
     )
     view_id: Mapped[int] = mapped_column(
@@ -876,7 +878,7 @@ class ViewRender(Base):
 class ViewSet(Base):
     __tablename__ = "view_set"
 
-    render_id: Mapped[uuid.UUID] = mapped_column(
+    render_id: Mapped[UUID] = mapped_column(
         postgresql.UUID(as_uuid=True), primary_key=True
     )
     view_id: Mapped[int] = mapped_column(
@@ -903,7 +905,7 @@ class ETag(Base):
         Integer, ForeignKey("namespace.namespace_id")
     )
     table: Mapped[str] = mapped_column(Text, nullable=False)
-    etag: Mapped[uuid.UUID] = mapped_column(
+    etag: Mapped[UUID] = mapped_column(
         postgresql.UUID(as_uuid=True),
         nullable=False,
     )

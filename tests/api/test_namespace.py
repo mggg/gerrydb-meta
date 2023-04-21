@@ -14,46 +14,46 @@ NAMESPACES_ROOT = f"{API_PREFIX}/namespaces"
 
 
 @pytest.fixture
-def client_with_namespace_rc_all(db_and_client_with_meta_no_scopes):
+def ctx_with_namespace_rc_all(ctx_no_scopes_factory):
     """Client with global read/create namespace scopes."""
-    db, client, meta = db_and_client_with_meta_no_scopes
-    grant_scope(db, meta, ScopeType.NAMESPACE_READ, namespace_group=NamespaceGroup.ALL)
-    grant_scope(db, meta, ScopeType.NAMESPACE_CREATE)
-    yield client
-
-
-@pytest.fixture
-def client_with_namespace_ro_all(db_and_client_with_meta_no_scopes):
-    """Client with global read/write namespace scopes."""
-    db, client, meta = db_and_client_with_meta_no_scopes
-    grant_scope(db, meta, ScopeType.NAMESPACE_READ, namespace_group=NamespaceGroup.ALL)
-    yield client
-
-
-@pytest.fixture
-def db_and_client_with_namespace_rc_public(db_and_client_with_meta_no_scopes):
-    """Client with public read/write/create namespace scopes (+ session and metadata)."""
-    db, client, meta = db_and_client_with_meta_no_scopes
+    ctx = ctx_no_scopes_factory()
     grant_scope(
-        db, meta, ScopeType.NAMESPACE_READ, namespace_group=NamespaceGroup.PUBLIC
+        ctx.db, ctx.meta, ScopeType.NAMESPACE_READ, namespace_group=NamespaceGroup.ALL
     )
-    grant_scope(db, meta, ScopeType.NAMESPACE_CREATE)
-    yield db, client, meta
+    grant_scope(ctx.db, ctx.meta, ScopeType.NAMESPACE_CREATE)
+    yield ctx
 
 
 @pytest.fixture
-def client_with_namespace_rc_public(db_and_client_with_namespace_rc_public):
-    """Client with public read/write/create namespace scopes."""
-    _, client, _ = db_and_client_with_namespace_rc_public
-    yield client
+def ctx_with_namespace_ro_all(ctx_no_scopes_factory):
+    """Client with global read/write namespace scopes."""
+    ctx = ctx_no_scopes_factory()
+    grant_scope(
+        ctx.db, ctx.meta, ScopeType.NAMESPACE_READ, namespace_group=NamespaceGroup.ALL
+    )
+    yield ctx
 
 
-def test_api_namespace_create_read__public(client_with_namespace_rc_all):
+@pytest.fixture
+def ctx_with_namespace_rc_public(ctx_no_scopes_factory):
+    """Client with public read/write/create namespace scopes (+ session and metadata)."""
+    ctx = ctx_no_scopes_factory()
+    grant_scope(
+        ctx.db,
+        ctx.meta,
+        ScopeType.NAMESPACE_READ,
+        namespace_group=NamespaceGroup.PUBLIC,
+    )
+    grant_scope(ctx.db, ctx.meta, ScopeType.NAMESPACE_CREATE)
+    yield ctx
+
+
+def test_api_namespace_create_read__public(ctx_with_namespace_rc_all):
     # Create new namespace.
     path = "census.2020"
     description = "2020 Census data"
 
-    create_response = client_with_namespace_rc_all.post(
+    create_response = ctx_with_namespace_rc_all.client.post(
         f"{NAMESPACES_ROOT}/",
         json={"path": path, "description": description, "public": True},
     )
@@ -64,28 +64,28 @@ def test_api_namespace_create_read__public(client_with_namespace_rc_all):
     assert create_body.public
 
     # Read it back.
-    read_response = client_with_namespace_rc_all.get(f"{NAMESPACES_ROOT}/{path}")
+    read_response = ctx_with_namespace_rc_all.client.get(f"{NAMESPACES_ROOT}/{path}")
     assert read_response.status_code == HTTPStatus.OK
     read_body = schemas.Namespace(**read_response.json())
     assert read_body == create_body
 
 
-def test_api_namespace_create__twice(client_with_namespace_rc_all):
+def test_api_namespace_create__twice(ctx_with_namespace_rc_all):
     body = {"path": "census", "description": "Census data", "public": True}
-    create_response = client_with_namespace_rc_all.post(
+    create_response = ctx_with_namespace_rc_all.client.post(
         f"{NAMESPACES_ROOT}/", json=body
     )
     assert create_response.status_code == HTTPStatus.CREATED
 
-    create_again_response = client_with_namespace_rc_all.post(
+    create_again_response = ctx_with_namespace_rc_all.client.post(
         f"{NAMESPACES_ROOT}/", json=body
     )
     assert create_again_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_api_namespace_create_ro(client_with_namespace_ro_all):
+def test_api_namespace_create_ro(ctx_with_namespace_ro_all):
     # Create new namespace.
-    create_response = client_with_namespace_ro_all.post(
+    create_response = ctx_with_namespace_ro_all.client.post(
         f"{NAMESPACES_ROOT}/",
         json={"path": "census", "description": "Census data", "public": True},
     )
@@ -93,42 +93,42 @@ def test_api_namespace_create_ro(client_with_namespace_ro_all):
     assert "permissions to create" in create_response.json()["detail"]
 
 
-def test_api_namespace_read__missing(client_with_namespace_rc_all):
-    read_response = client_with_namespace_rc_all.get(f"{NAMESPACES_ROOT}/missing")
+def test_api_namespace_read__missing(ctx_with_namespace_rc_all):
+    read_response = ctx_with_namespace_rc_all.client.get(f"{NAMESPACES_ROOT}/missing")
     assert read_response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_api_namespace_create_read__private(db_and_client_with_namespace_rc_public):
-    db, client, meta = db_and_client_with_namespace_rc_public
+def test_api_namespace_create_read__private(ctx_with_namespace_rc_public):
+    ctx = ctx_with_namespace_rc_public
     crud.namespace.create(
-        db=db,
+        db=ctx.db,
         obj_in=schemas.NamespaceCreate(
             path="private", description="secret!", public=False
         ),
-        obj_meta=meta,
+        obj_meta=ctx.meta,
     )
-    read_response = client.get(f"{NAMESPACES_ROOT}/private")
+    read_response = ctx.client.get(f"{NAMESPACES_ROOT}/private")
     assert read_response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_api_namespace_all__private(db_and_client_with_namespace_rc_public):
-    db, client, meta = db_and_client_with_namespace_rc_public
+def test_api_namespace_all__private(ctx_with_namespace_rc_public):
+    ctx = ctx_with_namespace_rc_public
     crud.namespace.create(
-        db=db,
+        db=ctx.db,
         obj_in=schemas.NamespaceCreate(
             path="private", description="secret!", public=False
         ),
-        obj_meta=meta,
+        obj_meta=ctx.meta,
     )
     crud.namespace.create(
-        db=db,
+        db=ctx.db,
         obj_in=schemas.NamespaceCreate(
             path="public", description="not secret!", public=True
         ),
-        obj_meta=meta,
+        obj_meta=ctx.meta,
     )
 
-    list_response = client.get(f"{NAMESPACES_ROOT}/")
+    list_response = ctx.client.get(f"{NAMESPACES_ROOT}/")
     assert list_response.status_code == HTTPStatus.OK
     list_body = list_response.json()
     assert len(list_body) == 1

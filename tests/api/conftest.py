@@ -15,6 +15,18 @@ from gerrydb_meta.main import app
 from .scopes import grant_namespaced_scope, grant_scope
 
 
+# Extend this for all new tests rather than returning tuples from fixtures.
+@dataclass(frozen=True)
+class TestContext:
+    """Database context for an API test."""
+
+    db: Session
+    client: TestClient
+    meta: models.ObjectMeta | None = None
+    user: models.User | None = None
+    namespace: models.Namespace | None = None
+
+
 @pytest.fixture
 def client_no_auth(db):
     """FastAPI test client with no authentication."""
@@ -27,76 +39,49 @@ def client_no_auth(db):
 
 
 @pytest.fixture
-def db_and_client_with_user_no_scopes(db):
-    """Database session and FastAPI test client with API key authentication."""
+def ctx_no_scopes_factory(db):
+    """Factory for database session + test client with API key auth and metadata context."""
 
     def get_test_db() -> Generator:
         yield db
 
-    admin = GerryAdmin(db)
-    user = admin.user_create(name="Test User", email="test@example.com")
-    api_key = admin.key_create(user)
-    db.flush()
-    db.refresh(user)
+    user_idx = 0
 
-    app.dependency_overrides[get_db] = get_test_db
-    client = TestClient(app)
-    client.headers = {"X-API-Key": api_key}
-    yield db, client, user
+    def ctx_factory() -> TestContext:
+        # TODO: replace with `crud` calls.
+        nonlocal user_idx
+        admin = GerryAdmin(db)
+        user = admin.user_create(name="Test User", email=f"test{user_idx}@example.com")
+        user_idx += 1
+        api_key = admin.key_create(user)
+        db.flush()
 
+        meta = models.ObjectMeta(notes="metameta", created_by=user.user_id)
+        db.add(meta)
+        db.flush()
+        db.refresh(user)
+        db.refresh(meta)
 
-@pytest.fixture
-def client_with_user_no_scopes(db_and_client_with_user_no_scopes):
-    """FastAPI test client with API key authentication."""
-    _, client, user = db_and_client_with_user_no_scopes
-    yield client, user
+        app.dependency_overrides[get_db] = get_test_db
+        client = TestClient(app)
+        client.headers = {"X-API-Key": api_key, "X-GerryDB-Meta-Id": str(meta.uuid)}
+        return TestContext(db=db, client=client, user=user, meta=meta)
 
-
-@pytest.fixture
-def client_with_superuser(db_and_client_with_user_no_scopes):
-    """FastAPI test client with API key authentication and maximum privileges."""
-    db, client, user = db_and_client_with_user_no_scopes
-    grant_scope(db, user, ScopeType.ALL, NamespaceGroup.ALL)
-    yield client, user
+    return ctx_factory
 
 
 @pytest.fixture
-def db_and_client_with_meta_no_scopes(db):
+def ctx_no_scopes(ctx_no_scopes_factory):
     """Database session + test client with API key auth and metadata context."""
-
-    def get_test_db() -> Generator:
-        yield db
-
-    # TODO: replace with `crud` calls.
-    admin = GerryAdmin(db)
-    user = admin.user_create(name="Test User", email="test@example.com")
-    api_key = admin.key_create(user)
-    db.flush()
-    meta = models.ObjectMeta(notes="metameta", created_by=user.user_id)
-    db.add(meta)
-    db.flush()
-    db.refresh(user)
-    db.refresh(meta)
-
-    app.dependency_overrides[get_db] = get_test_db
-    client = TestClient(app)
-    client.headers = {"X-API-Key": api_key, "X-GerryDB-Meta-Id": str(meta.uuid)}
-    yield db, client, meta
+    yield ctx_no_scopes_factory()
 
 
 @pytest.fixture
-def client_with_meta_no_scopes(db_and_client_with_meta_no_scopes):
-    """Test client with API key auth and metadata context."""
-    _, client, meta = db_and_client_with_meta_no_scopes
-    yield client, meta
-
-
-@pytest.fixture
-def client_with_meta_superuser(db_and_client_with_meta_no_scopes):
-    """Test client with API key auth and metadata context."""
-    db, client, meta = db_and_client_with_meta_no_scopes
-    grant_scope(db, meta, ScopeType.ALL, NamespaceGroup.ALL)
-    yield client, meta
+def ctx_superuser(ctx_no_scopes_factory):
+    """FastAPI test client with API key authentication and maximum privileges."""
+    ctx = ctx_no_scopes_factory()
+    grant_scope(ctx.db, ctx.user, ScopeType.ALL, NamespaceGroup.ALL)
+    yield ctx
 
 
 @pytest.fixture
@@ -106,65 +91,80 @@ def client_with_meta_locality(db_and_client_with_meta_locality):
     yield client, meta
 
 
-# Extend this for all new tests rather than returning tuples from fixtures.
-@dataclass(frozen=True)
-class TestContext:
-    """Database context for an API test."""
-
-    db: Session
-    client: TestClient
-    meta: models.ObjectMeta | None = None
-    namespace: models.Namespace | None = None
-
-
 @pytest.fixture
-def namespaced_read_only_ctx(request, db_and_client_with_meta_no_scopes):
-    """Context with an API client with NAMESPACE_READ scope in a namespace."""
-    db, client, meta = db_and_client_with_meta_no_scopes
+def ctx_public_namespace_read_only(request, ctx_no_scopes_factory):
+    """Context with an API client with public NAMESPACE_READ scope."""
+    base_ctx = ctx_no_scopes_factory()
     test_name = request.node.name.replace("[", "__").replace("]", "")
     namespace, _ = crud.namespace.create(
-        db=db,
+        db=base_ctx.db,
         obj_in=schemas.NamespaceCreate(
             path=test_name,
             description=f"Namespace for test {request.node.name}",
             public=True,
         ),
-        obj_meta=meta,
+        obj_meta=base_ctx.meta,
     )
-    grant_namespaced_scope(db, meta, namespace, ScopeType.NAMESPACE_READ)
-    yield TestContext(db=db, client=client, meta=meta, namespace=namespace)
+    grant_scope(
+        base_ctx.db,
+        base_ctx.meta,
+        ScopeType.NAMESPACE_READ,
+        namespace_group=NamespaceGroup.PUBLIC,
+    )
+    yield TestContext(
+        db=base_ctx.db,
+        client=base_ctx.client,
+        meta=base_ctx.meta,
+        user=base_ctx.user,
+        namespace=namespace,
+    )
 
 
 @pytest.fixture
-def namespaced_read_write_ctx(namespaced_read_only_ctx):
-    """Context with an API client with NAMESPACE_READ scope in a namespace."""
-    ctx = namespaced_read_only_ctx
+def ctx_public_namespace_read_write(ctx_public_namespace_read_only):
+    """Context with an API client with public NAMESPACE_READ scope and
+    namespaced NAMESPACE_WRITE scope."""
+    ctx = ctx_public_namespace_read_only
     grant_namespaced_scope(ctx.db, ctx.meta, ctx.namespace, ScopeType.NAMESPACE_WRITE)
     yield ctx
 
 
 @pytest.fixture
-def private_namespace_read_only_ctx(request, db_and_client_with_meta_no_scopes):
+def ctx_private_namespace_read_only(request, ctx_no_scopes_factory):
     """Context with an API client with NAMESPACE_READ scope in a private namespace."""
-    db, client, meta = db_and_client_with_meta_no_scopes
+    base_ctx = ctx_no_scopes_factory()
     test_name = request.node.name.replace("[", "__").replace("]", "")
     namespace, _ = crud.namespace.create(
-        db=db,
+        db=base_ctx.db,
         obj_in=schemas.NamespaceCreate(
-            path=test_name,
+            path=f"{test_name}__private",
             description=f"Private namespace for test {request.node.name}",
             public=False,
         ),
-        obj_meta=meta,
+        obj_meta=base_ctx.meta,
     )
-    grant_namespaced_scope(db, meta, namespace, ScopeType.NAMESPACE_READ)
-    yield TestContext(db=db, client=client, meta=meta, namespace=namespace)
+    grant_scope(
+        base_ctx.db,
+        base_ctx.meta,
+        ScopeType.NAMESPACE_READ,
+        namespace_group=NamespaceGroup.PUBLIC,
+    )
+    grant_namespaced_scope(
+        base_ctx.db, base_ctx.meta, namespace, ScopeType.NAMESPACE_READ
+    )
+    yield TestContext(
+        db=base_ctx.db,
+        client=base_ctx.client,
+        meta=base_ctx.meta,
+        user=base_ctx.user,
+        namespace=namespace,
+    )
 
 
 @pytest.fixture
-def private_namespace_read_write_ctx(private_namespace_read_only_ctx):
+def ctx_private_namespace_read_write(ctx_private_namespace_read_only):
     """Context with an API client with NAMESPACE_READ scope in a private namespace."""
-    ctx = private_namespace_read_only_ctx
+    ctx = ctx_private_namespace_read_only
     grant_namespaced_scope(ctx.db, ctx.meta, ctx.namespace, ScopeType.NAMESPACE_WRITE)
     yield ctx
 

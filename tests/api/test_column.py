@@ -5,14 +5,12 @@ from gerrydb_meta import schemas
 from gerrydb_meta.enums import ColumnKind, ColumnType, ScopeType
 from gerrydb_meta.main import API_PREFIX
 
-from .scopes import revoke_scope_type
-
 COLUMNS_ROOT = f"{API_PREFIX}/columns"
 
 
-def test_api_column_create_read(namespaced_read_write_ctx, pop_column_meta):
-    namespace = namespaced_read_write_ctx.namespace.path
-    create_response = namespaced_read_write_ctx.client.post(
+def test_api_column_create_read(ctx_public_namespace_read_write, pop_column_meta):
+    namespace = ctx_public_namespace_read_write.namespace.path
+    create_response = ctx_public_namespace_read_write.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
@@ -25,7 +23,7 @@ def test_api_column_create_read(namespaced_read_write_ctx, pop_column_meta):
     assert create_body.type == ColumnType.INT
     assert set(create_body.aliases) == set(pop_column_meta["aliases"])
 
-    read_response = namespaced_read_write_ctx.client.get(
+    read_response = ctx_public_namespace_read_write.client.get(
         f"{COLUMNS_ROOT}/{namespace}/{create_body.canonical_path}"
     )
     assert read_response.status_code == HTTPStatus.OK, read_response.json()
@@ -34,17 +32,17 @@ def test_api_column_create_read(namespaced_read_write_ctx, pop_column_meta):
 
 
 def test_api_column_create_read__get_by_alias(
-    namespaced_read_write_ctx, pop_column_meta
+    ctx_public_namespace_read_write, pop_column_meta
 ):
-    namespace = namespaced_read_write_ctx.namespace.path
-    create_response = namespaced_read_write_ctx.client.post(
+    namespace = ctx_public_namespace_read_write.namespace.path
+    create_response = ctx_public_namespace_read_write.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
     create_body = schemas.Column(**create_response.json())
 
     alias = pop_column_meta["aliases"][0]
-    read_response = namespaced_read_write_ctx.client.get(
+    read_response = ctx_public_namespace_read_write.client.get(
         f"{COLUMNS_ROOT}/{namespace}/{alias}"
     )
     assert read_response.status_code == HTTPStatus.OK, read_response.json()
@@ -52,15 +50,15 @@ def test_api_column_create_read__get_by_alias(
     assert read_body == create_body
 
 
-def test_api_column_create_patch(namespaced_read_write_ctx, pop_column_meta):
-    namespace = namespaced_read_write_ctx.namespace.path
-    create_response = namespaced_read_write_ctx.client.post(
+def test_api_column_create_patch(ctx_public_namespace_read_write, pop_column_meta):
+    namespace = ctx_public_namespace_read_write.namespace.path
+    create_response = ctx_public_namespace_read_write.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
     path = pop_column_meta["canonical_path"]
-    patch_response = namespaced_read_write_ctx.client.patch(
+    patch_response = ctx_public_namespace_read_write.client.patch(
         f"{COLUMNS_ROOT}/{namespace}/{path}",
         json={"aliases": ["another_alias"]},
     )
@@ -70,90 +68,82 @@ def test_api_column_create_patch(namespaced_read_write_ctx, pop_column_meta):
 
 
 def test_api_column_create_all(
-    namespaced_read_write_ctx, pop_column_meta, vap_column_meta
+    ctx_public_namespace_read_write, pop_column_meta, vap_column_meta
 ):
-    namespace = namespaced_read_write_ctx.namespace.path
+    namespace = ctx_public_namespace_read_write.namespace.path
     canonical_paths = set()
     for col_meta in (pop_column_meta, vap_column_meta):
-        create_response = namespaced_read_write_ctx.client.post(
+        create_response = ctx_public_namespace_read_write.client.post(
             f"{COLUMNS_ROOT}/{namespace}", json=col_meta
         )
         canonical_paths.add(col_meta["canonical_path"])
         assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
-    all_response = namespaced_read_write_ctx.client.get(f"{COLUMNS_ROOT}/{namespace}")
+    all_response = ctx_public_namespace_read_write.client.get(
+        f"{COLUMNS_ROOT}/{namespace}"
+    )
     assert all_response.status_code == HTTPStatus.OK, all_response.json()
     assert set(col["canonical_path"] for col in all_response.json()) == canonical_paths
 
 
 def test_api_column_create_read__scope_read_only(
-    namespaced_read_only_ctx, pop_column_meta
+    ctx_public_namespace_read_only, pop_column_meta
 ):
-    namespace = namespaced_read_only_ctx.namespace.path
-    create_response = namespaced_read_only_ctx.client.post(
+    namespace = ctx_public_namespace_read_only.namespace.path
+    create_response = ctx_public_namespace_read_only.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.NOT_FOUND, create_response.json()
 
-    read_response = namespaced_read_only_ctx.client.get(
+    read_response = ctx_public_namespace_read_only.client.get(
         f"{COLUMNS_ROOT}/{namespace}/{pop_column_meta['canonical_path']}"
     )
     assert read_response.status_code == HTTPStatus.NOT_FOUND, read_response.json()
 
 
 def test_api_column_create_read__private_namespace(
-    private_namespace_read_write_ctx, pop_column_meta
+    ctx_public_namespace_read_write, ctx_private_namespace_read_write, pop_column_meta
 ):
-    ctx = private_namespace_read_write_ctx
-    namespace = ctx.namespace.path
-    create_response = ctx.client.post(
+    private_ctx = ctx_private_namespace_read_write
+    namespace = private_ctx.namespace.path
+    create_response = private_ctx.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
-    # Revoke access to the private namespace.
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_READ)
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_WRITE)
-
-    read_response = ctx.client.get(
+    read_response = ctx_public_namespace_read_write.client.get(
         f"{COLUMNS_ROOT}/{namespace}/{pop_column_meta['canonical_path']}"
     )
     assert read_response.status_code == HTTPStatus.NOT_FOUND, read_response.json()
 
 
 def test_api_column_create_all__private_namespace(
-    private_namespace_read_write_ctx, pop_column_meta
+    ctx_public_namespace_read_write, ctx_private_namespace_read_write, pop_column_meta
 ):
-    ctx = private_namespace_read_write_ctx
-    namespace = ctx.namespace.path
-    create_response = ctx.client.post(
+    private_ctx = ctx_private_namespace_read_write
+    namespace = private_ctx.namespace.path
+    create_response = private_ctx.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
-    # Revoke access to the private namespace.
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_READ)
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_WRITE)
-
-    read_response = ctx.client.get(f"{COLUMNS_ROOT}/{namespace}")
-    assert read_response.status_code == HTTPStatus.NOT_FOUND, read_response.json()
+    all_response = ctx_public_namespace_read_write.client.get(
+        f"{COLUMNS_ROOT}/{namespace}"
+    )
+    assert all_response.status_code == HTTPStatus.NOT_FOUND, all_response.json()
 
 
 def test_api_column_create_patch__private_namespace(
-    private_namespace_read_write_ctx, pop_column_meta
+    ctx_public_namespace_read_write, ctx_private_namespace_read_write, pop_column_meta
 ):
-    ctx = private_namespace_read_write_ctx
-    namespace = ctx.namespace.path
-    create_response = ctx.client.post(
+    private_ctx = ctx_private_namespace_read_write
+    namespace = private_ctx.namespace.path
+    create_response = private_ctx.client.post(
         f"{COLUMNS_ROOT}/{namespace}", json=pop_column_meta
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
-    # Revoke access to the private namespace.
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_READ)
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_WRITE)
-
-    patch_response = ctx.client.patch(
+    patch_response = ctx_public_namespace_read_write.client.patch(
         f"{COLUMNS_ROOT}/{namespace}/{pop_column_meta['canonical_path']}",
         json={"aliases": ["another_alias"]},
     )

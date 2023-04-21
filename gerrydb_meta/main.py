@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from gerrydb_meta.api import api_router
 from gerrydb_meta.exceptions import (
     BulkCreateError,
+    BulkPatchError,
     ColumnValueTypeError,
     CreateValueError,
 )
@@ -42,6 +43,18 @@ def bulk_create_error(request: Request, exc: BulkCreateError):
         status_code=HTTPStatus.CONFLICT,
         content={
             "detail": f"Object creation failed. Reason: {exc}",
+            "paths": exc.paths,
+        },
+    )
+
+
+@app.exception_handler(BulkPatchError)
+def bulk_create_error(request: Request, exc: BulkCreateError):
+    """Handles (bulk) creation conflicts."""
+    return JSONResponse(
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        content={
+            "detail": f"Object patch failed. Reason: {exc}",
             "paths": exc.paths,
         },
     )

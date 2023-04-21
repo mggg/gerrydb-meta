@@ -7,8 +7,6 @@ from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.enums import ColumnKind, ColumnType, ScopeType
 from gerrydb_meta.main import API_PREFIX
 
-from .scopes import revoke_scope_type
-
 COLUMN_SETS_ROOT = f"{API_PREFIX}/column-sets"
 
 
@@ -31,8 +29,8 @@ def create_column(
     return col
 
 
-def test_api_column_set_create_read(namespaced_read_write_ctx):
-    ctx = namespaced_read_write_ctx
+def test_api_column_set_create_read(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
     create_column(ctx, "test1")
@@ -57,8 +55,8 @@ def test_api_column_set_create_read(namespaced_read_write_ctx):
     assert read_body == create_body
 
 
-def test_api_column_set_create_all(namespaced_read_write_ctx):
-    ctx = namespaced_read_write_ctx
+def test_api_column_set_create_all(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
     create_column(ctx, "test")
@@ -77,12 +75,13 @@ def test_api_column_set_create_all(namespaced_read_write_ctx):
         f"{COLUMN_SETS_ROOT}/{namespace}",
     )
     assert all_response.status_code == HTTPStatus.OK, all_response.json()
+    assert len(all_response.json()) == 1
     read_body = schemas.ColumnSet(**all_response.json()[0])
     assert read_body == create_body
 
 
-def test_api_column_set_create_read__scope_read_only(namespaced_read_only_ctx):
-    ctx = namespaced_read_only_ctx
+def test_api_column_set_create_read__scope_read_only(ctx_public_namespace_read_only):
+    ctx = ctx_public_namespace_read_only
     namespace = ctx.namespace.path
 
     create_response = ctx.client.post(
@@ -96,8 +95,8 @@ def test_api_column_set_create_read__scope_read_only(namespaced_read_only_ctx):
     assert create_response.status_code == HTTPStatus.NOT_FOUND, create_response.json()
 
 
-def test_api_column_set_create__column_aliases(namespaced_read_write_ctx):
-    ctx = namespaced_read_write_ctx
+def test_api_column_set_create__column_aliases(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
     create_column(ctx, "test1", aliases=["t1", "x"])
@@ -116,8 +115,8 @@ def test_api_column_set_create__column_aliases(namespaced_read_write_ctx):
     assert create_body.refs == ["y", "x"]
 
 
-def test_api_column_set_create__duplicate_column(namespaced_read_write_ctx):
-    ctx = namespaced_read_write_ctx
+def test_api_column_set_create__duplicate_column(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
     create_column(ctx, "test")
@@ -135,8 +134,10 @@ def test_api_column_set_create__duplicate_column(namespaced_read_write_ctx):
     ), create_response.json()
 
 
-def test_api_column_set_create__aliased_duplicate_column(namespaced_read_write_ctx):
-    ctx = namespaced_read_write_ctx
+def test_api_column_set_create__aliased_duplicate_column(
+    ctx_public_namespace_read_write,
+):
+    ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
     create_column(ctx, "test", aliases=["t"])
@@ -154,8 +155,8 @@ def test_api_column_set_create__aliased_duplicate_column(namespaced_read_write_c
     ), create_response.json()
 
 
-def test_api_column_set_create__missing_column(namespaced_read_write_ctx):
-    ctx = namespaced_read_write_ctx
+def test_api_column_set_create__missing_column(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
     create_response = ctx.client.post(
@@ -172,36 +173,35 @@ def test_api_column_set_create__missing_column(namespaced_read_write_ctx):
 
 
 def test_api_column_set_create_read__private_namespace(
-    private_namespace_read_write_ctx,
+    ctx_public_namespace_read_write,
+    ctx_private_namespace_read_write,
 ):
-    ctx = private_namespace_read_write_ctx
-    namespace = ctx.namespace.path
-    create_response = ctx.client.post(
+    private_ctx = ctx_private_namespace_read_write
+    namespace = private_ctx.namespace.path
+    create_response = private_ctx.client.post(
         f"{COLUMN_SETS_ROOT}/{namespace}",
         json={"path": "cols", "description": "empty", "columns": []},
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
-    # Revoke access to the private namespace.
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_READ)
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_WRITE)
-
-    read_response = ctx.client.get(f"{COLUMN_SETS_ROOT}/{namespace}/cols")
+    read_response = ctx_public_namespace_read_write.client.get(
+        f"{COLUMN_SETS_ROOT}/{namespace}/cols"
+    )
     assert read_response.status_code == HTTPStatus.NOT_FOUND, read_response.json()
 
 
-def test_api_column_create_all__private_namespace(private_namespace_read_write_ctx):
-    ctx = private_namespace_read_write_ctx
-    namespace = ctx.namespace.path
-    create_response = ctx.client.post(
+def test_api_column_create_all__private_namespace(
+    ctx_public_namespace_read_write, ctx_private_namespace_read_write
+):
+    private_ctx = ctx_private_namespace_read_write
+    namespace = private_ctx.namespace.path
+    create_response = private_ctx.client.post(
         f"{COLUMN_SETS_ROOT}/{namespace}",
         json={"path": "cols", "description": "empty", "columns": []},
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
 
-    # Revoke access to the private namespace.
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_READ)
-    revoke_scope_type(ctx.db, ctx.meta, ScopeType.NAMESPACE_WRITE)
-
-    all_response = ctx.client.get(f"{COLUMN_SETS_ROOT}/{namespace}")
+    all_response = ctx_public_namespace_read_write.client.get(
+        f"{COLUMN_SETS_ROOT}/{namespace}"
+    )
     assert all_response.status_code == HTTPStatus.NOT_FOUND, all_response.json()

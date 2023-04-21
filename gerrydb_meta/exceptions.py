@@ -2,11 +2,15 @@
 from dataclasses import dataclass
 
 
-class CreateValueError(ValueError):
+class GerryValueError(ValueError):
+    """Base GerryDB `ValueError`."""
+
+
+class CreateValueError(GerryValueError):
     """`ValueError` raised on failed object creation."""
 
 
-class BulkCreateError(ValueError):
+class BulkCreateError(GerryValueError):
     """`ValueError` raised when object(s) already exist."""
 
     paths: list[str]
@@ -16,7 +20,7 @@ class BulkCreateError(ValueError):
         super().__init__(message)
 
 
-class BulkPatchError(ValueError):
+class BulkPatchError(GerryValueError):
     """`ValueError` raised when patched object(s) do not exist."""
 
     paths: list[str]
@@ -27,7 +31,7 @@ class BulkPatchError(ValueError):
 
 
 @dataclass
-class ColumnValueTypeError(ValueError):
+class ColumnValueTypeError(GerryValueError):
     """`ValueError` raised when column value(s) do not match the column type."""
 
     errors: list[str]
