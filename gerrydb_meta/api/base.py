@@ -438,20 +438,7 @@ class NamespacedObjectApi:
         private namespaces that are not its own. If `base_namespace` is provided,
         private namespaces with paths that do not match `base_namespace` are rejected.
         """
-        print(
-            "scopes:",
-            scopes._global_scopes,
-            scopes._namespace_group_scopes,
-            scopes._namespace_scopes,
-        )
         namespace_obj = crud.namespace.get(db=db, path=path)
-        print(
-            "namespace path:",
-            path,
-            namespace_obj.namespace_id,
-            namespace_obj.public,
-            scopes.can_read_in_namespace(namespace_obj),
-        )
         if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,

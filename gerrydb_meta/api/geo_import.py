@@ -13,8 +13,8 @@ from gerrydb_meta.scopes import ScopeManager
 
 
 class GeoImportApi(NamespacedObjectApi):
-    def _obj(self, *, db: Session, namespace: models.Namespace, uuid: str) -> Any:
-        """Loads a generic namespaced object by UUID or raises an HTTP error."""
+    def _obj(self, *, db: Session, uuid: str) -> Any:
+        """Loads a generic object by UUID or raises an HTTP error."""
         try:
             parsed_uuid = UUID(uuid)
         except ValueError:
@@ -23,12 +23,13 @@ class GeoImportApi(NamespacedObjectApi):
                 detail="GeoImport ID is not a valid UUID hex string.",
             )
 
-        obj = self.crud.get(db=db, namespace=namespace, uuid=parsed_uuid)
+        obj = self.crud.get(db=db, uuid=parsed_uuid)
         if obj is None:
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=f"{self.obj_name_singular} not found in namespace.",
             )
+        return obj
 
     def _get(self, router: APIRouter) -> Callable:
         @router.get(
@@ -43,10 +44,8 @@ class GeoImportApi(NamespacedObjectApi):
             db: Session = Depends(get_db),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-            namespace_obj = self._namespace_with_read(
-                db=db, scopes=scopes, path=namespace
-            )
-            return self._obj(db=db, namespace=namespace_obj, uuid=uuid)
+            self._namespace_with_read(db=db, scopes=scopes, path=namespace)
+            return self._obj(db=db, uuid=uuid)
 
         return get_route
 
