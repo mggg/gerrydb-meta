@@ -6,7 +6,7 @@ import pytest
 from gerrydb_meta import schemas
 from gerrydb_meta.main import API_PREFIX
 
-GEO_LAYERS_ROOT = f"{API_PREFIX}/geo-layers"
+GEO_LAYERS_ROOT = f"{API_PREFIX}/layers"
 
 
 @pytest.fixture
