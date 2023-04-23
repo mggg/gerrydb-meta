@@ -2,7 +2,7 @@
 from http import HTTPStatus
 
 from gerrydb_meta import schemas
-from gerrydb_meta.enums import ColumnKind, ColumnType, ScopeType
+from gerrydb_meta.enums import ColumnKind, ColumnType
 from gerrydb_meta.main import API_PREFIX
 
 COLUMNS_ROOT = f"{API_PREFIX}/columns"

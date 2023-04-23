@@ -1,32 +1,11 @@
 """Tests for GerryDB REST API column set endpoints."""
 from http import HTTPStatus
 
-import pytest
-
-from gerrydb_meta import crud, models, schemas
-from gerrydb_meta.enums import ColumnKind, ColumnType, ScopeType
+from gerrydb_meta import schemas
 from gerrydb_meta.main import API_PREFIX
+from tests.api import create_column
 
 COLUMN_SETS_ROOT = f"{API_PREFIX}/column-sets"
-
-
-def create_column(
-    ctx, path: str = "test", aliases: list[str] | None = None
-) -> models.Namespace:
-    """Creates a column in a test context's namespace (direct CRUD)."""
-    col, _ = crud.column.create(
-        db=ctx.db,
-        obj_in=schemas.ColumnCreate(
-            canonical_path=path,
-            description="Test column",
-            kind=ColumnKind.COUNT,
-            type=ColumnType.INT,
-            aliases=aliases,
-        ),
-        obj_meta=ctx.meta,
-        namespace=ctx.namespace,
-    )
-    return col
 
 
 def test_api_column_set_create_read(ctx_public_namespace_read_write):
