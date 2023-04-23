@@ -93,7 +93,7 @@ def test_api_geo_layer_create_read__private_namespace(
     assert read_response.status_code == HTTPStatus.NOT_FOUND, read_response.json()
 
 
-def test_api_column_create_all__private_namespace(
+def test_api_geo_layer_create_all__private_namespace(
     ctx_public_namespace_read_write,
     ctx_private_namespace_read_write,
     geo_layer,

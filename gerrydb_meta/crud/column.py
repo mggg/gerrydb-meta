@@ -173,7 +173,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         rows = []
         validation_errors = []
         for geo, value in values:
-            suffix = "column value for geography {geo.full_path}"
+            suffix = f"column value for geography {geo.full_path}"
             if col.type == ColumnType.FLOAT and isinstance(value, int):
                 # Silently promote int -> float.
                 value = float(value)
@@ -183,7 +183,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 validation_errors.append(f"Expected integer {suffix}")
             elif col.type == ColumnType.STR and not isinstance(value, str):
                 validation_errors.append(f"Expected string {suffix}")
-            elif col.type == ColumnType.BOOL and isinstance(value, bool):
+            elif col.type == ColumnType.BOOL and not isinstance(value, bool):
                 validation_errors.append(f"Expected boolean {suffix}")
             rows.append(
                 {
