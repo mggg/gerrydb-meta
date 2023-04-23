@@ -157,7 +157,7 @@ def from_resource_paths(
         if parts[1] not in ENDPOINT_TO_CRUD:
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
-                detail=f'Unknown resource "{parts[0]}".',
+                detail=f'Unknown resource "{parts[1]}".',
             )
 
         parsed_paths.append((parts[1], parts[2], normalize_path("/".join(parts[3:]))))
@@ -182,7 +182,7 @@ def from_resource_paths(
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=(
                     f'Namespace "{namespace}" not found, or you do not have '
-                    "sufficient permissions to read geographies in this namespace."
+                    "sufficient permissions to read data in this namespace."
                 ),
             )
 

@@ -56,7 +56,6 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
             )
             db.add(template_version)
             db.flush()
-            db.refresh(template_version)
 
             for idx, member in enumerate(resolved_members):
                 if (
@@ -87,7 +86,7 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
 
             etag = self._update_etag(db, namespace)
 
-        db.refresh(view_template)
+        db.refresh(template_version)
         return template_version, etag
 
     # TODO: patch()

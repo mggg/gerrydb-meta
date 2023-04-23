@@ -77,7 +77,7 @@ class ViewTemplateApi(NamespacedObjectApi):
 
         return create_route
 
-    # TODO: _patch()
+    # TODO: _patch()?
 
 
 router = ViewTemplateApi(

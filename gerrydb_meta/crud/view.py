@@ -10,17 +10,7 @@ from typing import Tuple
 
 from geoalchemy2 import Geometry
 from geoalchemy2 import func as geo_func
-from sqlalchemy import (
-    ScalarResult,
-    Sequence,
-    cast,
-    exc,
-    func,
-    label,
-    or_,
-    select,
-    union,
-)
+from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
