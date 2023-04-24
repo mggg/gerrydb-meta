@@ -1,8 +1,10 @@
 """Common CRUD utilities for API tests."""
 from typing import Any
-from shapely import box
+
 import shapely.wkb
+from shapely import box
 from sqlalchemy import select
+
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.crud.column import COLUMN_TYPE_TO_VALUE_COLUMN
 from gerrydb_meta.enums import ColumnKind, ColumnType
@@ -37,7 +39,7 @@ def create_geo(ctx, path: str = "geo") -> models.Geography:
         db=ctx.db,
         obj_meta=ctx.meta,
         namespace=ctx.namespace,
-    ) 
+    )
     geo_objs = crud.geography.create_bulk(
         db=ctx.db,
         geo_import=geo_import,
@@ -48,7 +50,7 @@ def create_geo(ctx, path: str = "geo") -> models.Geography:
                 path=path,
                 geography=shapely.wkb.dumps(box(0, 0, 1, 1)),
             )
-        ]
+        ],
     )
     return geo_objs[0]
 
