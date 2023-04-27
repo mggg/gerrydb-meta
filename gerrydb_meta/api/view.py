@@ -163,6 +163,36 @@ def get_view(
     return schemas.ViewMeta.from_orm(view_obj)
 
 
+@router.get(
+    "/{namespace}",
+    response_model=list[schemas.ViewMeta],
+    dependencies=[Depends(can_read_localities)],
+)
+def all_views(
+    *,
+    response: Response,
+    namespace: str,
+    db: Session = Depends(get_db),
+    scopes: ScopeManager = Depends(get_scopes),
+):
+    view_namespace_obj = crud.namespace.get(db=db, path=namespace)
+    if view_namespace_obj is None or not scopes.can_read_in_namespace(
+        view_namespace_obj
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=(
+                f'Namespace "{namespace}" not found, or you do not have '
+                "sufficient permissions to write views in this namespace."
+            ),
+        )
+
+    view_objs = crud.view.all(db=db, namespace=view_namespace_obj)
+    etag = crud.view.etag(db, view_namespace_obj)
+    add_etag(response, etag)
+    return [schemas.ViewMeta.from_orm(view_obj) for view_obj in view_objs]
+
+
 @router.post(
     "/{namespace}/{path:path}",
     status_code=HTTPStatus.CREATED,

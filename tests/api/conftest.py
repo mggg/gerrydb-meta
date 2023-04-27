@@ -111,6 +111,7 @@ def ctx_public_namespace_read_only(request, ctx_no_scopes_factory):
         ScopeType.NAMESPACE_READ,
         namespace_group=NamespaceGroup.PUBLIC,
     )
+    grant_scope(base_ctx.db, base_ctx.meta, ScopeType.LOCALITY_READ)
     yield TestContext(
         db=base_ctx.db,
         client=base_ctx.client,
@@ -126,6 +127,7 @@ def ctx_public_namespace_read_write(ctx_public_namespace_read_only):
     namespaced NAMESPACE_WRITE scope."""
     ctx = ctx_public_namespace_read_only
     grant_namespaced_scope(ctx.db, ctx.meta, ctx.namespace, ScopeType.NAMESPACE_WRITE)
+    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_WRITE)
     yield ctx
 
 
@@ -149,6 +151,7 @@ def ctx_private_namespace_read_only(request, ctx_no_scopes_factory):
         ScopeType.NAMESPACE_READ,
         namespace_group=NamespaceGroup.PUBLIC,
     )
+    grant_scope(base_ctx.db, base_ctx.meta, ScopeType.LOCALITY_READ)
     grant_namespaced_scope(
         base_ctx.db, base_ctx.meta, namespace, ScopeType.NAMESPACE_READ
     )
@@ -165,6 +168,7 @@ def ctx_private_namespace_read_only(request, ctx_no_scopes_factory):
 def ctx_private_namespace_read_write(ctx_private_namespace_read_only):
     """Context with an API client with NAMESPACE_READ scope in a private namespace."""
     ctx = ctx_private_namespace_read_only
+    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_WRITE)
     grant_namespaced_scope(ctx.db, ctx.meta, ctx.namespace, ScopeType.NAMESPACE_WRITE)
     yield ctx
 

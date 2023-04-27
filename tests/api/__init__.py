@@ -1,4 +1,6 @@
 """Common CRUD utilities for API tests."""
+from random import choice
+from string import ascii_lowercase
 from typing import Any
 
 import shapely.wkb
@@ -31,6 +33,39 @@ def create_column(
         namespace=ctx.namespace,
     )
     return col
+
+
+def create_locality(ctx) -> tuple[str, models.Locality]:
+    """Creates a locality with a random name/canonical path (direct CRUD)."""
+    path = "".join(choice(ascii_lowercase) for _ in range(10))
+    locs, _ = crud.locality.create_bulk(
+        db=ctx.db,
+        objs_in=[
+            schemas.LocalityCreate(
+                canonical_path=path,
+                parent_path=None,
+                default_proj=None,
+                name=f"random locality {path}",
+            ),
+        ],
+        obj_meta=ctx.meta,
+    )
+    return locs[0], path
+
+
+def create_geo_layer(ctx, path: str = "test") -> models.GeoLayer:
+    """Creates a geographic layer in a test context's namespace (direct CRUD)."""
+    layer, _ = crud.geo_layer.create(
+        db=ctx.db,
+        obj_in=schemas.GeoLayerCreate(
+            path=path,
+            description="Test geographic layer",
+            source_url=None,
+        ),
+        obj_meta=ctx.meta,
+        namespace=ctx.namespace,
+    )
+    return layer
 
 
 def create_geo(ctx, path: str = "geo") -> models.Geography:

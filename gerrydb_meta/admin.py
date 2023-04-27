@@ -80,6 +80,19 @@ class GerryAdmin:
         #    self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
         # )
 
+        grant_scope(
+            self.session,
+            user,
+            ScopeType.NAMESPACE_READ,
+            namespace_group=NamespaceGroup.PUBLIC,
+        )
+        grant_scope(
+            self.session,
+            user,
+            ScopeType.NAMESPACE_WRITE_DERIVED,
+            namespace_group=NamespaceGroup.PUBLIC,
+        )
+
         return user
 
     def user_find_by_email(self, email: str) -> User:
