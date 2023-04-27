@@ -437,7 +437,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             plans=plans,
             plan_labels=plan_labels,
             plan_assignments=plan_assignments,
-            graph_areas=self._graph_areas(db, view),
+            graph_areas=None,  # self._graph_areas(db, view),
             graph_edges=self._graph_edges(db, view),
             geo_meta=geo_meta,
             geo_meta_ids=geo_meta_ids,

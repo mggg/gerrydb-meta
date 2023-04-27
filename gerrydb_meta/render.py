@@ -365,10 +365,10 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
                 for edge in context.graph_edges
             ),
         )
-        conn.executemany(
-            "INSERT INTO gerrydb_graph_node_area (path, area) VALUES (?, ?)",
-            ((node.path, node.area) for node in context.graph_areas),
-        )
+        # conn.executemany(
+        #    "INSERT INTO gerrydb_graph_node_area (path, area) VALUES (?, ?)",
+        #    ((node.path, node.area) for node in context.graph_areas),
+        # )
 
     if context.plan_assignments is not None:
         _init_gpkg_plans_extension(conn, geo_layer_name, context.plan_labels)
