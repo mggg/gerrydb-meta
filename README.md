@@ -11,4 +11,9 @@ This repository contains the code and deployment configuration for GerryDB's met
 6. Run the application server with `uvicorn gerrydb_meta.main:app --reload`.
 
 ## Running tests
-The Docker Compose manifest for this project spins up two PostGIS instances: one for persisting data for long-term local development, and one for ephemeral use by unit tests. The test server is exposed on port 54321; the username is `postgres`, and the password is `test`. To run the test suite, set up the app server as described above, initialize the test database by repeating step 4 (`CREATE DATABASE gerrydb; CREATE EXTENSION postgis;`), and execute the test suite with `GERRYDB_DATABASE_URI=postgresql://postgres:test@localhost:54321/gerrydb python -m pytest`. It is not necessary to initialize the application schema within this test database—all tables are dropped and recreated between test suite runs.
+The Docker Compose manifest for this project spins up two PostGIS instances: one for persisting data for long-term local development, and one for ephemeral use by unit tests. The test server is exposed on port 54321; the username is `postgres`, and the password is `test`. To run the test suite, set up the app server as described above, initialize the test database by repeating step 4 (`CREATE DATABASE gerrydb; CREATE EXTENSION postgis;`), and execute the test suite with
+```sh
+GERRYDB_DATABASE_URI=postgresql://postgres:test@localhost:54321/gerrydb python -m pytest
+```
+
+It is not necessary to initialize the application schema within this test database—all tables are dropped and recreated between test suite runs.
