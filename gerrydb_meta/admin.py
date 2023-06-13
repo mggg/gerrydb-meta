@@ -1,4 +1,5 @@
 """Administration tools for GerryDB."""
+import csv
 import logging
 import os
 import random
@@ -6,6 +7,8 @@ import string
 from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha512
+from pathlib import Path
+from typing import Optional
 
 import click
 from sqlalchemy import create_engine
@@ -163,6 +166,34 @@ def user_create(email: str, name: str):
         user = admin.user_create(email=email, name=name)
         raw_key = admin.key_create(user)
         print(f"New API key for new {user}: {raw_key}")
+
+
+@cli.command("user:create:bulk")
+@click.option("--roster", "roster_path", type=click.Path(path_type=Path), required=True)
+@click.option("--keys", "keys_path", type=click.Path(path_type=Path), required=True)
+def user_create(roster_path: Path, keys_path: Path):
+    """Creates users with active API keys in bulk.
+
+    Expects a roster CSV with `name` and `email` columns.
+    Generates a CSV with `name`, `email`, and `key` columns.
+    """
+    accounts = []
+    with admin_context() as admin, open(roster_path, newline="") as roster_fp:
+        for row in csv.DictReader(roster_fp):
+            name = row["name"].strip()
+            email = row["email"].lower().strip()
+            user = admin.user_create(name=name, email=email)
+            raw_key = admin.key_create(user)
+            accounts.append(
+                {"name": user.name, "email": user.email, "key": str(raw_key)}
+            )
+
+    print(f"Generated {len(accounts)} new accounts.")
+    with open(keys_path, "w", newline="") as keys_fp:
+        writer = csv.DictWriter(keys_fp, fieldnames=["name", "email", "key"])
+        writer.writeheader()
+        for account in accounts:
+            writer.writerow(account)
 
 
 @cli.command("key:create")
