@@ -8,6 +8,8 @@ from sqlalchemy.orm import sessionmaker
 from gerrydb_meta.admin import GerryAdmin
 from gerrydb_meta.models import Base
 
+from pathlib import Path
+
 
 @click.command()
 @click.option("--name", help="Superuser name.", required=True)
@@ -17,7 +19,9 @@ from gerrydb_meta.models import Base
 )
 @click.option("--init-schema", is_flag=True, help="Initialize schema from models.")
 def main(name: str, email: str, reset: bool, init_schema: bool):
-    """Initializes a GerryDB instance with a superuser.
+    """Initializes a GerryDB instance with a superuser. Creates a .gerrydb/config file
+    if none exists using localhost:8000 and the generated API key. Would connect
+    to local database, not production.
 
     Expects the `GERRYDB_DATABASE_URI` environment variable to be set to
     a PostgreSQL connection string.
@@ -37,7 +41,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
         Base.metadata.create_all(engine)
 
     admin = GerryAdmin(session=db)
-    user = admin.user_create(name=name, email=email)
+    user = admin.user_create(name=name, email=email, super_user = True)
     api_key = admin.key_create(user=user)
     db.commit()
     db.close()
@@ -46,6 +50,29 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
     with open(".gerryrc", "w") as fp:
         print(f'export GERRYDB_TEST_API_KEY="{api_key}"', file=fp)
     os.environ["GERRYDB_TEST_API_KEY"] = api_key
+
+    # if it does not already exist, create a ~/.gerrydb directory with a config file
+    if not (Path.home() / ".gerrydb" / "config").exists():
+        (Path.home() / ".gerrydb").mkdir(parents=True, exist_ok=True)
+        with open(Path.home() / ".gerrydb" / "config", "w") as config_fp:
+            print("[default]", file=config_fp)
+            print('host = "localhost:8000"', file=config_fp)
+            print(f'key = "{api_key}"', file=config_fp)
+    
+    else:
+        overwrite  = ""
+        while overwrite not in  ["y", "n"]:
+            overwrite = input("A .gerrydb/config file already exists, would you like to overwrite it? Y/N: ").lower()
+
+        if overwrite == "y":
+            (Path.home() / ".gerrydb").mkdir(parents=True, exist_ok=True)
+            with open(Path.home() / ".gerrydb" / "config", "w") as config_fp:
+                print("[default]", file=config_fp)
+                print('host = "localhost:8000"', file=config_fp)
+                print(f'key = "{api_key}"', file=config_fp)
+        
+        else:
+            print("You have decided not to overwrite your .gerrydb/config file in the home directory. You may need to manually edit it with your new API key.")
 
 
 if __name__ == "__main__":

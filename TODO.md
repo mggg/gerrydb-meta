@@ -11,6 +11,10 @@ Basic CRUD tests =
     [ ] ...add more here...
 
 # Features (ordered, short-term)
+[ ] change CLI to grant appropraite (full) privileges to user who initializes database
+
+
+
 Expose:
 [x] GeoImport / GeoLayer
 [ ] Geography (with versioning)
