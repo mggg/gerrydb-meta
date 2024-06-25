@@ -27,14 +27,14 @@ def db_schema(db_engine):
     with db_engine.connect() as conn:
         init_transaction = conn.begin()
         conn.execute(text("DROP SCHEMA IF EXISTS gerrydb_test"))
-        conn.execute(text("CREATE SCHEMA gerrydb"))
+        conn.execute(text("CREATE SCHEMA gerrydb_test"))
         init_transaction.commit()
 
         models.Base.metadata.create_all(db_engine)
         yield sessionmaker(db_engine)
 
         cleanup_transaction = conn.begin()
-        conn.execute(text("DROP SCHEMA gerrydb CASCADE"))
+        conn.execute(text("DROP SCHEMA gerrydb_test CASCADE"))
         cleanup_transaction.commit()
 
 

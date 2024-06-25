@@ -123,7 +123,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         obj_in: schemas.ViewCreate,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-        template: models.ViewTemplate,
+        template: models.ViewTemplate | models.ViewTemplateVersion,
         locality: models.Locality,
         layer: models.GeoLayer,
         graph: models.Graph | None = None,
@@ -204,6 +204,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
         bad_cols = []
+        
         for column in columns.values():
             value_count = value_counts_by_col.get(column.col_id, 0)
             if value_count < num_geos:

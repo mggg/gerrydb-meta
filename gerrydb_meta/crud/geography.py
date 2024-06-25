@@ -44,6 +44,17 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 "Cannot create geographies that already exist.",
                 paths=[geo.path for geo in existing_geos],
             )
+            
+        # Need to check for unique paths since otherwise the db will just
+        # insert the first occurance which could be confusing. (This error
+        # should almost never be raised in practice.)
+        paths = [normalize_path(obj_in.path) for obj_in in objs_in]
+        if len(paths) != len(set(paths)):
+            raise BulkCreateError(
+                "Cannot create geographies with duplicate paths.",
+                paths=[path for path in paths if paths.count(path) > 1],
+            )
+            
 
         with db.begin(nested=True):
             geos = list(
@@ -84,7 +95,8 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                         ],
                     )
                 )
-            except StatementError as ex:
+    
+            except Exception as ex:
                 log.exception(
                     "Geography insert failed, likely due to invalid geometries."
                 )
@@ -117,6 +129,16 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             )
             .all()
         )
+
+        # This is technically caught by the next error, but this is more
+        # informative.
+        paths = [normalize_path(obj_in.path) for obj_in in objs_in]
+        if len(paths) != len(set(paths)):
+            raise BulkPatchError(
+                "Cannot patch geographies with duplicate paths.",
+                paths=[path for path in paths if paths.count(path) > 1],
+            )
+
         if len(existing_geos) < len(objs_in):
             missing = set(normalize_path(geo.path) for geo in objs_in) - set(
                 geo.path for geo in existing_geos
@@ -124,6 +146,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             raise BulkPatchError(
                 "Cannot update geographies that do not exist.", paths=list(missing)
             )
+
 
         geos_by_path = {geo.path: geo for geo in existing_geos}
         geos_ordered = [geos_by_path[normalize_path(geo.path)] for geo in objs_in]

@@ -1,4 +1,5 @@
 """CRUD operations and transformations for districting plans."""
+
 import logging
 import uuid
 from typing import Tuple
