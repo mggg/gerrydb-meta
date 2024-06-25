@@ -7,7 +7,6 @@ This repository contains the code and deployment configuration for GerryDB's met
 2. In the root of this repository, launch a PostGIS server with `docker-compose up -d`.
 3. Connect to the PostGIS server with a Postgres client (port `54320`, username `postgres`, password `dev`).
 4. Initialize a PostGIS database by executing the SQL statement `CREATE DATABASE gerrydb`. Close the connection, make `gerrydb` the defualt database. Reopen the connection, and add geography database objects via `CREATE EXTENSION postgis`.
-5. Initialize the application schema by running `GERRYDB_DATABASE_URI=postgresql://postgres:dev@localhost:54320/gerrydb python init.py --reset --name <NAME> --email <email>`. Save the generated API key to your bash profile (for some Mac users, this might be acheived by `cat .gerryrc >> ~/.zprofile`). Also store the following code in the profile: 
 ```
 export GERRYDB_DATABASE_URI="postgresql://postgres:dev@localhost:54320/gerrydb"
 export GERRYDB_TEST_DATABASE_URI="postgresql://postgres:test@localhost:54321"
@@ -24,9 +23,19 @@ key = <API_key>
 ```
 If this file does not exist yet, initializing the database should have created it in your home directory. 
 If it already exists, you will be given the option to overwrite it, or leave it.
-If you leave, you may need to manually edit it.
+If you leave it, you may need to manually edit it.
 
 7. Run the application server with `uvicorn gerrydb_meta.main:app --reload`.
+
+## Saving the database
+To save the current database into a file called `dump.tar`, run the following.
+`pg_dump -U postgres -h localhost -p 54320 -Ft gerrydb > dump.tar`.
+Chris has set up a `pgd` alias.
+
+## Reloading the database
+To load a previous version of the database from a file called `dump.tar`, run the following.
+`pg_restore -U postgres -h localhost -p 54320 -d gerrydb -c -Ft dump.tar`
+Chris has set up a `pgr` alias.
 
 ## Deleting the database
 If you want to clear your database and start over, delete the relevant docker containers and volumes, then follow the steps above.
