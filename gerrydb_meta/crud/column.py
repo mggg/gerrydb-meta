@@ -1,4 +1,5 @@
 """CRUD operations and transformations for column metadata."""
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -161,7 +162,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         values: list[Tuple[models.Geography, Any]],
         obj_meta: models.ObjectMeta,
     ) -> None:
-        """Sets column values across geographies.
+        """Sets column values across geographies. This is tied to a specific
+        geoimport for auditing purposes.
 
         Raises:
             ColumnValueTypeError: If column types do not match expected types.

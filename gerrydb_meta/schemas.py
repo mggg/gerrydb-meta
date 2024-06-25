@@ -1,8 +1,9 @@
 """User-facing schemas for GerryDB objects."""
+
 from datetime import datetime
 from typing import Any
 
-from pydantic import AnyUrl, BaseModel, constr
+from pydantic import AnyUrl, BaseModel, constr, validator
 
 from gerrydb_meta import enums, models
 
@@ -223,6 +224,14 @@ class GeographyBase(BaseModel):
     geography: bytes | None
     internal_point: bytes | None
 
+    @validator("geography", "internal_point", pre=True, each_item=False)
+    def check_bytes_type(cls, v, field):
+        if v is not None and not isinstance(v, bytes):
+            raise ValueError(
+                f"The {field.name} must be of type bytes, got type {type(v).__name__}"
+            )
+        return v
+
 
 class GeographyCreate(GeographyBase):
     """Geographic unit data received on creation (geography as raw WKB bytes)."""
@@ -285,7 +294,10 @@ class ColumnSetBase(BaseModel):
 
 
 class ColumnSetCreate(ColumnSetBase):
-    """Column grouping data received on creation."""
+    """Column grouping data received on creation.
+    The columns must first exist in the before a column set
+    can be created with them.
+    """
 
     columns: list[GerryPath]
 
@@ -349,9 +361,11 @@ class ViewTemplate(ViewTemplateBase):
             namespace=obj.parent.namespace.path,
             description=obj.parent.description,
             members=[
-                Column.from_orm(member.member.column)
-                if isinstance(member.member, models.ColumnRef)
-                else ColumnSet.from_orm(member.member)
+                (
+                    Column.from_orm(member.member.column)
+                    if isinstance(member.member, models.ColumnRef)
+                    else ColumnSet.from_orm(member.member)
+                )
                 for member in members
             ],
             valid_from=obj.valid_from,

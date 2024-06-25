@@ -1,4 +1,5 @@
 """CRUD operations and transformations for view templates."""
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
         namespace: models.Namespace,
     ) -> Tuple[models.ViewTemplateVersion, uuid.UUID]:
         """Creates a new view template."""
+        # Note: the resolved members are intended to be either ColumnRef or ColumnSet
         with db.begin(nested=True):
             canonical_path = normalize_path(obj_in.path)
             view_template = models.ViewTemplate(
