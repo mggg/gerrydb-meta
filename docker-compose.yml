@@ -8,12 +8,29 @@ services:
       POSTGRES_PASSWORD: dev
     volumes:
       - db:/var/lib/postgresql
+    deploy:
+      # Do not touch the memory limits or TX will destroy you
+      resources:
+        limits:
+          memory: 16g 
+        reservations:
+          memory: 8g 
+    shm_size: '16gb' 
   test-db:
     image: postgis/postgis
     ports:
       - "54321:5432"
     environment:
       POSTGRES_PASSWORD: test
+    deploy:
+      # Do not touch the memory limits or TX will destroy you
+      resources:
+        limits:
+          memory: 16g 
+        reservations:
+          memory: 8g 
+    shm_size: '16gb' 
 volumes:
   db:
+
  
