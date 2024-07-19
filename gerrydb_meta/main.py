@@ -1,4 +1,5 @@
 """Entrypoint for Gerry API server."""
+
 from http import HTTPStatus
 
 from fastapi import FastAPI, Request, Response
@@ -14,7 +15,11 @@ from gerrydb_meta.exceptions import (
     CreateValueError,
 )
 
-import logging
+from uvicorn.config import LOGGING_CONFIG, logger
+
+from io import BytesIO
+import json
+import gzip
 
 API_PREFIX = "/api/v1"
 
@@ -28,7 +33,8 @@ def create_value_error(request: Request, exc: CreateValueError):
         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         content={
             "kind": "Create value error",
-            "detail": f"Object creation failed. Reason: {exc}"},
+            "detail": f"Object creation failed. Reason: {exc}",
+        },
     )
 
 
@@ -39,8 +45,9 @@ def column_value_type_error(request: Request, exc: ColumnValueTypeError):
         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         content={
             "kind": "Column value type error",
-            "detail": "Type errors found in column values.", 
-            "errors": exc.errors},
+            "detail": "Type errors found in column values.",
+            "errors": exc.errors,
+        },
     )
 
 
@@ -74,43 +81,67 @@ app.add_middleware(GZipMiddleware)
 app.include_router(api_router, prefix=API_PREFIX)
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-MAX_BUFFER_SIZE = 1024
-
 @app.middleware("http")
-async def log_422_errors(request: Request, call_next):
+async def log_400_errors(request: Request, call_next):
     response = await call_next(request)
-    
+
     # Check for the specific status code
-    if response.status_code == 422:
-        print(response.headers)
-        
-        # If the response is a StreamingRessponse, you need to iterate over the body
+    if response.status_code in [400, 422]:
+
+        # If the response is a StreamingResponse, you need to iterate over the body
         # and consume it to log the content
         if isinstance(response, StreamingResponse):
-            body_content = b''
+            body_content = b""
+            # Reconstruct the response body from the stream
             async for chunk in response.body_iterator:
                 body_content += chunk
-                if len(body_content) > MAX_BUFFER_SIZE:
-                    body_content = body_content[:MAX_BUFFER_SIZE]
-                    break
-            logger.info(
-                f"\n\t422 for Request: {request.method},\n\tAt: {request.url}\n\tBody: {body_content.decode()}"
+
+            # Need this in case the original body is encoded
+            original_body = body_content
+
+            # Handle potential gzip encoding
+            if response.headers.get("Content-Encoding") == "gzip":
+                body_content = gzip.decompress(body_content)
+
+            try:
+                json_body = json.loads(body_content.decode())
+                logger.error(
+                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {json_body.get('detail', 'No detail available')}"
+                )
+            except Exception as e:
+                # Log the error with the reconstructed body content
+                logger.error(
+                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {body_content.decode('utf-8', errors='replace')}"
+                )
+
+            # Create a new StreamingResponse with the consumed content
+            response = StreamingResponse(
+                BytesIO(original_body),
+                status_code=response.status_code,
+                headers=dict(response.headers),
             )
-            return Response(content=body_content, status_code=422, headers=dict(response.headers))
         else:
             # For non-streaming responses, you can directly access the body
-            body_content = b''
-            if hasattr(response, 'body'):
+            body_content = b""
+            if hasattr(response, "body"):
                 body_content = response.body
-            logger.info(
-                f"\n\t422 for Request: {request.method},\n\tAt: {request.url}\n\tBody: {body_content.decode()}"
-            )
-    
+
+            # Handle potential gzip encoding
+            if response.headers.get("Content-Encoding") == "gzip":
+                body_content = gzip.decompress(body_content)
+
+            try:
+                json_body = json.loads(body_content.decode())
+                logger.error(
+                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {json_body.get('detail', 'No detail available')}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {body_content.decode('utf-8', errors='replace')}"
+                )
+
     return response
+
 
 @app.get("/health")
 def health_check():
