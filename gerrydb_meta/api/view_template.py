@@ -1,4 +1,5 @@
 """Endpoints for view templates."""
+
 from http import HTTPStatus
 from typing import Callable
 
@@ -59,6 +60,7 @@ class ViewTemplateApi(NamespacedObjectApi):
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
+
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )

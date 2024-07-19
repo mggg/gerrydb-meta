@@ -1,4 +1,5 @@
 """CRUD operations and transformations for generic object metadata."""
+
 from uuid import UUID
 
 from sqlalchemy.orm import Session

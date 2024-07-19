@@ -1,4 +1,5 @@
 """Generic CR(UD) views and utilities."""
+
 import inspect
 import logging
 from collections import defaultdict
@@ -143,10 +144,12 @@ def from_resource_paths(
         HTTPException: On parsing failure, authorization failure, or lookup failure.
     """
     # Break paths into (object, namespace, path) form.
+
     parsed_paths = []
     for path in paths:
-        parts = path.strip().lower().split("/")
-        if len(parts) < 4:
+        path = normalize_path(path, case_sensitive_uid="geographies" in path)
+        parts = path.strip().split("/")
+        if len(parts) < 3:
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST,
                 detail=(
@@ -154,25 +157,34 @@ def from_resource_paths(
                     "/<resource>/<namespace>/<path>"
                 ),
             )
-        if parts[1] not in ENDPOINT_TO_CRUD:
+        if parts[0] not in ENDPOINT_TO_CRUD:
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=f'Unknown resource "{parts[1]}".',
             )
 
-        parsed_paths.append((parts[1], parts[2], normalize_path("/".join(parts[3:]))))
+        parsed_paths.append(tuple(parts))
 
     # Check for duplicates, which usually violate uniqueness constraints
     # somewhere down the line.
     if len(set(parsed_paths)) < len(parsed_paths):
+        dup_paths = [path for path in parsed_paths if parsed_paths.count(path) > 1]
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail="Duplicate resource paths found.",
+            detail=f"Duplicate resource paths found {dup_paths}",
         )
 
     # Verify that the user has read access in all namespaces
     # the objects are in.
-    namespaces = {namespace for _, namespace, _ in parsed_paths}
+    try:
+        namespaces = {namespace for _, namespace, _ in parsed_paths}
+    except Exception as e:
+        bad_paths = [path for path in parsed_paths if len(path) != 3]
+        raise ValueError(
+            f"Failed to parse paths: {['/'.join(path) for path in bad_paths]}. "
+            "Paths must verify the form '/<resource>/<namespace>/<path>'."
+        ) from e
+
     namespace_objs = {}
     for namespace in namespaces:
         namespace_obj = crud.namespace.get(db=db, path=namespace)
@@ -292,9 +304,11 @@ def geos_from_paths(
     """
     return from_resource_paths(
         paths=[
-            f"/geographies{path}"
-            if path.startswith("/")
-            else f"/geographies/{namespace}/{path}"
+            (
+                f"/geographies{path}"
+                if path.startswith("/")
+                else f"/geographies/{namespace}/{path}"
+            )
             for path in paths
         ],
         db=db,

@@ -1,4 +1,5 @@
 """API operations for manipulating column values."""
+
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, HTTPException

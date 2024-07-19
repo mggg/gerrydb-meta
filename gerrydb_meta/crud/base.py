@@ -1,4 +1,5 @@
 """Generic CR(UD) operations."""
+
 # Based on the `full-stack-fastapi-postgresql` template:
 #   https://github.com/tiangolo/full-stack-fastapi-postgresql/
 #   blob/490c554e23343eec0736b06e59b2108fdd057fdc/
@@ -19,8 +20,21 @@ CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 PatchSchemaType = TypeVar("PatchSchemaType", bound=BaseModel)
 
 
-def normalize_path(path: str) -> str:
-    """Normalizes a path (removes leading, trailing, and duplicate slashes)."""
+def normalize_path(path: str, case_sensitive_uid: bool = False) -> str:
+    """Normalizes a path (removes leading, trailing, and duplicate slashes, and
+    lowercases the path if `case_sensitive` is `False`).
+
+    Some paths, such as paths containing GEOIDs, are case-sensitive in the last
+    segment. In these cases, `case_sensitive` should be set to `True`.
+    """
+    if case_sensitive_uid:
+        path_list = path.strip().split("/")
+        return "/".join(
+            seg.lower() if i < len(path_list) - 1 else seg
+            for i, seg in enumerate(path_list)
+            if seg
+        )
+
     return "/".join(seg for seg in path.strip().lower().split("/") if seg)
 
 
@@ -111,7 +125,7 @@ class NamespacedCRBase(Generic[ModelType, CreateSchemaType]):
         *,
         obj_in: CreateSchemaType,
         namespace: Namespace,
-        obj_meta: ObjectMeta
+        obj_meta: ObjectMeta,
     ) -> Tuple[ModelType, uuid.UUID]:
         obj_in_data = jsonable_encoder(obj_in)
         db_obj = self.model(

@@ -1,4 +1,5 @@
 """Endpoints for views."""
+
 import logging
 import os
 import subprocess
@@ -229,6 +230,7 @@ def render_view(
 
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
+    storage_credentials = storage_client = None
     if bucket_name is not None and key_path is not None:
         try:
             storage_credentials = Credentials.from_service_account_file(key_path)
