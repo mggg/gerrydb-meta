@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API view template endpoints."""
+
 from http import HTTPStatus
 
 from gerrydb_meta import crud, schemas
@@ -26,7 +27,7 @@ def test_api_view_template_create_read__one_column(ctx_public_namespace_read_wri
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
     create_body = schemas.ViewTemplate(**create_response.json())
-    assert {member.canonical_path for member in create_body.members} == {"test"}
+    assert {member["canonical_path"] for member in create_body.members} == {"test"}
 
     read_response = ctx.client.get(
         f"{VIEW_TEMPLATES_ROOT}/{namespace}/one_col",

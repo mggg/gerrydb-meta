@@ -1,4 +1,5 @@
 """Test configuration for GerryDB."""
+
 import os
 
 import pytest
@@ -26,15 +27,15 @@ def db_schema(db_engine):
     """SQLAlchemy ORM session maker with GerryDB schema initialized."""
     with db_engine.connect() as conn:
         init_transaction = conn.begin()
-        conn.execute(text("DROP SCHEMA IF EXISTS gerrydb_test"))
-        conn.execute(text("CREATE SCHEMA gerrydb_test"))
+        conn.execute(text("DROP SCHEMA IF EXISTS gerrydb"))
+        conn.execute(text("CREATE SCHEMA gerrydb"))
         init_transaction.commit()
 
         models.Base.metadata.create_all(db_engine)
         yield sessionmaker(db_engine)
 
         cleanup_transaction = conn.begin()
-        conn.execute(text("DROP SCHEMA gerrydb_test CASCADE"))
+        conn.execute(text("DROP SCHEMA gerrydb CASCADE"))
         cleanup_transaction.commit()
 
 
