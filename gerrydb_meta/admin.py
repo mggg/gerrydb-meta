@@ -1,4 +1,5 @@
 """Administration tools for GerryDB."""
+
 import csv
 import logging
 import os
@@ -82,7 +83,7 @@ class GerryAdmin:
             # global privileges
             grant_scope(self.session, user, ScopeType.ALL, namespace_group=None)
             grant_scope(
-            self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
+                self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
             )
 
         else:

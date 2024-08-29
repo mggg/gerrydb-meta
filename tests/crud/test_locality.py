@@ -1,4 +1,5 @@
 """Tests for GerryDB CRUD operations on locality metadata."""
+
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.crud.locality import normalize_path
 

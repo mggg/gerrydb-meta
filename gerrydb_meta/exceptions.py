@@ -1,4 +1,5 @@
 """Global exceptions (largely related to CRUD operations/data integrity)."""
+
 from dataclasses import dataclass
 
 

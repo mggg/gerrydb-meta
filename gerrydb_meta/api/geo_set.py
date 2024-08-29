@@ -2,6 +2,7 @@
 
 A `GeoSet` defines a `GeoLayer` on a `Locality`.
 """
+
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, HTTPException

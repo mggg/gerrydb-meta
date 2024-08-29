@@ -1,4 +1,5 @@
 """Database and authorization dependencies for GerryDB endpoints."""
+
 import os
 import re
 import threading

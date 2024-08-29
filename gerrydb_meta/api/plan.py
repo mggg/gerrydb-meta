@@ -1,4 +1,5 @@
 """Endpoints for districting plans."""
+
 from http import HTTPStatus
 from typing import Callable
 

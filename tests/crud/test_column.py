@@ -61,7 +61,6 @@ def test_crud_column_get_ref(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
 
     assert crud.column.get_ref(db=db, path="mayor", namespace=ns).col_id == col.col_id
     assert crud.column.get_ref(db=db, path="mayor", namespace=ns) is col.canonical_ref
@@ -208,6 +207,7 @@ def test_crud_column_set_values(db_with_meta):
     assert cols_list[0].val_json is None
     assert cols_list[1].val_json is None
 
+
 def test_crud_column_patch(db_with_meta):
     db, meta = db_with_meta
 
@@ -230,13 +230,12 @@ def test_crud_column_patch(db_with_meta):
         db=db,
         obj=col,
         obj_meta=meta,
-        patch=schemas.ColumnPatch(aliases=['foo/bar']),
+        patch=schemas.ColumnPatch(aliases=["foo/bar"]),
     )
 
     refs_lst = []
     for col_ref in data_col.refs:
         refs_lst.append(col_ref.path)
-    
+
     assert "foo/bar" in refs_lst
     assert "geo identifier" in refs_lst
-    

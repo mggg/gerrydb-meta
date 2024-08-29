@@ -1,4 +1,5 @@
 """Tests for GerryDB CRUD operations on object metadata."""
+
 from gerrydb_meta import crud, schemas
 
 

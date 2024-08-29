@@ -1,4 +1,5 @@
 """Endpoints for generic object metadata."""
+
 from http import HTTPStatus
 from uuid import UUID
 

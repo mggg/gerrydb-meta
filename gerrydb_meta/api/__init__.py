@@ -1,4 +1,5 @@
 """Base configuration and routing for Gerry API endpoints."""
+
 from fastapi import APIRouter
 
 from gerrydb_meta import crud, schemas

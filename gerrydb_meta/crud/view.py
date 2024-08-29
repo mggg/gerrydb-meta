@@ -1,4 +1,5 @@
 """CRUD operations and transformations for views."""
+
 import logging
 import re
 import uuid
@@ -204,7 +205,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
         bad_cols = []
-        
+
         for column in columns.values():
             value_count = value_counts_by_col.get(column.col_id, 0)
             if value_count < num_geos:

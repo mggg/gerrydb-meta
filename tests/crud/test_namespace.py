@@ -1,6 +1,7 @@
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import ColumnKind, ColumnType
 
+
 def test_crud_namespace_create(db_with_meta):
     db, meta = db_with_meta
     ns, _ = crud.namespace.create(
@@ -16,7 +17,7 @@ def test_crud_namespace_create(db_with_meta):
     assert ns.description == "A legendary city"
     assert ns.public is True
 
-    
+
 def test_crud_namespace_get(db_with_meta):
     db, meta = db_with_meta
     ns, _ = crud.namespace.create(

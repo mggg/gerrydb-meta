@@ -8,11 +8,12 @@ import pytest
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 import uuid
 
-square_corners = [(-1,-1), (1,-1), (1,1), (-1, 1)]
+square_corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
 
 square = Polygon(square_corners)
 
 internal_point = Point(0.0, 0.0)
+
 
 def make_atlantis_ns(db, meta):
     ns, _ = crud.namespace.create(
@@ -29,36 +30,32 @@ def make_atlantis_ns(db, meta):
 
 def test_view_create(db_with_meta):
     db, meta = db_with_meta
-   
+
     ns = make_atlantis_ns(db, meta)
 
     grid_graph = nx.Graph()
-    grid_graph.add_nodes_from(['central', 'western'])
-    grid_graph.add_edge('central', 'western', weight=1.0)
-    
-    geo_import, _ = crud.geo_import.create(
-        db=db,
-        obj_meta=meta,
-        namespace=ns
-    )
-    
+    grid_graph.add_nodes_from(["central", "western"])
+    grid_graph.add_edge("central", "western", weight=1.0)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
     geo, _ = crud.geography.create_bulk(
         db=db,
         objs_in=[
             schemas.GeographyCreate(
                 path="central_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
             schemas.GeographyCreate(
                 path="western_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
         ],
         obj_meta=meta,
         geo_import=geo_import,
-        namespace=ns
+        namespace=ns,
     )
 
     geo_layer, _ = crud.geo_layer.create(
@@ -71,7 +68,7 @@ def test_view_create(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     loc, _ = crud.locality.create_bulk(
         db=db,
         objs_in=[
@@ -84,13 +81,13 @@ def test_view_create(db_with_meta):
         ],
         obj_meta=meta,
     )
-  
+
     crud.geo_layer.map_locality(
         db=db,
         layer=geo_layer,
         locality=loc[0],
         geographies=[geo[0] for geo in geo],
-        obj_meta=meta
+        obj_meta=meta,
     )
 
     created_graph, _ = crud.graph.create(
@@ -101,20 +98,17 @@ def test_view_create(db_with_meta):
             locality="atlantis/atlantis_locality",
             layer="atlantis_blocks",
             edges=[
-                (a,b,{k: v for k,v in attr.items() if k != "id"})
-                for (a,b), attr in grid_graph.edges.items()
-            ]
+                (a, b, {k: v for k, v in attr.items() if k != "id"})
+                for (a, b), attr in grid_graph.edges.items()
+            ],
         ),
         geo_set_version=crud.geo_layer.get_set_by_locality(
-            db=db,
-            layer=geo_layer,
-            locality=loc[0]
+            db=db, layer=geo_layer, locality=loc[0]
         ),
-        edge_geos={"central": geo[0][0], "western": geo[1][0] },
+        edge_geos={"central": geo[0][0], "western": geo[1][0]},
         obj_meta=meta,
         namespace=ns,
     )
-
 
     mayor_col, _ = crud.column.create(
         db=db,
@@ -149,7 +143,7 @@ def test_view_create(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-  
+
     crud.column.set_values(
         db=db,
         col=pop_col,
@@ -159,7 +153,7 @@ def test_view_create(db_with_meta):
         ],
         obj_meta=meta,
     )
-    
+
     col_set, _ = crud.column_set.create(
         db=db,
         obj_in=schemas.ColumnSetCreate(
@@ -169,8 +163,8 @@ def test_view_create(db_with_meta):
         ),
         obj_meta=meta,
         namespace=ns,
-    ) 
-    
+    )
+
     view_template, _ = crud.view_template.create(
         db=db,
         obj_in=schemas.ViewTemplateCreate(
@@ -180,7 +174,7 @@ def test_view_create(db_with_meta):
         ),
         resolved_members=[col_set],
         obj_meta=meta,
-        namespace=ns,        
+        namespace=ns,
     )
 
     view, _ = crud.view.create(
@@ -200,7 +194,7 @@ def test_view_create(db_with_meta):
         layer=geo_layer,
         graph=created_graph,
     )
-   
+
     assert view.template_id == view_template.template_id
     assert view.loc_id == loc[0].loc_id
     assert view.layer_id == geo_layer.layer_id
@@ -214,36 +208,32 @@ def test_view_create(db_with_meta):
 
 def test_view_get(db_with_meta):
     db, meta = db_with_meta
-   
+
     ns = make_atlantis_ns(db, meta)
 
     grid_graph = nx.Graph()
-    grid_graph.add_nodes_from(['central', 'western'])
-    grid_graph.add_edge('central', 'western', weight=1.0)
-    
-    geo_import, _ = crud.geo_import.create(
-        db=db,
-        obj_meta=meta,
-        namespace=ns
-    )
-    
+    grid_graph.add_nodes_from(["central", "western"])
+    grid_graph.add_edge("central", "western", weight=1.0)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
     geo, _ = crud.geography.create_bulk(
         db=db,
         objs_in=[
             schemas.GeographyCreate(
                 path="central_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
             schemas.GeographyCreate(
                 path="western_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
         ],
         obj_meta=meta,
         geo_import=geo_import,
-        namespace=ns
+        namespace=ns,
     )
 
     geo_layer, _ = crud.geo_layer.create(
@@ -256,7 +246,7 @@ def test_view_get(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     loc, _ = crud.locality.create_bulk(
         db=db,
         objs_in=[
@@ -269,13 +259,13 @@ def test_view_get(db_with_meta):
         ],
         obj_meta=meta,
     )
-  
+
     crud.geo_layer.map_locality(
         db=db,
         layer=geo_layer,
         locality=loc[0],
         geographies=[geo[0] for geo in geo],
-        obj_meta=meta
+        obj_meta=meta,
     )
 
     created_graph, _ = crud.graph.create(
@@ -286,20 +276,17 @@ def test_view_get(db_with_meta):
             locality="atlantis/atlantis_locality",
             layer="atlantis_blocks",
             edges=[
-                (a,b,{k: v for k,v in attr.items() if k != "id"})
-                for (a,b), attr in grid_graph.edges.items()
-            ]
+                (a, b, {k: v for k, v in attr.items() if k != "id"})
+                for (a, b), attr in grid_graph.edges.items()
+            ],
         ),
         geo_set_version=crud.geo_layer.get_set_by_locality(
-            db=db,
-            layer=geo_layer,
-            locality=loc[0]
+            db=db, layer=geo_layer, locality=loc[0]
         ),
-        edge_geos={"central": geo[0][0], "western": geo[1][0] },
+        edge_geos={"central": geo[0][0], "western": geo[1][0]},
         obj_meta=meta,
         namespace=ns,
     )
-
 
     mayor_col, _ = crud.column.create(
         db=db,
@@ -334,7 +321,7 @@ def test_view_get(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-  
+
     crud.column.set_values(
         db=db,
         col=pop_col,
@@ -344,7 +331,7 @@ def test_view_get(db_with_meta):
         ],
         obj_meta=meta,
     )
-    
+
     col_set, _ = crud.column_set.create(
         db=db,
         obj_in=schemas.ColumnSetCreate(
@@ -354,8 +341,8 @@ def test_view_get(db_with_meta):
         ),
         obj_meta=meta,
         namespace=ns,
-    ) 
-    
+    )
+
     view_template, _ = crud.view_template.create(
         db=db,
         obj_in=schemas.ViewTemplateCreate(
@@ -365,7 +352,7 @@ def test_view_get(db_with_meta):
         ),
         resolved_members=[col_set],
         obj_meta=meta,
-        namespace=ns,        
+        namespace=ns,
     )
 
     view, _ = crud.view.create(
@@ -385,45 +372,40 @@ def test_view_get(db_with_meta):
         layer=geo_layer,
         graph=created_graph,
     )
-   
-    retrieved = crud.view.get(db=db, path="mayor_power", namespace=ns)
-    
-    assert retrieved == view
 
+    retrieved = crud.view.get(db=db, path="mayor_power", namespace=ns)
+
+    assert retrieved == view
 
 
 def test_view_render(db_with_meta):
     db, meta = db_with_meta
-   
+
     ns = make_atlantis_ns(db, meta)
 
     grid_graph = nx.Graph()
-    grid_graph.add_nodes_from(['central', 'western'])
-    grid_graph.add_edge('central', 'western', weight=1.0)
-    
-    geo_import, _ = crud.geo_import.create(
-        db=db,
-        obj_meta=meta,
-        namespace=ns
-    )
-    
+    grid_graph.add_nodes_from(["central", "western"])
+    grid_graph.add_edge("central", "western", weight=1.0)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
     geo, _ = crud.geography.create_bulk(
         db=db,
         objs_in=[
             schemas.GeographyCreate(
                 path="central_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
             schemas.GeographyCreate(
                 path="western_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
         ],
         obj_meta=meta,
         geo_import=geo_import,
-        namespace=ns
+        namespace=ns,
     )
 
     geo_layer, _ = crud.geo_layer.create(
@@ -436,7 +418,7 @@ def test_view_render(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     loc, _ = crud.locality.create_bulk(
         db=db,
         objs_in=[
@@ -449,13 +431,13 @@ def test_view_render(db_with_meta):
         ],
         obj_meta=meta,
     )
-  
+
     crud.geo_layer.map_locality(
         db=db,
         layer=geo_layer,
         locality=loc[0],
         geographies=[geo[0] for geo in geo],
-        obj_meta=meta
+        obj_meta=meta,
     )
 
     created_graph, _ = crud.graph.create(
@@ -466,20 +448,17 @@ def test_view_render(db_with_meta):
             locality="atlantis/atlantis_locality",
             layer="atlantis_blocks",
             edges=[
-                (a,b,{k: v for k,v in attr.items() if k != "id"})
-                for (a,b), attr in grid_graph.edges.items()
-            ]
+                (a, b, {k: v for k, v in attr.items() if k != "id"})
+                for (a, b), attr in grid_graph.edges.items()
+            ],
         ),
         geo_set_version=crud.geo_layer.get_set_by_locality(
-            db=db,
-            layer=geo_layer,
-            locality=loc[0]
+            db=db, layer=geo_layer, locality=loc[0]
         ),
-        edge_geos={"central": geo[0][0], "western": geo[1][0] },
+        edge_geos={"central": geo[0][0], "western": geo[1][0]},
         obj_meta=meta,
         namespace=ns,
     )
-
 
     mayor_col, _ = crud.column.create(
         db=db,
@@ -514,7 +493,7 @@ def test_view_render(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-  
+
     crud.column.set_values(
         db=db,
         col=pop_col,
@@ -524,7 +503,7 @@ def test_view_render(db_with_meta):
         ],
         obj_meta=meta,
     )
-    
+
     col_set, _ = crud.column_set.create(
         db=db,
         obj_in=schemas.ColumnSetCreate(
@@ -534,8 +513,8 @@ def test_view_render(db_with_meta):
         ),
         obj_meta=meta,
         namespace=ns,
-    ) 
-    
+    )
+
     view_template, _ = crud.view_template.create(
         db=db,
         obj_in=schemas.ViewTemplateCreate(
@@ -545,7 +524,7 @@ def test_view_render(db_with_meta):
         ),
         resolved_members=[col_set],
         obj_meta=meta,
-        namespace=ns,        
+        namespace=ns,
     )
 
     view, _ = crud.view.create(
@@ -565,11 +544,9 @@ def test_view_render(db_with_meta):
         layer=geo_layer,
         graph=created_graph,
     )
-    
+
     geo_set_version = crud.geo_layer.get_set_by_locality(
-        db=db,
-        layer=geo_layer,
-        locality=loc[0]
+        db=db, layer=geo_layer, locality=loc[0]
     )
 
     plan, _ = crud.plan.create(
@@ -582,7 +559,7 @@ def test_view_render(db_with_meta):
             daves_id="daves_atlantis_plan",
             locality="atlantis_loc",
             layer="atlantis_layer",
-            assignments={"central_atlantis": "1", "western_atlantis": "2"}
+            assignments={"central_atlantis": "1", "western_atlantis": "2"},
         ),
         geo_set_version=geo_set_version,
         obj_meta=meta,
@@ -593,44 +570,45 @@ def test_view_render(db_with_meta):
     view_render_context = crud.view.render(db=db, view=view)
 
     assert set(view_render_context.columns.keys()) == set(["mayor", "population"])
-    assert  view_render_context.plan_labels == ["atlantis_plan"]
-    
-    new_plan_assignment_list = [(b,c) for a,b,c in view_render_context.plan_assignments]
-    assert new_plan_assignment_list == [("central_atlantis", "1"), ("western_atlantis", "2")]
+    assert view_render_context.plan_labels == ["atlantis_plan"]
+
+    new_plan_assignment_list = [
+        (b, c) for a, b, c in view_render_context.plan_assignments
+    ]
+    assert new_plan_assignment_list == [
+        ("central_atlantis", "1"),
+        ("western_atlantis", "2"),
+    ]
 
 
 def test_view_make_and_get_cached_render(db_with_meta_and_user):
     db, meta, user = db_with_meta_and_user
-   
+
     ns = make_atlantis_ns(db, meta)
 
     grid_graph = nx.Graph()
-    grid_graph.add_nodes_from(['central', 'western'])
-    grid_graph.add_edge('central', 'western', weight=1.0)
-    
-    geo_import, _ = crud.geo_import.create(
-        db=db,
-        obj_meta=meta,
-        namespace=ns
-    )
-    
+    grid_graph.add_nodes_from(["central", "western"])
+    grid_graph.add_edge("central", "western", weight=1.0)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
     geo, _ = crud.geography.create_bulk(
         db=db,
         objs_in=[
             schemas.GeographyCreate(
                 path="central_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
             schemas.GeographyCreate(
                 path="western_atlantis",
-                geography = None,
-                internal_point = None,
+                geography=None,
+                internal_point=None,
             ),
         ],
         obj_meta=meta,
         geo_import=geo_import,
-        namespace=ns
+        namespace=ns,
     )
 
     geo_layer, _ = crud.geo_layer.create(
@@ -643,7 +621,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     loc, _ = crud.locality.create_bulk(
         db=db,
         objs_in=[
@@ -656,13 +634,13 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         ],
         obj_meta=meta,
     )
-  
+
     crud.geo_layer.map_locality(
         db=db,
         layer=geo_layer,
         locality=loc[0],
         geographies=[geo[0] for geo in geo],
-        obj_meta=meta
+        obj_meta=meta,
     )
 
     created_graph, _ = crud.graph.create(
@@ -673,20 +651,17 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
             locality="atlantis/atlantis_locality",
             layer="atlantis_blocks",
             edges=[
-                (a,b,{k: v for k,v in attr.items() if k != "id"})
-                for (a,b), attr in grid_graph.edges.items()
-            ]
+                (a, b, {k: v for k, v in attr.items() if k != "id"})
+                for (a, b), attr in grid_graph.edges.items()
+            ],
         ),
         geo_set_version=crud.geo_layer.get_set_by_locality(
-            db=db,
-            layer=geo_layer,
-            locality=loc[0]
+            db=db, layer=geo_layer, locality=loc[0]
         ),
-        edge_geos={"central": geo[0][0], "western": geo[1][0] },
+        edge_geos={"central": geo[0][0], "western": geo[1][0]},
         obj_meta=meta,
         namespace=ns,
     )
-
 
     mayor_col, _ = crud.column.create(
         db=db,
@@ -721,7 +696,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         obj_meta=meta,
         namespace=ns,
     )
-  
+
     crud.column.set_values(
         db=db,
         col=pop_col,
@@ -731,7 +706,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         ],
         obj_meta=meta,
     )
-    
+
     col_set, _ = crud.column_set.create(
         db=db,
         obj_in=schemas.ColumnSetCreate(
@@ -741,8 +716,8 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         ),
         obj_meta=meta,
         namespace=ns,
-    ) 
-    
+    )
+
     view_template, _ = crud.view_template.create(
         db=db,
         obj_in=schemas.ViewTemplateCreate(
@@ -752,7 +727,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         ),
         resolved_members=[col_set],
         obj_meta=meta,
-        namespace=ns,        
+        namespace=ns,
     )
 
     view, _ = crud.view.create(
@@ -772,11 +747,9 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         layer=geo_layer,
         graph=created_graph,
     )
-    
+
     geo_set_version = crud.geo_layer.get_set_by_locality(
-        db=db,
-        layer=geo_layer,
-        locality=loc[0]
+        db=db, layer=geo_layer, locality=loc[0]
     )
 
     plan, _ = crud.plan.create(
@@ -789,7 +762,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
             daves_id="daves_atlantis_plan",
             locality="atlantis_loc",
             layer="atlantis_layer",
-            assignments={"central_atlantis": "1", "western_atlantis": "2"}
+            assignments={"central_atlantis": "1", "western_atlantis": "2"},
         ),
         geo_set_version=geo_set_version,
         obj_meta=meta,
@@ -798,13 +771,13 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
     )
 
     view_render_context = crud.view.render(db=db, view=view)
-    
-    
+
     render_uuid = uuid.uuid4()
-    
-    
-    cashed_render = crud.view.cache_render(db=db, view=view, created_by=user, render_id=render_uuid, path="mayor_power")
-    
+
+    cashed_render = crud.view.cache_render(
+        db=db, view=view, created_by=user, render_id=render_uuid, path="mayor_power"
+    )
+
     retrieved_cashed_render = crud.view.get_cached_render(db=db, view=view)
-   
+
     assert retrieved_cashed_render == cashed_render

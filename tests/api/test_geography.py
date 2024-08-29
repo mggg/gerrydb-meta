@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API geography endpoints."""
+
 from http import HTTPStatus
 
 import msgpack

@@ -1,4 +1,5 @@
 """Common CRUD utilities for API tests."""
+
 from random import choice
 from string import ascii_lowercase
 from typing import Any

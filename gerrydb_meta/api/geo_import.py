@@ -1,4 +1,5 @@
 """Endpoints for geographic layer metadata."""
+
 from http import HTTPStatus
 from typing import Any, Callable
 from uuid import UUID

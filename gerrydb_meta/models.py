@@ -263,6 +263,7 @@ class GeoLayer(Base):
     So if we were to have the locality as some state, then the layer might
     be something like "tract". We can then map geometries to this layer.
     """
+
     __tablename__ = "geo_layer"
     __table_args__ = (UniqueConstraint("path", "namespace_id"),)
 

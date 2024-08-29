@@ -18,9 +18,9 @@ def make_atlantis_ns(db, meta):
 
 def test_crud_column_set_create_base(db_with_meta):
     db, meta = db_with_meta
-    
+
     ns = make_atlantis_ns(db, meta)
-   
+
     crud.column.create(
         db=db,
         obj_in=schemas.ColumnCreate(
@@ -32,7 +32,7 @@ def test_crud_column_set_create_base(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-   
+
     crud.column.create(
         db=db,
         obj_in=schemas.ColumnCreate(
@@ -44,7 +44,7 @@ def test_crud_column_set_create_base(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     col_set, _ = crud.column_set.create(
         db=db,
         obj_in=schemas.ColumnSetCreate(
@@ -55,23 +55,39 @@ def test_crud_column_set_create_base(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
-    set_id = db.query(models.ColumnSet).filter(models.ColumnSet.path == "a_set_of_columns").first().set_id
-    
+
+    set_id = (
+        db.query(models.ColumnSet)
+        .filter(models.ColumnSet.path == "a_set_of_columns")
+        .first()
+        .set_id
+    )
+
     assert col_set.set_id == set_id
     assert col_set.columns[0].set_id == set_id
     assert col_set.columns[1].set_id == set_id
 
-    assert col_set.columns[0].ref_id == db.query(models.ColumnRef).filter(models.ColumnRef.path == col_set.columns[0].ref.path).first().ref_id
-    assert col_set.columns[1].ref_id == db.query(models.ColumnRef).filter(models.ColumnRef.path == col_set.columns[1].ref.path).first().ref_id
-    
-    
+    assert (
+        col_set.columns[0].ref_id
+        == db.query(models.ColumnRef)
+        .filter(models.ColumnRef.path == col_set.columns[0].ref.path)
+        .first()
+        .ref_id
+    )
+    assert (
+        col_set.columns[1].ref_id
+        == db.query(models.ColumnRef)
+        .filter(models.ColumnRef.path == col_set.columns[1].ref.path)
+        .first()
+        .ref_id
+    )
+
+
 def test_crud_column_set_get(db_with_meta):
     db, meta = db_with_meta
-    
-    
+
     ns = make_atlantis_ns(db, meta)
-   
+
     crud.column.create(
         db=db,
         obj_in=schemas.ColumnCreate(
@@ -83,7 +99,7 @@ def test_crud_column_set_get(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-   
+
     crud.column.create(
         db=db,
         obj_in=schemas.ColumnCreate(
@@ -95,7 +111,7 @@ def test_crud_column_set_get(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     col_set, _ = crud.column_set.create(
         db=db,
         obj_in=schemas.ColumnSetCreate(
@@ -106,5 +122,5 @@ def test_crud_column_set_get(db_with_meta):
         obj_meta=meta,
         namespace=ns,
     )
-    
+
     assert crud.column_set.get(db=db, path="a_set_of_columns", namespace=ns) == col_set

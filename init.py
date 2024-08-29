@@ -1,4 +1,5 @@
 """Initializes a GerryDB instance with a superuser."""
+
 import os
 
 import click
@@ -41,7 +42,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
         Base.metadata.create_all(engine)
 
     admin = GerryAdmin(session=db)
-    user = admin.user_create(name=name, email=email, super_user = True)
+    user = admin.user_create(name=name, email=email, super_user=True)
     api_key = admin.key_create(user=user)
     db.commit()
     db.close()
@@ -58,11 +59,13 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
             print("[default]", file=config_fp)
             print('host = "localhost:8000"', file=config_fp)
             print(f'key = "{api_key}"', file=config_fp)
-    
+
     else:
-        overwrite  = ""
-        while overwrite not in  ["y", "n"]:
-            overwrite = input("A .gerrydb/config file already exists, would you like to overwrite it? Y/N: ").lower()
+        overwrite = ""
+        while overwrite not in ["y", "n"]:
+            overwrite = input(
+                "A .gerrydb/config file already exists, would you like to overwrite it? Y/N: "
+            ).lower()
 
         if overwrite == "y":
             (Path.home() / ".gerrydb").mkdir(parents=True, exist_ok=True)
@@ -70,9 +73,11 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
                 print("[default]", file=config_fp)
                 print('host = "localhost:8000"', file=config_fp)
                 print(f'key = "{api_key}"', file=config_fp)
-        
+
         else:
-            print("You have decided not to overwrite your .gerrydb/config file in the home directory. You may need to manually edit it with your new API key.")
+            print(
+                "You have decided not to overwrite your .gerrydb/config file in the home directory. You may need to manually edit it with your new API key."
+            )
 
 
 if __name__ == "__main__":

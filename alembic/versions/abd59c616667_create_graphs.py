@@ -5,6 +5,7 @@ Revises: 88f266906828
 Create Date: 2023-03-23 16:59:16.924503
 
 """
+
 import sqlalchemy as sa
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy.dialects import postgresql
