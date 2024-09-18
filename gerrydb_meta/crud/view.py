@@ -275,6 +275,14 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .first()
         )
 
+    def all(self, db: Session, *, namespace: models.Namespace) -> list[models.View]:
+        """Retrieves all views in a namespace."""
+        return (
+            db.query(models.View)
+            .filter(models.View.namespace_id == namespace.namespace_id)
+            .all()
+        )
+
     def _create_render(
         self,
         db: Session,
