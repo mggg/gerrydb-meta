@@ -130,3 +130,7 @@ dmypy.json
 
 .DS_Store
 .gerryrc
+
+
+# Ignore all of the backup files that might be floating around
+*.tar
