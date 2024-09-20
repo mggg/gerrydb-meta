@@ -160,7 +160,7 @@ def from_resource_paths(
         if parts[0] not in ENDPOINT_TO_CRUD:
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND,
-                detail=f'Unknown resource "{parts[1]}".',
+                detail=f'Unknown resource "{parts[0]}".',
             )
 
         parsed_paths.append(tuple(parts))

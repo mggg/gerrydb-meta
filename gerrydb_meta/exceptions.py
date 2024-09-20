@@ -36,3 +36,7 @@ class ColumnValueTypeError(GerryValueError):
     """`ValueError` raised when column value(s) do not match the column type."""
 
     errors: list[str]
+
+
+class GerryPathError(Exception):
+    """Raised when an invalid path is provided. Generally, this means invalid characters are present"""
