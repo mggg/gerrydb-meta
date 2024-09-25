@@ -11,6 +11,14 @@ from gerrydb_meta.api.base import NamespacedObjectApi, add_etag, from_resource_p
 from gerrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 from gerrydb_meta.scopes import ScopeManager
 
+import logging
+
+
+log = logging.getLogger("uvicorn")
+
+
+MAX_VIEW_TEMPLATE_COLUMNS = 200
+
 
 class ViewTemplateApi(NamespacedObjectApi):
     def _check_public(self, scopes: ScopeManager) -> None:
@@ -67,6 +75,25 @@ class ViewTemplateApi(NamespacedObjectApi):
             resolved_objs = from_resource_paths(
                 paths=obj_in.members, db=db, scopes=scopes, follow_refs=False
             )
+            total_objs = 0
+            for item in resolved_objs:
+                if isinstance(item, models.ColumnSet):
+                    total_objs += len(item.columns)
+                else:
+                    total_objs += 1
+
+            if total_objs > MAX_VIEW_TEMPLATE_COLUMNS:
+                log.error(
+                    f"Cannot create view template with more than {MAX_VIEW_TEMPLATE_COLUMNS} columns."
+                )
+                raise HTTPException(
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    detail=(
+                        f"Maximum view template column count exceeded. Found {total_objs} columns. "
+                        f"Maximum is {MAX_VIEW_TEMPLATE_COLUMNS}."
+                    ),
+                )
+
             template_obj, etag = self.crud.create(
                 db=db,
                 obj_in=obj_in,
