@@ -20,10 +20,14 @@ GetSchemaType = TypeVar("GetSchemaType", bound=BaseModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 PatchSchemaType = TypeVar("PatchSchemaType", bound=BaseModel)
 
+# These characters are most likely to appear in the resource_id part of
+# a path (typically the last segment). Exclusion of these characters
+# prevents ogr2ogr fails and helps protect against malicious code injection.
 INVALID_PATH_SUBSTRINGS = set(
     {
         "..",
         " ",
+        ";",
     }
 )
 
