@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
+import os, sys, shlex
 
 import orjson as json
 
@@ -205,6 +206,51 @@ def _init_gpkg_plans_extension(
     conn.commit()
 
 
+def __get_arg_max() -> int:
+    """
+    Retrieve the system's ARG_MAX value.
+
+    Returns:
+        int: The maximum length of the arguments to the exec functions in bytes.
+             Returns None if the value cannot be determined.
+    """
+    if hasattr(os, "sysconf"):
+        if "SC_ARG_MAX" in os.sysconf_names:
+            try:
+                arg_max = os.sysconf("SC_ARG_MAX")
+                if arg_max > 0:
+                    return arg_max
+            except (ValueError, OSError) as e:
+                print(f"Warning: Unable to retrieve ARG_MAX using os.sysconf: {e}")
+                raise e
+
+    if sys.platform.startswith("win"):
+        raise RuntimeError("This function cannot be run in a Windows environment.")
+
+    # Fallback Unix-like systems where SC_ARG_MAX is not available.
+    # Uses common default value (Linux typically has 2,097,152 bytes).
+    return 2097152
+
+
+def __validate_query(query: str) -> bool:
+    """
+    Ensures that the query is does not exceed the maximum allowable
+    length of queries made to the terminal. This is generally governed by
+    the ARG_MAX environment variable.
+
+    Args:
+        query: The query to be validated.
+
+    Raises:
+        RuntimeError: If the query is too long.
+    """
+    query_utf8 = query.encode("utf-8")
+    max_query_len = __get_arg_max()
+
+    if len(query_utf8) > max_query_len:
+        raise RuntimeError("The length of the geoquery passed to ogr2ogr is too long. ")
+
+
 def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID, Path]:
     """Renders a view (with metadata) to a GeoPackage."""
     render_uuid = uuid.uuid4()
@@ -229,16 +275,22 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         *proj_args,
     ]
 
+    subprocess_command_list = [
+        "ogr2ogr",
+        *base_args,
+        "-sql",
+        context.geo_query,
+        "-nln",
+        geo_layer_name,
+    ]
+
+    subprocess_command = shlex.join(subprocess_command_list)
+
+    __validate_query(subprocess_command)
+
     try:
         subprocess.run(
-            [
-                "ogr2ogr",
-                *base_args,
-                "-sql",
-                context.geo_query,
-                "-nln",
-                geo_layer_name,
-            ],
+            subprocess_command_list,
             check=True,
             capture_output=True,
         )
@@ -262,6 +314,7 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         raise RenderError(
             "Failed to render view: geographic layer not found in GeoPackage.",
         ) from ex
+
     if geo_row_count != context.view.num_geos:
         # Validate inner joins.
         raise RenderError(
@@ -269,19 +322,25 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
             f"in layer, got {geo_row_count} geographies."
         )
 
+    subprocess_command_list = [
+        "ogr2ogr",
+        *base_args,
+        "-update",
+        "-sql",
+        context.internal_point_query,
+        "-nln",
+        internal_point_layer_name,
+        "-nlt",
+        "POINT",
+    ]
+
+    subprocess_command = shlex.join(subprocess_command_list)
+
+    __validate_query(subprocess_command)
+
     try:
         subprocess.run(
-            [
-                "ogr2ogr",
-                *base_args,
-                "-update",
-                "-sql",
-                context.internal_point_query,
-                "-nln",
-                internal_point_layer_name,
-                "-nlt",
-                "POINT",
-            ],
+            subprocess_command_list,
             check=True,
             capture_output=True,
         )
@@ -349,11 +408,23 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         )
         db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
 
+    geo_attrs_dict = {}
+
+    assert (
+        context.geo_meta_ids.keys() == context.geo_valid_from_dates.keys()
+    ), "Geographic metadata IDs and valid dates must be aligned."
+
+    for path in context.geo_meta_ids.keys():
+        geo_attrs_dict[path] = (
+            context.geo_meta_ids[path],
+            context.geo_valid_from_dates[path],
+        )
+
     conn.executemany(
-        "INSERT INTO gerrydb_geo_attrs (path, meta_id) VALUES (?, ?)",
+        "INSERT INTO gerrydb_geo_attrs (path, meta_id, valid_from) VALUES (?, ?, ?)",
         (
-            (path, db_meta_id_to_gpkg_meta_id[db_id])
-            for path, db_id in context.geo_meta_ids.items()
+            (path, db_meta_id_to_gpkg_meta_id[db_id], valid_from)
+            for path, (db_id, valid_from) in geo_attrs_dict.items()
         ),
     )
 
