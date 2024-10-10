@@ -167,7 +167,7 @@ def test_crud_column_set_values(db_with_meta):
     col, _ = crud.column.create(
         db=db,
         obj_in=schemas.ColumnCreate(
-            canonical_path="geo identifier",
+            canonical_path="geo_identifier",
             description="an identifier number for the region",
             kind=ColumnKind.IDENTIFIER,
             type=ColumnType.INT,
@@ -216,7 +216,7 @@ def test_crud_column_patch(db_with_meta):
     col, _ = crud.column.create(
         db=db,
         obj_in=schemas.ColumnCreate(
-            canonical_path="geo identifier",
+            canonical_path="geo_identifier",
             description="an identifier number for the region",
             kind=ColumnKind.IDENTIFIER,
             type=ColumnType.INT,
@@ -238,4 +238,4 @@ def test_crud_column_patch(db_with_meta):
         refs_lst.append(col_ref.path)
 
     assert "foo/bar" in refs_lst
-    assert "geo identifier" in refs_lst
+    assert "geo_identifier" in refs_lst
