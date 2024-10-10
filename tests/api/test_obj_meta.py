@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API object metadata endpoints."""
+
 from http import HTTPStatus
 
 from sqlalchemy.orm import Session

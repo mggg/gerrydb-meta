@@ -1,4 +1,5 @@
 """Scopes (permissions) and role management."""
+
 from dataclasses import dataclass
 
 from gerrydb_meta.enums import NamespaceGroup, ScopeType

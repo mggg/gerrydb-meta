@@ -1,4 +1,5 @@
 """Administration tools for GerryDB."""
+
 import csv
 import logging
 import os
@@ -69,32 +70,35 @@ class GerryAdmin:
 
     session: SessionType
 
-    def user_create(self, email: str, name: str) -> User:
-        """Returns a new user."""
+    def user_create(self, email: str, name: str, super_user: bool = False) -> User:
+        """Returns a new user.
+        If `super_user`, grants user global privileges."""
         user = User(email=email, name=name)
         log.info("Created new user: %s", user)
         self.session.add(user)
         self.session.flush()
         self.session.refresh(user)
 
-        # TODO: don't grant broad privileges by default!
-        # grant_scope(self.session, user, ScopeType.ALL, namespace_group=None)
-        # grant_scope(
-        #    self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
-        # )
+        if super_user:
+            # global privileges
+            grant_scope(self.session, user, ScopeType.ALL, namespace_group=None)
+            grant_scope(
+                self.session, user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL
+            )
 
-        grant_scope(
-            self.session,
-            user,
-            ScopeType.NAMESPACE_READ,
-            namespace_group=NamespaceGroup.PUBLIC,
-        )
-        grant_scope(
-            self.session,
-            user,
-            ScopeType.NAMESPACE_WRITE_DERIVED,
-            namespace_group=NamespaceGroup.PUBLIC,
-        )
+        else:
+            grant_scope(
+                self.session,
+                user,
+                ScopeType.NAMESPACE_READ,
+                namespace_group=NamespaceGroup.PUBLIC,
+            )
+            grant_scope(
+                self.session,
+                user,
+                ScopeType.NAMESPACE_WRITE_DERIVED,
+                namespace_group=NamespaceGroup.PUBLIC,
+            )
 
         return user
 

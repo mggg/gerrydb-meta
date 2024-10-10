@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API column set endpoints."""
+
 from http import HTTPStatus
 
 from gerrydb_meta import schemas

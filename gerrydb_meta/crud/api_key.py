@@ -1,4 +1,5 @@
 """CRUD operations and transformations for location metadata."""
+
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models

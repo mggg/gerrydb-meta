@@ -1,4 +1,5 @@
 """Endpoints for base geographic data (points and polygons)."""
+
 from http import HTTPStatus
 from typing import Callable
 

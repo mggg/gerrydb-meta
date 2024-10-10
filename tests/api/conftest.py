@@ -1,4 +1,5 @@
 """Fixtures for REST API tests."""
+
 from dataclasses import dataclass
 from typing import Generator
 

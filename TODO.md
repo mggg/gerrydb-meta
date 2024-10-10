@@ -4,13 +4,16 @@ Basic CRUD tests =
  * simple write/read
  * simple error handling
 
-[ ] Basic CRUD tests
-    [ ] Columns
-    [ ] Column sets
-    [ ] Geographic layers
-    [ ] ...add more here...
 
 # Features (ordered, short-term)
+
+
+# Small improvements 
+[ ] Find locations where path errors can occur and raise the GerryPathError rather than
+    the current ValueError
+[ ] Fix the logging on PUT calls
+
+
 Expose:
 [x] GeoImport / GeoLayer
 [ ] Geography (with versioning)

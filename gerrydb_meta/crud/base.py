@@ -1,4 +1,5 @@
 """Generic CR(UD) operations."""
+
 # Based on the `full-stack-fastapi-postgresql` template:
 #   https://github.com/tiangolo/full-stack-fastapi-postgresql/
 #   blob/490c554e23343eec0736b06e59b2108fdd057fdc/
@@ -12,15 +13,46 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from gerrydb_meta.models import Base, ETag, Namespace, ObjectMeta
+from gerrydb_meta.exceptions import GerryPathError
 
 ModelType = TypeVar("ModelType", bound=Base)
 GetSchemaType = TypeVar("GetSchemaType", bound=BaseModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 PatchSchemaType = TypeVar("PatchSchemaType", bound=BaseModel)
 
+# These characters are most likely to appear in the resource_id part of
+# a path (typically the last segment). Exclusion of these characters
+# prevents ogr2ogr fails and helps protect against malicious code injection.
+INVALID_PATH_SUBSTRINGS = set(
+    {
+        "..",
+        " ",
+        ";",
+    }
+)
 
-def normalize_path(path: str) -> str:
-    """Normalizes a path (removes leading, trailing, and duplicate slashes)."""
+
+def normalize_path(path: str, case_sensitive_uid: bool = False) -> str:
+    """Normalizes a path (removes leading, trailing, and duplicate slashes, and
+    lowercases the path if `case_sensitive` is `False`).
+
+    Some paths, such as paths containing GEOIDs, are case-sensitive in the last
+    segment. In these cases, `case_sensitive` should be set to `True`.
+    """
+    for item in INVALID_PATH_SUBSTRINGS:
+        if item in path:
+            raise GerryPathError(
+                f"Invalid path: '{path}'. Please remove the following substring: '{item}'"
+            )
+
+    if case_sensitive_uid:
+        path_list = path.strip().split("/")
+        return "/".join(
+            seg.lower() if i < len(path_list) - 1 else seg
+            for i, seg in enumerate(path_list)
+            if seg
+        )
+
     return "/".join(seg for seg in path.strip().lower().split("/") if seg)
 
 
@@ -111,7 +143,7 @@ class NamespacedCRBase(Generic[ModelType, CreateSchemaType]):
         *,
         obj_in: CreateSchemaType,
         namespace: Namespace,
-        obj_meta: ObjectMeta
+        obj_meta: ObjectMeta,
     ) -> Tuple[ModelType, uuid.UUID]:
         obj_in_data = jsonable_encoder(obj_in)
         db_obj = self.model(

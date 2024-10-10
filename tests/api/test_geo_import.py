@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API GeoImport endpoints."""
+
 from http import HTTPStatus
 
 from gerrydb_meta import schemas

@@ -1,4 +1,5 @@
 """Endpoints for views."""
+
 import logging
 import os
 import subprocess
@@ -27,7 +28,7 @@ from gerrydb_meta.api.deps import (
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
 
-log = logging.getLogger()
+log = logging.getLogger("uvicorn")
 
 router = APIRouter()
 CHUNK_SIZE = 32 * 1024 * 1024  # for gzipping rendered views
@@ -229,6 +230,7 @@ def render_view(
 
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
+    storage_credentials = storage_client = None
     if bucket_name is not None and key_path is not None:
         try:
             storage_credentials = Credentials.from_service_account_file(key_path)

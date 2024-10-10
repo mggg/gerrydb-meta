@@ -1,4 +1,5 @@
 """CRUD operations and transformations for districting plans."""
+
 import logging
 import uuid
 from typing import Tuple
@@ -42,6 +43,22 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             raise CreateValueError(
                 "Geographies not associated with locality and layer: "
                 f"{', '.join(bad_geo_paths)}"
+            )
+
+        # Check to make sure that all of the edges exist in the set of geographies
+        # associated with the locality and layer.
+
+        missing_geos = set()
+        for geo_path_1, geo_path_2, _ in obj_in.edges:
+            if geo_path_1 not in edge_geos:
+                missing_geos.add(geo_path_1)
+            if geo_path_2 not in edge_geos:
+                missing_geos.add(geo_path_2)
+
+        if len(missing_geos) > 0:
+            raise CreateValueError(
+                "Passed edge geographies do not match the geographies associated "
+                f"with the underlying graph. Missing edge geographies: {', '.join(missing_geos)}"
             )
 
         with db.begin(nested=True):

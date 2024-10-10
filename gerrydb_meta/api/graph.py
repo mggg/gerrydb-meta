@@ -1,4 +1,5 @@
 """Endpoints for districting graphs."""
+
 from http import HTTPStatus
 from typing import Callable
 

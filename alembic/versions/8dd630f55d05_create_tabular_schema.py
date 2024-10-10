@@ -5,6 +5,7 @@ Revises: f92609b1a9bd
 Create Date: 2023-03-22 14:47:10.447269
 
 """
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -172,7 +173,7 @@ def upgrade() -> None:
     )
     op.create_table(
         "column_value",
-        sa.Column("val_id", sa.Integer(), nullable=False),
+        sa.Column("val_id", sa.BigInteger(), nullable=False),
         sa.Column("col_id", sa.Integer(), nullable=False),
         sa.Column("geo_id", sa.Integer(), nullable=False),
         sa.Column("meta_id", sa.Integer(), nullable=False),

@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API column value endpoints."""
+
 from http import HTTPStatus
 
 import pytest

@@ -1,4 +1,5 @@
 """Endpoints for locality metadata."""
+
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response

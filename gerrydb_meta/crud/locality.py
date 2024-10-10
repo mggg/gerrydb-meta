@@ -1,4 +1,5 @@
 """CRUD operations and transformations for location metadata."""
+
 import logging
 import uuid
 from typing import Collection, Tuple

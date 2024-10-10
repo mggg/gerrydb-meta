@@ -1,4 +1,5 @@
 """CRUD operations and transformations for geographic layers."""
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -32,6 +33,7 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
                 description=obj_in.description,
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
+                source_url=obj_in.source_url,
             )
             db.add(geo_layer)
 

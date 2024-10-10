@@ -1,4 +1,5 @@
 """CRUD operations and transformations for views."""
+
 import logging
 import re
 import uuid
@@ -109,6 +110,7 @@ class ViewRenderContext:
     graph_edges: Sequence | None
     geo_meta: dict[int, models.ObjectMeta]
     geo_meta_ids: dict[str, int]  # by path
+    geo_valid_from_dates: dict[str, datetime]
 
     # Bulk queries for `ogr2ogr`.
     geo_query: str
@@ -123,7 +125,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         obj_in: schemas.ViewCreate,
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
-        template: models.ViewTemplate,
+        template: models.ViewTemplate | models.ViewTemplateVersion,
         locality: models.Locality,
         layer: models.GeoLayer,
         graph: models.Graph | None = None,
@@ -204,6 +206,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
         bad_cols = []
+
         for column in columns.values():
             value_count = value_counts_by_col.get(column.col_id, 0)
             if value_count < num_geos:
@@ -271,6 +274,14 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 models.View.path == normalize_path(path),
             )
             .first()
+        )
+
+    def all(self, db: Session, *, namespace: models.Namespace) -> list[models.View]:
+        """Retrieves all views in a namespace."""
+        return (
+            db.query(models.View)
+            .filter(models.View.namespace_id == namespace.namespace_id)
+            .all()
         )
 
     def _create_render(
@@ -430,6 +441,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         plans, plan_labels, plan_assignments = self._plans(db, view)
         geo_meta_ids, geo_meta = self._geo_meta(db, view)
+        geo_valid_from_dates = self._geo_valid_dates(db, view)
 
         return ViewRenderContext(
             view=view,
@@ -441,6 +453,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             graph_edges=self._graph_edges(db, view),
             geo_meta=geo_meta,
             geo_meta_ids=geo_meta_ids,
+            geo_valid_from_dates=geo_valid_from_dates,
             # Query generation: substitute in literals and remove the
             # ST_AsBinary() calls added by GeoAlchemy2.
             geo_query=re.sub(
@@ -495,6 +508,29 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         distinct_meta = {meta.meta_id: meta for meta in raw_distinct_meta}
 
         return geo_meta_ids, distinct_meta
+
+    def _geo_valid_dates(self, db: Session, view: models.View) -> dict[str, datetime]:
+        """Gets the valid dates for each geometry.
+
+        Returns:
+            A dictionary mapping geometry IDs to valid dates.
+        """
+
+        query = (
+            select(models.Geography.path, models.GeoVersion.valid_from)
+            .join(
+                models.GeoSetMember,
+                models.Geography.geo_id == models.GeoSetMember.geo_id,
+            )
+            .join(
+                models.GeoVersion, models.Geography.geo_id == models.GeoVersion.geo_id
+            )
+            .where(models.GeoSetMember.set_version_id == view.set_version_id)
+        )
+
+        result = db.execute(query)
+
+        return {row.path: row.valid_from for row in result}
 
     def _plans(
         self, db: Session, view: models.View

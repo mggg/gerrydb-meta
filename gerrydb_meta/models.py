@@ -1,4 +1,5 @@
 """SQL table definitions for GerryDB."""
+
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -257,6 +258,12 @@ class LocalityRef(Base):
 
 
 class GeoLayer(Base):
+    """
+    Keeps track of the kind of layer for the geography in the given locality.
+    So if we were to have the locality as some state, then the layer might
+    be something like "tract". We can then map geometries to this layer.
+    """
+
     __tablename__ = "geo_layer"
     __table_args__ = (UniqueConstraint("path", "namespace_id"),)
 
@@ -542,7 +549,7 @@ class ColumnValue(Base):
     __tablename__ = "column_value"
     __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
 
-    val_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    val_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     col_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("column.col_id"),

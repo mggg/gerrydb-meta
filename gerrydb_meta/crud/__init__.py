@@ -1,4 +1,5 @@
 """Internal CRUD operations."""
+
 from gerrydb_meta.crud.api_key import api_key
 from gerrydb_meta.crud.base import (
     CRBase,

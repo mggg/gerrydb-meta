@@ -1,4 +1,5 @@
 """Tests for GerryDB REST API namespace endpoints."""
+
 from http import HTTPStatus
 
 import pytest
