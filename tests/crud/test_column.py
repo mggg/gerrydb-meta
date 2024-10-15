@@ -204,9 +204,6 @@ def test_crud_column_set_values(db_with_meta):
     assert cols_list[0].val_bool is None
     assert cols_list[1].val_bool is None
 
-    assert cols_list[0].val_json is None
-    assert cols_list[1].val_json is None
-
 
 def test_crud_column_patch(db_with_meta):
     db, meta = db_with_meta

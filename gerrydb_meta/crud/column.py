@@ -202,8 +202,12 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
-        with_values = (
-            db.query(models.ColumnValue.val_id)
+        with_tuples = (
+            db.query(
+                models.ColumnValue.col_id,
+                models.ColumnValue.geo_id,
+                models.ColumnValue.valid_from,
+            )
             .filter(
                 models.ColumnValue.col_id == col.col_id,
                 models.ColumnValue.geo_id.in_(geo_ids),
@@ -211,6 +215,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             )
             .all()
         )
+
+        with_values = ["_".join([str(val) for val in tup]) for tup in with_tuples]
 
         with db.begin(nested=True):
             db.execute(insert(models.ColumnValue), rows)
@@ -220,9 +226,14 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 db.execute(
                     update(models.ColumnValue)
                     .where(
-                        models.ColumnValue.val_id.in_(
-                            val.val_id for val in with_values
-                        ),
+                        "_".join(
+                            [
+                                str(models.ColumnValue.col_id),
+                                str(models.ColumnValue.geo_id),
+                                str(models.ColumnValue.valid_from),
+                            ]
+                        )
+                        in with_values
                     )
                     .values(valid_to=now)
                 )
