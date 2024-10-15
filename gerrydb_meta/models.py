@@ -549,16 +549,17 @@ class ColumnValue(Base):
     __tablename__ = "column_value"
     __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
 
-    val_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     col_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("column.col_id"),
         nullable=False,
+        primary_key=True,
     )
     geo_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("geography.geo_id"),
         nullable=False,
+        primary_key=True,
     )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
@@ -566,6 +567,7 @@ class ColumnValue(Base):
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        primary_key=True,
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -573,7 +575,6 @@ class ColumnValue(Base):
     val_int: Mapped[int] = mapped_column(BigInteger, nullable=True)
     val_str: Mapped[str] = mapped_column(Text, nullable=True)
     val_bool: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    val_json: Mapped[Any] = mapped_column(postgresql.JSONB, nullable=True)
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
 
