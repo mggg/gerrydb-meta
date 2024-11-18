@@ -60,6 +60,9 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 "Cannot create geographies with duplicate paths.",
                 paths=[path for path in paths if paths.count(path) > 1],
             )
+        
+        #THIS IS WHERE WE MAKE GEOIDS, ANNA! 
+        #TODO: also create a column_value empty partition for the geoid. (after the foreign key exists, obvs)
 
         with db.begin(nested=True):
             geos = list(
