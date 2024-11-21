@@ -19,7 +19,13 @@ from pathlib import Path
     "--reset", is_flag=True, help="Clear old data and re-initialize schema (dangerous)."
 )
 @click.option("--init-schema", is_flag=True, help="Initialize schema from models.")
-def main(name: str, email: str, reset: bool, init_schema: bool):
+@click.option(
+    "--use-test-key",
+    is_flag=True,
+    help="Sets the API key for the new user to a known value. "
+    "FOR TESTING USE ONLY!!!",
+)
+def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bool):
     """Initializes a GerryDB instance with a superuser. Creates a .gerrydb/config file
     if none exists using localhost:8000 and the generated API key. Would connect
     to local database, not production.

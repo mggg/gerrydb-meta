@@ -28,7 +28,7 @@ from gerrydb_meta.api.deps import (
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
 
-log = logging.getLogger("uvicorn")
+log = logging.getLogger()
 
 router = APIRouter()
 CHUNK_SIZE = 32 * 1024 * 1024  # for gzipping rendered views
