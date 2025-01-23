@@ -478,6 +478,40 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             ),
         )
 
+    def _agg_select(col)->str:
+        select_str=f"""
+        
+        MAX(case when col_id = {col.col_id} then {COLUMN_TYPE_TO_VALUE_COLUMN[col.type]}  else null) as {col.canonical_ref.path}
+        """
+        return select_str
+    
+    def _column_sub(cols, geoids, view_at,)-> str:
+        COLUMN_VALUE_TABLE_NAME = "column_value"
+
+        agg_selects=[]
+        for col in cols:
+            agg_selects.append(
+            f"""
+        
+            MAX(case when col_id = {col.col_id} then {COLUMN_TYPE_TO_VALUE_COLUMN[col.type]}  else null) as {col.canonical_ref.path}
+            """
+            )
+        
+
+
+        subquery= f"""
+        SELECT 
+        geoid,
+        {",\n".join([_agg_select(col) for col in cols])
+        }
+        FROM {COLUMN_VALUE_TABLE_NAME}
+        WHERE column_id in ({",".join([col.id for col in cols])})
+        AND valid_from <= {view_at}
+        AND (valid_to is NONE  OR valid_to >= {view_at})
+        """
+
+        return subquery
+    
     def _geo_meta(
         self, db: Session, view: models.View
     ) -> tuple[dict[str, int], dict[int, models.ObjectMeta]]:
