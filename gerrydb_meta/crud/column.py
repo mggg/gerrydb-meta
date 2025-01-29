@@ -204,7 +204,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
 
-        #make sure partitions exist for all geos
+        # make sure partitions exist for all geos
         for geo_id in set(geo_ids):
             db.execute(create_column_value_partition_text(geo_id=geo_id))
 

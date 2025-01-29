@@ -29,7 +29,7 @@ from gerrydb_meta.enums import (
 )
 from gerrydb_meta.utils import create_column_value_partition_text
 
-SCHEMA= "gerrydb"
+SCHEMA = "gerrydb"
 metadata_obj = MetaData(schema=SCHEMA)
 
 
@@ -373,10 +373,14 @@ class Geography(Base):
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
 
+
 @event.listens_for(Geography, "after_insert")
 def create_geo_partition_in_column_value(mapper, connection, geo):
-    geo_id=geo.geo_id
-    Session.object_session(geo).execute(create_column_value_partition_text(geo_id=geo_id))
+    geo_id = geo.geo_id
+    Session.object_session(geo).execute(
+        create_column_value_partition_text(geo_id=geo_id)
+    )
+
 
 class GeoImport(Base):
     __tablename__ = "geo_import"
@@ -553,8 +557,10 @@ class ColumnSetMember(Base):
 
 class ColumnValue(Base):
     __tablename__ = "column_value"
-    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),
-                      {"postgresql_partition_by": "LIST (geo_id)" })
+    __table_args__ = (
+        UniqueConstraint("col_id", "geo_id", "valid_from"),
+        {"postgresql_partition_by": "LIST (geo_id)"},
+    )
 
     col_id: Mapped[int] = mapped_column(
         Integer,

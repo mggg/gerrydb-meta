@@ -61,7 +61,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 "Cannot create geographies with duplicate paths.",
                 paths=[path for path in paths if paths.count(path) > 1],
             )
-        
+
         with db.begin(nested=True):
             geos = list(
                 db.scalars(
@@ -112,11 +112,9 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 )
                 raise BulkCreateError(
                     "Failed to insert geometries. Geometries must be encoded in WKB format."
-                ) from ex            
+                ) from ex
 
             etag = self._update_etag(db, namespace)
-        
-        
 
         db.flush()
         return list(zip(geos, geo_versions)), etag
