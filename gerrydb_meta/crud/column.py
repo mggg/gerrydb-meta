@@ -5,13 +5,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Collection, Tuple
 
-from sqlalchemy import exc, insert, update
+from sqlalchemy import exc, insert, update, text
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.enums import ColumnType
 from gerrydb_meta.exceptions import ColumnValueTypeError, CreateValueError
+from gerrydb_meta.utils import create_column_value_partition_text
 
 log = logging.getLogger()
 
@@ -168,6 +169,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         Raises:
             ColumnValueTypeError: If column types do not match expected types.
         """
+        table_name=models.ColumnValue.__table__.name
         val_column = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
         now = datetime.now(timezone.utc)
 
@@ -202,6 +204,11 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
+
+        #make sure partitions exist for all geos
+        for geo_id in set(geo_ids):
+            db.execute(create_column_value_partition_text(geo_id=geo_id))
+
         with_tuples = (
             db.query(
                 models.ColumnValue.col_id,

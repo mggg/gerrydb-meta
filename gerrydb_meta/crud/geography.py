@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from typing import Collection
 
 from geoalchemy2.elements import WKBElement
-from sqlalchemy import and_, insert, or_, update
+from sqlalchemy import and_, insert, or_, update, text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import BulkCreateError, BulkPatchError
+from gerrydb_meta.utils import create_column_value_partition_text
 
 log = logging.getLogger()
 
@@ -61,9 +62,6 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 paths=[path for path in paths if paths.count(path) > 1],
             )
         
-        #THIS IS WHERE WE MAKE GEOIDS, ANNA! 
-        #TODO: also create a column_value empty partition for the geoid. (after the foreign key exists, obvs)
-
         with db.begin(nested=True):
             geos = list(
                 db.scalars(
@@ -80,6 +78,8 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     ],
                 )
             )
+            for geo in geos:
+                db.execute(create_column_value_partition_text(geo_id=geo.geo_id))
 
             try:
                 geo_versions = list(
@@ -112,9 +112,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 )
                 raise BulkCreateError(
                     "Failed to insert geometries. Geometries must be encoded in WKB format."
-                ) from ex
+                ) from ex            
 
             etag = self._update_etag(db, namespace)
+        
+        
 
         db.flush()
         return list(zip(geos, geo_versions)), etag

@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography as SqlGeography
-from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime
+from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, text, event
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
     ForeignKey,
@@ -17,8 +17,9 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 from sqlalchemy.sql import func
+from sqlalchemy.types import CHAR
 
 from gerrydb_meta.enums import (
     ColumnKind,
@@ -27,8 +28,10 @@ from gerrydb_meta.enums import (
     ScopeType,
     ViewRenderStatus,
 )
+from gerrydb_meta.utils import create_column_value_partition_text
 
-metadata_obj = MetaData(schema="gerrydb")
+SCHEMA= "gerrydb"
+metadata_obj = MetaData(schema=SCHEMA)
 
 
 class Base(DeclarativeBase):
@@ -371,6 +374,10 @@ class Geography(Base):
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
 
+@event.listens_for(Geography, "after_insert")
+def create_geo_partition_in_column_value(mapper, connection, geo):
+    geo_id=geo.geo_id
+    Session.object_session(geo).execute(create_column_value_partition_text(geo_id=geo_id))
 
 class GeoImport(Base):
     __tablename__ = "geo_import"
@@ -547,7 +554,8 @@ class ColumnSetMember(Base):
 
 class ColumnValue(Base):
     __tablename__ = "column_value"
-    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
+    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),
+                      {"postgresql_partition_by": "LIST (geo_id)" })
 
     col_id: Mapped[int] = mapped_column(
         Integer,
