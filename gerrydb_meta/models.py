@@ -19,7 +19,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 from sqlalchemy.sql import func
-from sqlalchemy.types import CHAR
 
 from gerrydb_meta.enums import (
     ColumnKind,

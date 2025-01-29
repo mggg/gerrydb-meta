@@ -169,7 +169,6 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         Raises:
             ColumnValueTypeError: If column types do not match expected types.
         """
-        table_name=models.ColumnValue.__table__.name
         val_column = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
         now = datetime.now(timezone.utc)
 
