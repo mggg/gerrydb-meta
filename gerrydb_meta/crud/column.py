@@ -81,6 +81,9 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             canonical_ref.col_id = col.col_id
             db.flush()
 
+            #create partition
+            db.execute(create_column_value_partition_text(column_id=col.col_id))
+
             # Create additional aliases (non-canonical references) to the column.
             if obj_in.aliases:
                 self._add_aliases(
@@ -204,9 +207,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
 
-        # make sure partitions exist for all geos
-        for geo_id in set(geo_ids):
-            db.execute(create_column_value_partition_text(geo_id=geo_id))
+        # make sure partition exists for column
+        db.execute(create_column_value_partition_text(column_id=col.col_id))
 
         with_tuples = (
             db.query(

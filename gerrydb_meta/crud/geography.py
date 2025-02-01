@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import BulkCreateError, BulkPatchError
-from gerrydb_meta.utils import create_column_value_partition_text
 
 log = logging.getLogger()
 
@@ -78,8 +77,6 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                     ],
                 )
             )
-            for geo in geos:
-                db.execute(create_column_value_partition_text(geo_id=geo.geo_id))
 
             try:
                 geo_versions = list(

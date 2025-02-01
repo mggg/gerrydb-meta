@@ -559,7 +559,7 @@ class ColumnValue(Base):
     __tablename__ = "column_value"
     __table_args__ = (
         UniqueConstraint("col_id", "geo_id", "valid_from"),
-        {"postgresql_partition_by": "LIST (geo_id)"},
+        {"postgresql_partition_by": "LIST (col_id)"},
     )
 
     col_id: Mapped[int] = mapped_column(
