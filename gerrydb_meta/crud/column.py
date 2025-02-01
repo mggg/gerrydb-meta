@@ -81,7 +81,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             canonical_ref.col_id = col.col_id
             db.flush()
 
-            #create partition
+            # create partition
             db.execute(create_column_value_partition_text(column_id=col.col_id))
 
             # Create additional aliases (non-canonical references) to the column.
