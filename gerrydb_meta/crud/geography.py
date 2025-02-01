@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Collection
 
 from geoalchemy2.elements import WKBElement
-from sqlalchemy import and_, insert, or_, update, text
+from sqlalchemy import and_, insert, or_, update
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Session
 
