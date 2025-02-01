@@ -374,14 +374,6 @@ class Geography(Base):
         return f"/{self.namespace.path}/{self.path}"
 
 
-@event.listens_for(Geography, "after_insert")
-def create_geo_partition_in_column_value(mapper, connection, geo):
-    geo_id = geo.geo_id
-    Session.object_session(geo).execute(
-        create_column_value_partition_text(geo_id=geo_id)
-    )
-
-
 class GeoImport(Base):
     __tablename__ = "geo_import"
 
