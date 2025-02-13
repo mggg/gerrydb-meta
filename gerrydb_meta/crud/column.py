@@ -5,13 +5,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Collection, Tuple
 
-from sqlalchemy import exc, insert, update
+from sqlalchemy import exc, insert, update, text
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.enums import ColumnType
 from gerrydb_meta.exceptions import ColumnValueTypeError, CreateValueError
+from gerrydb_meta.utils import create_column_value_partition_text
 
 log = logging.getLogger()
 
@@ -79,6 +80,9 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
             canonical_ref.col_id = col.col_id
             db.flush()
+
+            # create partition
+            db.execute(create_column_value_partition_text(column_id=col.col_id))
 
             # Create additional aliases (non-canonical references) to the column.
             if obj_in.aliases:
@@ -202,6 +206,10 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
+
+        # make sure partition exists for column
+        db.execute(create_column_value_partition_text(column_id=col.col_id))
+
         with_tuples = (
             db.query(
                 models.ColumnValue.col_id,
