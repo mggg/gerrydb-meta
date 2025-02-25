@@ -11,7 +11,7 @@ from typing import Tuple
 
 from geoalchemy2 import Geometry
 from geoalchemy2 import func as geo_func
-from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union
+from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union 
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import text, column
@@ -372,42 +372,25 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 models.GeoSetMember.geo_id,
             )
             .filter(models.GeoSetMember.set_version_id == view.set_version_id)
-            .subquery()
+            .subquery("members_sub")
         )
-        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
-        
-
-        COLUMN_VALUE_TABLE_NAME = "column_value"
+        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery("geo_sub")
 
         agg_selects=[]
         column_labels=[]
         col_ids=[]
         for _, col in columns.items():
-            agg_selects.append(
-            f"""
-        
-            MAX(case when col_id = {col.col_id} then {COLUMN_TYPE_TO_VALUE_COLUMN[col.type]}  else null end) as {col.canonical_ref.path}
-            """
-            )
+            agg_selects.append(func.max(column(COLUMN_TYPE_TO_VALUE_COLUMN[col.type])).filter(models.ColumnValue.col_id==col.col_id).label(col.canonical_ref.path))
             column_labels.append(column(col.canonical_ref.path))
-            col_ids.append(str(col.col_id))
-        
-        agg_select=",\n".join(agg_selects)
-        col_where=f"({",".join(col_ids)})"
+            col_ids.append(col.col_id)
 
-        column_sub=text(f"""
-        SELECT 
-        geo_id,
-        {agg_select}
-        FROM gerrydb.{COLUMN_VALUE_TABLE_NAME}
-        WHERE col_id in {col_where}
-        AND valid_from <= '{view.at}'
-        AND (valid_to is NULL  OR valid_to >= '{view.at}')
-        GROUP BY geo_id
-        """
-        ).columns(models.GeoVersion.geo_id,
-                  *column_labels
-                    ).subquery()
+        column_sub= select(models.ColumnValue.geo_id,*agg_selects).where(
+                        models.ColumnValue.col_id.in_(col_ids),
+                        models.ColumnValue.valid_from <= view.at,
+                        or_(
+                                models.ColumnValue.valid_to.is_(None),
+                                models.ColumnValue.valid_to >= view.at,
+                            )).group_by(models.ColumnValue.geo_id).subquery("column_value")
 
         timestamp_clauses = [
             models.GeoVersion.valid_from <= view.at,
@@ -417,6 +400,18 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             ),
         ]
 
+        ## included for reference: a version without subqueries.
+        # geo_query=(
+        #         select(models.Geography.path,
+        #                models.GeoVersion.geography,
+        #                *column_labels,
+        #         ).join(models.GeoSetMember, models.GeoSetMember.geo_id==models.Geography.geo_id)
+        #         .join(models.GeoVersion, models.GeoSetMember.geo_id==models.GeoVersion.geo_id)
+        #         .join(column_sub, column_sub.c.geo_id==models.Geography.geo_id)
+        #         .where(models.GeoSetMember.set_version_id == view.set_version_id, *timestamp_clauses)
+        #     )
+        
+        
         geo_query = (
             select(
                 geo_sub.c.path,
@@ -434,7 +429,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             column_sub, column_sub.c.geo_id == models.GeoVersion.geo_id
         )
         geo_query = geo_query.where(*timestamp_clauses)
-        print(str(geo_query.compile(dialect=postgresql.dialect(),compile_kwargs={"literal_binds": True})))
 
         internal_point_query = (
             select(
