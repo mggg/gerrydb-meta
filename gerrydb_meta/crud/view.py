@@ -14,6 +14,7 @@ from geoalchemy2 import func as geo_func
 from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import text, column
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
@@ -358,7 +359,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .order_by(models.ViewRender.created_at.desc())
             .first()
         )
-
+    
     def render(self, db: Session, *, view: models.View) -> ViewRenderContext:
         """Generates queries to retrieve view data.
 
@@ -374,29 +375,39 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .subquery()
         )
         geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
+        
 
-        # Generate subqueries for joining tabular data.
-        column_subs = []
-        column_labels = []
-        for alias, col in columns.items():
-            value_col = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
-            column_sub = (
-                select(
-                    models.ColumnValue.geo_id,
-                    getattr(models.ColumnValue, value_col).label(alias),
-                )
-                .filter(
-                    models.ColumnValue.col_id == col.col_id,
-                    models.ColumnValue.valid_from <= view.at,
-                    or_(
-                        models.ColumnValue.valid_to.is_(None),
-                        models.ColumnValue.valid_to >= view.at,
-                    ),
-                )
-                .subquery()
+        COLUMN_VALUE_TABLE_NAME = "column_value"
+
+        agg_selects=[]
+        column_labels=[]
+        col_ids=[]
+        for _, col in columns.items():
+            agg_selects.append(
+            f"""
+        
+            MAX(case when col_id = {col.col_id} then {COLUMN_TYPE_TO_VALUE_COLUMN[col.type]}  else null end) as {col.canonical_ref.path}
+            """
             )
-            column_subs.append(column_sub)
-            column_labels.append(column_sub.c[col.canonical_ref.path])
+            column_labels.append(column(col.canonical_ref.path))
+            col_ids.append(str(col.col_id))
+        
+        agg_select=",\n".join(agg_selects)
+        col_where=f"({",".join(col_ids)})"
+
+        column_sub=text(f"""
+        SELECT 
+        geo_id,
+        {agg_select}
+        FROM gerrydb.{COLUMN_VALUE_TABLE_NAME}
+        WHERE col_id in {col_where}
+        AND valid_from <= '{view.at}'
+        AND (valid_to is NULL  OR valid_to >= '{view.at}')
+        GROUP BY geo_id
+        """
+        ).columns(models.GeoVersion.geo_id,
+                  *column_labels
+                    ).subquery()
 
         timestamp_clauses = [
             models.GeoVersion.valid_from <= view.at,
@@ -418,13 +429,12 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             )
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
         )
-
-        # Join tabular data.
-        for column_sub in column_subs:
-            geo_query = geo_query.join(
-                column_sub, column_sub.c.geo_id == models.GeoVersion.geo_id
-            )
+        
+        geo_query = geo_query.join(
+            column_sub, column_sub.c.geo_id == models.GeoVersion.geo_id
+        )
         geo_query = geo_query.where(*timestamp_clauses)
+        print(str(geo_query.compile(dialect=postgresql.dialect(),compile_kwargs={"literal_binds": True})))
 
         internal_point_query = (
             select(
@@ -478,39 +488,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             ),
         )
 
-    def _agg_select(col)->str:
-        select_str=f"""
-        
-        MAX(case when col_id = {col.col_id} then {COLUMN_TYPE_TO_VALUE_COLUMN[col.type]}  else null) as {col.canonical_ref.path}
-        """
-        return select_str
-    
-    def _column_sub(cols, geoids, view_at,)-> str:
-        COLUMN_VALUE_TABLE_NAME = "column_value"
-
-        agg_selects=[]
-        for col in cols:
-            agg_selects.append(
-            f"""
-        
-            MAX(case when col_id = {col.col_id} then {COLUMN_TYPE_TO_VALUE_COLUMN[col.type]}  else null) as {col.canonical_ref.path}
-            """
-            )
-        
-
-
-        subquery= f"""
-        SELECT 
-        geoid,
-        {",\n".join([_agg_select(col) for col in cols])
-        }
-        FROM {COLUMN_VALUE_TABLE_NAME}
-        WHERE column_id in ({",".join([col.id for col in cols])})
-        AND valid_from <= {view_at}
-        AND (valid_to is NONE  OR valid_to >= {view_at})
-        """
-
-        return subquery
     
     def _geo_meta(
         self, db: Session, view: models.View
