@@ -49,7 +49,12 @@ def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bo
 
     admin = GerryAdmin(session=db)
     user = admin.user_create(name=name, email=email, super_user=True)
-    api_key = admin.key_create(user=user)
+
+    if use_test_key:
+        api_key = admin.create_test_key(user=user)
+    else:
+        api_key = admin.key_create(user=user)
+
     db.commit()
     db.close()
 
