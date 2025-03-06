@@ -14,7 +14,7 @@ from gerrydb_meta.scopes import ScopeManager
 import logging
 
 
-log = logging.getLogger("uvicorn")
+log = logging.getLogger()
 
 
 MAX_VIEW_TEMPLATE_COLUMNS = 200

@@ -71,8 +71,23 @@ class GerryAdmin:
     session: SessionType
 
     def user_create(self, email: str, name: str, super_user: bool = False) -> User:
-        """Returns a new user.
-        If `super_user`, grants user global privileges."""
+        """
+        Returns a new user. If `super_user`, grants user global privileges.
+
+        By default, a new user is only allowed to read from public namespaces.
+        In order to write or do anythin else, an admin must grant the user
+        permissions on the back end.
+
+
+        Args:
+            email: The user's email address.
+            name: The user's name.
+            super_user: Whether to grant the user global privileges.
+
+        Returns:
+            The new user.
+        """
+
         user = User(email=email, name=name)
         log.info("Created new user: %s", user)
         self.session.add(user)
@@ -125,6 +140,27 @@ class GerryAdmin:
         """
         raw_key, key_hash = _generate_api_key()
         log.info("Generated new API key for %s.", user)
+        self.session.add(ApiKey(user=user, key_hash=key_hash))
+        return raw_key
+
+    def create_test_key(self, user: User) -> str:
+        """
+        Creates a known API key for testing purposes.
+
+
+        """
+        user_confirmation = input(
+            f"You are about to create a TESTING API key for user {user}. "
+            f"This API key is NOT secure and should be considered public knowledge. "
+            "Are you sure you want to continue? Y/N: "
+        )
+
+        if user_confirmation.lower() != "y":
+            raise ValueError("User aborted API key creation.")
+
+        raw_key = "7w7uv9mi575n2dhlmg3wqba2imv1aqdys387tpbtpermujy1tuyqbxetygx8u3fr"
+        key_hash = sha512(raw_key.encode("utf-8")).digest()
+        log.info("Generated new ***TESTING*** API key for %s.", user)
         self.session.add(ApiKey(user=user, key_hash=key_hash))
         return raw_key
 
