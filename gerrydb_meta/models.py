@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography as SqlGeography
-from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime
+from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, text, event
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
     ForeignKey,
@@ -17,7 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 from sqlalchemy.sql import func
 
 from gerrydb_meta.enums import (
@@ -27,8 +27,10 @@ from gerrydb_meta.enums import (
     ScopeType,
     ViewRenderStatus,
 )
+from gerrydb_meta.utils import create_column_value_partition_text
 
-metadata_obj = MetaData(schema="gerrydb")
+SCHEMA = "gerrydb"
+metadata_obj = MetaData(schema=SCHEMA)
 
 
 class Base(DeclarativeBase):
@@ -547,18 +549,22 @@ class ColumnSetMember(Base):
 
 class ColumnValue(Base):
     __tablename__ = "column_value"
-    __table_args__ = (UniqueConstraint("col_id", "geo_id", "valid_from"),)
+    __table_args__ = (
+        UniqueConstraint("col_id", "geo_id", "valid_from"),
+        {"postgresql_partition_by": "LIST (col_id)"},
+    )
 
-    val_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     col_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("column.col_id"),
         nullable=False,
+        primary_key=True,
     )
     geo_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("geography.geo_id"),
         nullable=False,
+        primary_key=True,
     )
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
@@ -566,6 +572,7 @@ class ColumnValue(Base):
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        primary_key=True,
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -573,7 +580,6 @@ class ColumnValue(Base):
     val_int: Mapped[int] = mapped_column(BigInteger, nullable=True)
     val_str: Mapped[str] = mapped_column(Text, nullable=True)
     val_bool: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    val_json: Mapped[Any] = mapped_column(postgresql.JSONB, nullable=True)
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta")
 
