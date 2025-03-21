@@ -20,7 +20,7 @@ from gerrydb_meta.enums import NamespaceGroup, ScopeType
 from gerrydb_meta.models import ApiKey, ObjectMeta, User, UserScope
 
 log = logging.getLogger()
-Session = sessionmaker(create_engine(os.getenv("GERRYDB_DATABASE_URI")))
+Session = sessionmaker(create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=False))
 
 API_KEY_CHARS = string.ascii_lowercase + string.digits
 

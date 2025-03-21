@@ -22,7 +22,7 @@ API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 def get_db() -> Generator:
     try:
-        engine = create_engine(db_url)
+        engine = create_engine(db_url, echo=False)
         Session = sessionmaker(engine)
         db = Session()
         yield db

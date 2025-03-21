@@ -33,7 +33,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bo
     Expects the `GERRYDB_DATABASE_URI` environment variable to be set to
     a PostgreSQL connection string.
     """
-    engine = create_engine(os.getenv("GERRYDB_DATABASE_URI"))
+    engine = create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=False)
     db = sessionmaker(engine)()
 
     if reset:
