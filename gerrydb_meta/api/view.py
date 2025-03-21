@@ -10,7 +10,7 @@ from typing import Generator
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from google.cloud import storage
 from google.oauth2.service_account import Credentials
 from sqlalchemy.orm import Session
@@ -31,7 +31,6 @@ from gerrydb_meta.scopes import ScopeManager
 log = logging.getLogger()
 
 router = APIRouter()
-CHUNK_SIZE = 32 * 1024 * 1024  # for gzipping rendered views
 GPKG_MEDIA_TYPE = "application/geopackage+sqlite3"
 
 
@@ -306,18 +305,11 @@ def render_view(
             )
             raise ex
 
-    return StreamingResponse(
-        _async_read_and_delete(gpkg_path),
+    return FileResponse(
+        gpkg_path,
         media_type=GPKG_MEDIA_TYPE,
         headers={
             "ETag": etag.hex,
             "X-GerryDB-View-Render-ID": render_uuid.hex,
         },
     )
-
-
-async def _async_read_and_delete(path: Path) -> Generator[bytes, None, None]:
-    """Asynchronously reads a temporary file, then deletes it."""
-    with open(path, "rb") as fp:
-        yield fp.read()
-    path.unlink()

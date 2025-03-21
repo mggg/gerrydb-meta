@@ -347,6 +347,7 @@ class GeoVersion(Base):
         SqlGeography(geometry_type="POINT", srid=4269), nullable=True
     )
 
+    # NOTE: Maybe get rid of this?
     parent: Mapped["Geography"] = relationship(
         "Geography", back_populates="versions", lazy="joined"
     )

@@ -22,7 +22,6 @@ COLUMN_TYPE_TO_VALUE_COLUMN = {
     ColumnType.INT: "val_int",
     ColumnType.STR: "val_str",
     ColumnType.BOOL: "val_bool",
-    ColumnType.JSON: "val_json",
 }
 
 
