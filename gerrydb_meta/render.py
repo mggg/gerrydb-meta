@@ -7,6 +7,7 @@ import tempfile
 import uuid
 from pathlib import Path
 import os, sys, shlex
+import time
 
 import orjson as json
 
@@ -24,8 +25,6 @@ from uvicorn.config import logger as log
 # security concerns--ideally, ogr2ogr should be granted only read access to the database),
 # but empirical evidence suggests that using `ogr2ogr` is *much* faster and less
 # memory-intensive than loading geographies with SQLAlchemy/GeoAlchemy.
-
-log = logging.getLogger()
 
 
 class RenderError(Exception):
@@ -316,7 +315,7 @@ def __get_arg_max() -> int:
                 if arg_max > 0:
                     return arg_max
             except (ValueError, OSError) as e:
-                print(f"Warning: Unable to retrieve ARG_MAX using os.sysconf: {e}")
+                log.error(f"Warning: Unable to retrieve ARG_MAX using os.sysconf: {e}")
                 raise e
 
     if sys.platform.startswith("win"):
@@ -355,19 +354,13 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
     geo_layer_name = context.view.path
     internal_point_layer_name = f"{geo_layer_name}__internal_points"
 
-    if context.view.proj is not None:
-        proj_args = ["-t_srs", context.view.proj]
-    if context.view.loc.default_proj is not None:
-        proj_args = ["-t_srs", context.view.loc.default_proj]
-    else:
-        proj_args = []  # leave in original projection (conventionally EPSG:4269)
-
+    start = time.perf_counter()
+    log.debug("Before ogr2ogr")
     base_args = [
         "-f",
         "GPKG",
         str(gpkg_path),
         db_config,
-        *proj_args,
     ]
 
     subprocess_command_list = [
@@ -379,6 +372,7 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         geo_layer_name,
     ]
 
+    log.debug("View to gpkg subprocess command list %s", str(subprocess_command_list))
     subprocess_command = shlex.join(subprocess_command_list)
 
     __validate_query(subprocess_command)
@@ -400,6 +394,8 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
         raise RenderError("Failed to render view: geography query failed.")
 
+    log.debug("ogr2ogr took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
     conn = sqlite3.connect(gpkg_path)
 
     conn.execute(
@@ -418,6 +414,8 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
             "Failed to render view: geographic layer not found in GeoPackage.",
         ) from ex
 
+    log.debug("Counting geography rows took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
     if geo_row_count != context.view.num_geos:
         # Validate inner joins.
         raise RenderError(
@@ -437,10 +435,18 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         "POINT",
     ]
 
+    log.debug(
+        "Internal point query to gpkg subprocess command list %s",
+        str(subprocess_command_list),
+    )
     subprocess_command = shlex.join(subprocess_command_list)
 
     __validate_query(subprocess_command)
 
+    log.debug(
+        "Validating internal point query took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     try:
         subprocess.run(
             subprocess_command_list,
@@ -459,6 +465,10 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
         raise RenderError("Failed to render view: internal point query failed.")
 
+    log.debug(
+        "Running internal point query took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     try:
         internal_point_row_count = conn.execute(
             f"SELECT COUNT(*) FROM {internal_point_layer_name}"
@@ -474,6 +484,10 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
             f"in layer, got {geo_row_count} geographies."
         )
 
+    log.debug(
+        "Counting internal point rows took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     # Create indices and references on paths.
     conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
     conn.execute(
@@ -502,6 +516,10 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         ),
     )
 
+    log.debug(
+        "Updating table descriptions took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     # Insert geographic metadata objects.
     db_meta_id_to_gpkg_meta_id = {}
     for db_id, meta in context.geo_meta.items():
@@ -517,6 +535,10 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         context.geo_meta_ids.keys() == context.geo_valid_from_dates.keys()
     ), "Geographic metadata IDs and valid dates must be aligned."
 
+    log.debug(
+        "Updating geographic metadata took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     for path in context.geo_meta_ids.keys():
         geo_attrs_dict[path] = (
             context.geo_meta_ids[path],
@@ -531,6 +553,8 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         ),
     )
 
+    log.debug("Inserting geo attrs took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
     if context.graph_edges is not None:
         _init_gpkg_graph_extension(conn, geo_layer_name)
         conn.executemany(
@@ -545,6 +569,8 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         #    ((node.path, node.area) for node in context.graph_areas),
         # )
 
+    log.debug("Inserting graph edges took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
     if context.plan_assignments is not None:
         _init_gpkg_plans_extension(conn, geo_layer_name, context.plan_labels)
         cols = ["path", *context.plan_labels]
@@ -558,6 +584,7 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
             ([getattr(row, col) for col in cols] for row in context.plan_assignments),
         )
 
+    log.debug("Inserting plan assignments took %s seconds", time.perf_counter() - start)
     conn.commit()
     conn.close()
 
@@ -571,9 +598,13 @@ def graph_to_gpkg(
     temp_dir = Path(tempfile.mkdtemp())
     gpkg_path = Path(temp_dir) / f"{render_uuid.hex}.gpkg"
 
+    log.debug("GPGK PATH %s", gpkg_path)
+
     geo_layer_name = f"{context.graph.path}__geometry"
     internal_point_layer_name = f"{context.graph.path}__internal_points"
 
+    start = time.perf_counter()
+    log.debug("Before ogr2ogr")
     base_args = [
         "-f",
         "GPKG",
@@ -590,6 +621,7 @@ def graph_to_gpkg(
         geo_layer_name,
     ]
 
+    log.debug("Graph to gpkg subprocess command list %s", str(subprocess_command_list))
     subprocess_command = shlex.join(subprocess_command_list)
 
     __validate_query(subprocess_command)
@@ -610,6 +642,8 @@ def graph_to_gpkg(
         # log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
         raise RenderError("Failed to render view: geography query failed.")
 
+    log.debug("ogr2ogr took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
     conn = sqlite3.connect(gpkg_path)
 
     conn.execute(
@@ -631,10 +665,18 @@ def graph_to_gpkg(
         "POINT",
     ]
 
+    log.debug(
+        "Internal point query to gpkg subprocess command list %s",
+        str(subprocess_command_list),
+    )
     subprocess_command = shlex.join(subprocess_command_list)
 
     __validate_query(subprocess_command)
 
+    log.debug(
+        "Validating internal point query took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     try:
         subprocess.run(
             subprocess_command_list,
@@ -653,6 +695,10 @@ def graph_to_gpkg(
         log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
         raise RenderError("Failed to render graph: internal point query failed.")
 
+    log.debug(
+        "Running internal point query took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
 
     try:
         geo_row_count = conn.execute(
@@ -677,6 +723,9 @@ def graph_to_gpkg(
             f"in layer, but {internal_point_row_count} internal points."
         )
 
+    log.debug("Checking geography counts took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
+
     # Create indices and references on paths.
     conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
     conn.execute(
@@ -695,6 +744,9 @@ def graph_to_gpkg(
         ),
     )
 
+    log.debug(
+        "Updating table descriptions took %s seconds", time.perf_counter() - start
+    )
     start = time.perf_counter()
     # Insert geographic metadata objects.
     db_meta_id_to_gpkg_meta_id = {}
@@ -711,6 +763,10 @@ def graph_to_gpkg(
         context.geo_meta_ids.keys() == context.geo_valid_from_dates.keys()
     ), "Geographic metadata IDs and valid dates must be aligned."
 
+    log.debug(
+        "Updating geographic metadata took %s seconds", time.perf_counter() - start
+    )
+    start = time.perf_counter()
     for path in context.geo_meta_ids.keys():
         geo_attrs_dict[path] = (
             context.geo_meta_ids[path],
@@ -725,6 +781,8 @@ def graph_to_gpkg(
         ),
     )
 
+    log.debug("Inserting geo attrs took %s seconds", time.perf_counter() - start)
+    start = time.perf_counter()
     if context.graph_edges is not None:
         _init_gpkg_graph_extension(conn, geo_layer_name)
         conn.executemany(
@@ -739,6 +797,7 @@ def graph_to_gpkg(
         #    ((node.path, node.area) for node in context.graph_areas),
         # )
 
+    log.debug("Inserting graph edges took %s seconds", time.perf_counter() - start)
     conn.commit()
     conn.close()
 

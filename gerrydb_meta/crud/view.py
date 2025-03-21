@@ -1,6 +1,5 @@
 """CRUD operations and transformations for views."""
 
-import logging
 import re
 import uuid
 from collections import defaultdict
@@ -11,7 +10,8 @@ from typing import Tuple
 
 from geoalchemy2 import Geometry
 from geoalchemy2 import func as geo_func
-from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union
+from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union, bindparam
+from sqlalchemy import Table, Column, Integer, literal_column
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import text, column
@@ -21,10 +21,10 @@ from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.crud.column import COLUMN_TYPE_TO_VALUE_COLUMN
 from gerrydb_meta.enums import ViewRenderStatus
 from gerrydb_meta.exceptions import CreateValueError
+from uvicorn.config import logger as log
 
 _ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
 
-log = logging.getLogger()
 
 PLAN_BATCH_SIZE = 10000
 GRAPH_BATCH_SIZE = 100000
@@ -132,6 +132,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         graph: models.Graph | None = None,
     ) -> Tuple[models.View, uuid.UUID]:
         """Creates a new view."""
+        log.debug("TOP OF CR CREATE")
         valid_at = (
             datetime.now(timezone.utc) if obj_in.valid_at is None else obj_in.valid_at
         )
@@ -161,6 +162,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 f"in the future relative to view timestamp ({valid_at})."
             )
 
+        log.debug("TO THE VIEW TEMPLATE VERSION")
+
         template_version_id = (
             db.query(models.ViewTemplateVersion.template_version_id)
             .filter(
@@ -178,35 +181,46 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 "No template version found satisfying time constraints."
             )
 
+        log.debug("TO THE COLUMNS")
+
         columns = _view_columns(db, template_version_id)
+        log.debug("FOUND %d columns", len(columns))
+        log.debug(str(columns))
+        log.debug("TO THE GEO SET MEMBERS")
         geo_set_members = (
             db.query(models.GeoSetMember.geo_id)
             .filter(models.GeoSetMember.set_version_id == set_version_id)
-            .all()
+            .subquery()
         )
-        num_geos = len(geo_set_members)
+        log.debug("TO THE VALUE COUNTS")
         value_counts = (
             db.query(
                 models.ColumnValue.col_id,
                 label("num_geos", func.count(models.ColumnValue.geo_id)),
             )
+            .join(
+                geo_set_members, geo_set_members.c.geo_id == models.ColumnValue.geo_id
+            )
             .filter(
-                models.ColumnValue.geo_id.in_(
-                    member.geo_id for member in geo_set_members
-                ),
-                models.ColumnValue.col_id.in_(col.col_id for col in columns.values()),
+                models.ColumnValue.col_id.in_(bindparam("col_ids", expanding=True)),
                 models.ColumnValue.valid_from <= valid_at,
                 (
                     (models.ColumnValue.valid_to.is_(None))
                     | (models.ColumnValue.valid_to >= valid_at)
                 ),
             )
+            .params(col_ids=[col.col_id for col in columns.values()])
             .group_by(models.ColumnValue.col_id)
             .all()
         )
-
         value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
         bad_cols = []
+
+        num_geos = len(
+            db.query(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id == set_version_id)
+            .all()
+        )
 
         for column in columns.values():
             value_count = value_counts_by_col.get(column.col_id, 0)
@@ -365,6 +379,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         Used for bulk exports via `ogr2ogr`.
         """
+        log.debug("TOP OF CR RENDER")
         columns = _view_columns(db, view.template_version_id)
         members_sub = (
             select(
@@ -423,10 +438,26 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         #         .where(models.GeoSetMember.set_version_id == view.set_version_id, *timestamp_clauses)
         #     )
 
+        # Add some casting the the geometry view and do the projection if needed
+        if view.proj is not None:
+            geo_col = geo_func.ST_Transform(
+                models.GeoVersion.geography.op("::")(literal_column("geometry")),
+                int(view.proj.split(":")[1]),
+            ).label("geography")
+        elif view.loc.default_proj is not None:
+            geo_col = geo_func.ST_Transform(
+                models.GeoVersion.geography.op("::")(literal_column("geometry")),
+                int(view.loc.default_proj.split(":")[1]),
+            ).label("geography")
+        else:
+            geo_col = models.GeoVersion.geography.op("::")(
+                literal_column("geometry")
+            ).label("geography")
+
         geo_query = (
             select(
                 geo_sub.c.path,
-                models.GeoVersion.geography,
+                geo_col,
                 *column_labels,
             )
             .join(
@@ -458,7 +489,38 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         geo_meta_ids, geo_meta = self._geo_meta(db, view)
         geo_valid_from_dates = self._geo_valid_dates(db, view)
 
-        return ViewRenderContext(
+        cte = geo_query.cte(name="geo_full_table")
+        final_query = select(literal_column("*")).select_from(cte)
+
+        # Query generation: substitute in literals and remove the
+        # ST_AsBinary() calls added by GeoAlchemy2.
+        full_geo_query = re.sub(
+            _ST_ASBINARY_REGEX,
+            r"\1",
+            str(
+                final_query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            ),
+        )
+
+        log.debug("The new geo query is %s", full_geo_query)
+
+        full_internal_point_query = re.sub(
+            _ST_ASBINARY_REGEX,
+            r"\1",
+            str(
+                internal_point_query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            ),
+        )
+
+        log.debug("The new internal point query is %s", full_internal_point_query)
+
+        ret = ViewRenderContext(
             view=view,
             columns=columns,
             plans=plans,
@@ -469,29 +531,10 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             geo_meta=geo_meta,
             geo_meta_ids=geo_meta_ids,
             geo_valid_from_dates=geo_valid_from_dates,
-            # Query generation: substitute in literals and remove the
-            # ST_AsBinary() calls added by GeoAlchemy2.
-            geo_query=re.sub(
-                _ST_ASBINARY_REGEX,
-                r"\1",
-                str(
-                    geo_query.compile(
-                        dialect=postgresql.dialect(),
-                        compile_kwargs={"literal_binds": True},
-                    )
-                ),
-            ),
-            internal_point_query=re.sub(
-                _ST_ASBINARY_REGEX,
-                r"\1",
-                str(
-                    internal_point_query.compile(
-                        dialect=postgresql.dialect(),
-                        compile_kwargs={"literal_binds": True},
-                    )
-                ),
-            ),
+            geo_query=full_geo_query,
+            internal_point_query=full_internal_point_query,
         )
+        return ret
 
     def _geo_meta(
         self, db: Session, view: models.View

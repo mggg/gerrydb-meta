@@ -27,6 +27,7 @@ from gerrydb_meta.api.deps import (
 )
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
+import time
 
 log = logging.getLogger()
 
@@ -139,6 +140,10 @@ def get_view(
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    """
+    Returns a ViewMeta object containing information about a view, but not the
+    view itself.
+    """
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if view_namespace_obj is None or not scopes.can_read_in_namespace(
         view_namespace_obj
@@ -208,6 +213,7 @@ def render_view(
     user: models.User = Depends(get_user),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    log.debug("TOP OF VIEW RENDER")
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if view_namespace_obj is None or not scopes.can_read_in_namespace(
         view_namespace_obj
@@ -263,10 +269,15 @@ def render_view(
                 "Falling back to direct streaming."
             )
 
+    log.debug("BEFORE RENDER")
+    start = time.perf_counter()
     etag = crud.view.etag(db, view_namespace_obj)
     render_ctx = crud.view.render(db=db, view=view_obj)
+    log.debug("Time to render: %s", time.perf_counter() - start)
+    start = time.perf_counter()
     render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
-
+    log.debug("Time to write GPKG: %s", time.perf_counter() - start)
+    log.debug("AFTER GPKG")
     if has_gcs_context:
         try:
             bucket = storage_client.bucket(bucket_name)

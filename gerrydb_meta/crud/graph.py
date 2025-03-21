@@ -1,17 +1,42 @@
 """CRUD operations and transformations for districting plans."""
 
-import logging
+import re
 import uuid
 from typing import Tuple
+from dataclasses import dataclass
 
-from sqlalchemy import exc, insert, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union, bindparam
+from sqlalchemy import Table, Column, Integer, literal_column, insert
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.dialects import postgresql
+from geoalchemy2 import func as geo_func
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import CreateValueError
+from gerrydb_meta.models import *
+from typing import Optional, Tuple
+from datetime import datetime
+from uvicorn.config import logger as log
 
-log = logging.getLogger()
+_ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
+
+
+@dataclass(frozen=True)
+class GraphRenderContext:
+    graph: models.Graph
+    graph_areas: Sequence | None
+    graph_edges: Sequence | None
+    geo_meta: dict[int, models.ObjectMeta]
+    geo_meta_ids: dict[str, int]  # by path
+    geo_valid_from_dates: dict[str, datetime]
+
+    # Bulk queries for `ogr2ogr`.
+    geo_query: str
+    internal_point_query: str
+
+    def __repr__(self):
+        return f"GraphRenderContext(graph={self.graph})"
 
 
 class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
@@ -98,9 +123,20 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
 
         return graph, etag
 
+    def _create_edge_minimal(self, graph, all_geo_dict, graph_id, gid1, gid2, wts):
+        edge = GraphEdge()
+        edge.graph_id = graph_id
+        edge.geo_id_1 = gid1
+        edge.geo_id_2 = gid2
+        edge.weights = wts
+        edge.graph = graph
+        edge.geo_1 = all_geo_dict.get(gid1)
+        edge.geo_2 = all_geo_dict.get(gid2)
+        return edge
+
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
-    ) -> models.View | None:
+    ) -> models.Graph | None:
         """Retrieves a graph by path.
 
         Args:
@@ -115,6 +151,175 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             )
             .first()
         )
+
+    def _graph_edges(self, db: Session, graph: models.Graph) -> Sequence | None:
+        """Gets graph edges by path, if applicable."""
+        log.debug("Getting graph edges for graph %s", graph.graph_id)
+        if graph.graph_id is None:
+            return None
+
+        path_sub_1 = select(models.Geography.geo_id, models.Geography.path).subquery()
+        path_sub_2 = select(models.Geography.geo_id, models.Geography.path).subquery()
+        graph_edges_query = (
+            select(
+                path_sub_1.c.path.label("path_1"),
+                path_sub_2.c.path.label("path_2"),
+                models.GraphEdge.weights,
+            )
+            .join(
+                path_sub_1,
+                path_sub_1.c.geo_id == models.GraphEdge.geo_id_1,
+            )
+            .join(
+                path_sub_2,
+                path_sub_2.c.geo_id == models.GraphEdge.geo_id_2,
+            )
+            .where(
+                models.GraphEdge.graph_id == graph.graph_id,
+            )
+        )
+        log.debug("GRAPH EDGES QUERY %s", graph_edges_query)
+        ret = db.execute(graph_edges_query).fetchall()
+        log.debug("GRAPH EDGES QUERY RET %s", len(ret))
+        return ret
+
+    def _geo_meta(
+        self, db: Session, graph: models.Graph
+    ) -> tuple[dict[str, int], dict[int, models.ObjectMeta]]:
+        """Gets object metadata associated with a view's geographies.
+
+        Returns:
+            (1) Mapping from geography paths to metadata IDs.
+            (2) Mapping from metadata IDs to metadata objects.
+        """
+        members_sub = (
+            select(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id == graph.set_version_id)
+            .subquery()
+        )
+        raw_geo_meta_ids = db.execute(
+            select(models.Geography.path, models.Geography.meta_id).join(
+                members_sub, members_sub.c.geo_id == models.Geography.geo_id
+            )
+        ).fetchall()
+        geo_meta_ids = {row.path: row.meta_id for row in raw_geo_meta_ids}
+
+        distinct_meta_ids = set(geo_meta_ids.values())
+        raw_distinct_meta = (
+            db.query(models.ObjectMeta)
+            .where(models.ObjectMeta.meta_id.in_(distinct_meta_ids))
+            .all()
+        )
+        distinct_meta = {meta.meta_id: meta for meta in raw_distinct_meta}
+
+        return geo_meta_ids, distinct_meta
+
+    def _geo_valid_dates(self, db: Session, graph: models.Graph) -> dict[str, datetime]:
+        """Gets the valid dates for each geometry.
+
+        Returns:
+            A dictionary mapping geometry IDs to valid dates.
+        """
+
+        query = (
+            select(models.Geography.path, models.GeoVersion.valid_from)
+            .join(
+                models.GeoSetMember,
+                models.Geography.geo_id == models.GeoSetMember.geo_id,
+            )
+            .join(
+                models.GeoVersion, models.Geography.geo_id == models.GeoVersion.geo_id
+            )
+            .where(models.GeoSetMember.set_version_id == graph.set_version_id)
+        )
+
+        result = db.execute(query)
+
+        return {row.path: row.valid_from for row in result}
+
+    def render(self, db: Session, graph: models.Graph) -> GraphRenderContext:
+        timestamp_clauses = [
+            models.GeoVersion.valid_from <= graph.created_at,
+            or_(
+                models.GeoVersion.valid_to.is_(None),
+                models.GeoVersion.valid_to >= graph.created_at,
+            ),
+        ]
+
+        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery(
+            "geo_sub"
+        )
+        if graph.proj is not None:
+            geo_col = geo_func.ST_Transform(
+                models.GeoVersion.geography.op("::")(literal_column("geometry")),
+                int(graph.proj.split(":")[1]),
+            ).label("geography")
+        else:
+            geo_col = models.GeoVersion.geography.op("::")(
+                literal_column("geometry")
+            ).label("geography")
+
+        geo_query = select(
+            geo_sub.c.path,
+            geo_col,
+        ).join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+
+        geo_query = geo_query.where(*timestamp_clauses)
+
+        internal_point_query = (
+            select(
+                geo_sub.c.path,
+                models.GeoVersion.internal_point,
+            )
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .where(*timestamp_clauses)
+        )
+
+        geo_meta_ids, geo_meta = self._geo_meta(db, graph)
+        geo_valid_from_dates = self._geo_valid_dates(db, graph)
+
+        cte = geo_query.cte(name="testy_boy")
+        final_query = select(literal_column("*")).select_from(cte)
+
+        # Query generation: substitute in literals and remove the
+        # ST_AsBinary() calls added by GeoAlchemy2.
+        full_geo_query = re.sub(
+            _ST_ASBINARY_REGEX,
+            r"\1",
+            str(
+                final_query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            ),
+        )
+
+        log.debug("The new geo query is %s", full_geo_query)
+
+        full_internal_point_query = re.sub(
+            _ST_ASBINARY_REGEX,
+            r"\1",
+            str(
+                internal_point_query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            ),
+        )
+
+        log.debug("The new internal point query is %s", full_internal_point_query)
+        ret = GraphRenderContext(
+            graph=graph,
+            graph_areas=None,
+            graph_edges=self._graph_edges(db, graph),
+            geo_meta=geo_meta,
+            geo_meta_ids=geo_meta_ids,
+            geo_valid_from_dates=geo_valid_from_dates,
+            geo_query=full_geo_query,
+            internal_point_query=full_internal_point_query,
+        )
+
+        return ret
 
 
 graph = CRGraph(models.Graph)

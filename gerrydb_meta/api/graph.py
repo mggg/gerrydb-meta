@@ -49,6 +49,8 @@ def create_graph(
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    log.debug("TOP OF API CREATE GRAPH")
+    start = time.perf_counter()
     namespace_obj = crud.namespace.get(db=db, path=namespace)
 
     if namespace_obj is None or not scopes.can_write_derived_in_namespace(
@@ -61,6 +63,8 @@ def create_graph(
                 "sufficient permissions to write views in this namespace."
             ),
         )
+    log.debug("Time to get namespace: %s", time.perf_counter() - start)
+    start = time.perf_counter()
 
     # This will raise the relevane errors if the locality or layer are not found.
     geo_set_version = geo_set_from_paths(
@@ -71,6 +75,8 @@ def create_graph(
         scopes=scopes,
     )
 
+    log.debug("Time to get geo set version: %s", time.perf_counter() - start)
+    start = time.perf_counter()
     # Assemble geographies from edges; verify that they exist
     # and are a subset of the geographies in the `GeoSetVersion`.
     edge_geo_paths = list(
@@ -81,6 +87,8 @@ def create_graph(
     )
     edge_geos_by_path = dict(zip(edge_geo_paths, edge_geos))
 
+    log.debug("Time to get edge_geos: %s", time.perf_counter() - start)
+    start = time.perf_counter()
 
     graph, etag = crud.graph.create(
         db=db,
@@ -90,6 +98,7 @@ def create_graph(
         obj_meta=obj_meta,
         namespace=namespace_obj,
     )
+    log.debug("Time to create graph: %s", time.perf_counter() - start)
     add_etag(response, etag)
     return schemas.Graph.from_orm(graph)
 
@@ -111,6 +120,8 @@ def get_graph(
     Returns a GraphMeta object containing information about a graph, but not the
     graph itself.
     """
+    log.debug("TOP OF API GET GRAPH")
+    start = time.perf_counter()
 
     namespace_obj = crud.namespace.get(db=db, path=namespace)
     if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
@@ -120,6 +131,9 @@ def get_graph(
                 f'Namespace "{namespace}" not found, or you do not have '
                 "sufficient permissions to write views in this namespace."
             ),
+        )
+    log.debug("Time to get namespace: %s", time.perf_counter() - start)
+    start = time.perf_counter()
 
     graph_obj = crud.graph.get(db=db, path=path, namespace=namespace_obj)
     if graph_obj is None:
@@ -148,6 +162,7 @@ def render_graph(
     user: models.User = Depends(get_user),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    log.debug("TOP OF GRAPH RENDER")
     namespace_obj = crud.namespace.get(db=db, path=namespace)
     if namespace_obj is None or not scopes.can_read_in_namespace(namespace_obj):
         raise HTTPException(
@@ -206,9 +221,16 @@ def render_graph(
     #             "Falling back to direct streaming."
     #         )
 
+    log.debug("BEFORE GRAPH RENDER")
+    start = time.perf_counter()
     etag = crud.graph.etag(db, namespace_obj)
     render_ctx = crud.graph.render(db=db, graph=graph_obj)
+    log.debug("RENDER CTX %s", render_ctx)
+    log.debug("Time to render graph: %s", time.perf_counter() - start)
+    start = time.perf_counter()
     render_uuid, gpkg_path = graph_to_gpkg(context=render_ctx, db_config=db_config)
+    log.debug("Time to write GPKG: %s", time.perf_counter() - start)
+    log.debug("Created GPKG %s", gpkg_path)
 
     return FileResponse(
         gpkg_path,
