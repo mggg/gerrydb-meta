@@ -197,7 +197,7 @@ def all_views(
     "/{namespace}/{path:path}",
     status_code=HTTPStatus.CREATED,
     dependencies=[Depends(can_read_localities)],
-    response_class=StreamingResponse,
+    response_class=FileResponse,
 )
 def render_view(
     *,
@@ -271,7 +271,7 @@ def render_view(
         try:
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
-            subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
+            subprocess.run(["gzip", "-k", "-1", str(gpkg_path)], check=True)
 
             blob_path = f"{render_uuid.hex}.gpkg.gz"
             blob = bucket.blob(blob_path)
