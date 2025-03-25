@@ -62,3 +62,12 @@ class ViewRenderStatus(str, Enum):
     RUNNING = "running"
     FAILED = "failed"
     SUCCEEDED = "succeeded"
+
+
+class GraphRenderStatus(str, Enum):
+    """Job queue status of a rendered graph."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"

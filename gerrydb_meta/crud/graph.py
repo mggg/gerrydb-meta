@@ -4,6 +4,7 @@ import re
 import uuid
 from typing import Tuple
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union, bindparam
 from sqlalchemy import Table, Column, Integer, literal_column, insert
@@ -25,7 +26,6 @@ _ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
 @dataclass(frozen=True)
 class GraphRenderContext:
     graph: models.Graph
-    graph_areas: Sequence | None
     graph_edges: Sequence | None
     geo_meta: dict[int, models.ObjectMeta]
     geo_meta_ids: dict[str, int]  # by path
@@ -122,17 +122,6 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             etag = self._update_etag(db, namespace)
 
         return graph, etag
-
-    def _create_edge_minimal(self, graph, all_geo_dict, graph_id, gid1, gid2, wts):
-        edge = GraphEdge()
-        edge.graph_id = graph_id
-        edge.geo_id_1 = gid1
-        edge.geo_id_2 = gid2
-        edge.weights = wts
-        edge.graph = graph
-        edge.geo_1 = all_geo_dict.get(gid1)
-        edge.geo_2 = all_geo_dict.get(gid2)
-        return edge
 
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
@@ -310,7 +299,6 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         log.debug("The new internal point query is %s", full_internal_point_query)
         ret = GraphRenderContext(
             graph=graph,
-            graph_areas=None,
             graph_edges=self._graph_edges(db, graph),
             geo_meta=geo_meta,
             geo_meta_ids=geo_meta_ids,
@@ -320,6 +308,45 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         )
 
         return ret
+
+    def _create_render(
+        self,
+        db: Session,
+        *,
+        graph: models.Graph,
+        created_by: models.User,
+        render_id: uuid.UUID,
+        path: Path | str,
+        status: models.GraphRenderStatus,
+    ) -> models.GraphRender:
+        raise NotImplementedError
+
+    def cache_render(
+        self,
+        db: Session,
+        *,
+        graph: models.Graph,
+        created_by: models.User,
+        render_id: uuid.UUID,
+        path: Path | str,
+    ) -> models.GraphRender:
+        raise NotImplementedError
+
+    def queue_render(
+        self,
+        db: Session,
+        *,
+        graph: models.Graph,
+        created_by: models.User,
+        render_id: uuid.UUID,
+        path: Path | str,
+    ) -> models.GraphRender:
+        raise NotImplementedError
+
+    def get_cached_render(
+        self, db: Session, *, graph: models.Graph
+    ) -> models.GraphRender | None:
+        raise NotImplementedError
 
 
 graph = CRGraph(models.Graph)

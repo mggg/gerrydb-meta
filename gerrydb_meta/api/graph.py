@@ -237,6 +237,6 @@ def render_graph(
         media_type=GPKG_MEDIA_TYPE,
         headers={
             "ETag": etag.hex,
-            "X-GerryDB-View-Render-ID": render_uuid.hex,
+            "X-GerryDB-Graph-Render-ID": render_uuid.hex,
         },
     )

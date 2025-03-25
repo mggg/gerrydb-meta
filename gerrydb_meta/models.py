@@ -26,6 +26,7 @@ from gerrydb_meta.enums import (
     NamespaceGroup,
     ScopeType,
     ViewRenderStatus,
+    GraphRenderStatus,
 )
 from gerrydb_meta.utils import create_column_value_partition_text
 
@@ -672,6 +673,28 @@ class Graph(Base):
         return f"/{self.namespace.path}/{self.path}"
 
 
+class GraphRender(Base):
+    __tablename__ = "graph_render"
+
+    render_id: Mapped[UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True), primary_key=True
+    )
+    graph_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("graph.graph_id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.user_id"), nullable=False
+    )
+
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[GraphRenderStatus] = mapped_column(
+        SqlEnum(GraphRenderStatus), nullable=False
+    )
+
+
 class GraphEdge(Base):
     __tablename__ = "graph_edge"
 
@@ -886,28 +909,6 @@ class ViewRender(Base):
     status: Mapped[ViewRenderStatus] = mapped_column(
         SqlEnum(ViewRenderStatus), nullable=False
     )
-
-
-"""
-class ViewSet(Base):
-    __tablename__ = "view_set"
-
-    render_id: Mapped[UUID] = mapped_column(
-        postgresql.UUID(as_uuid=True), primary_key=True
-    )
-    view_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("view.view_id"), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    created_by: Mapped[int] = mapped_column(
-        Integer, ForeignKey("user.user_id"), nullable=False
-    )
-    # e.g. local filesystem, S3, ...
-    path: Mapped[str] = mapped_column(Text, nullable=False)
-    # job_status: Mapped[]
-"""
 
 
 class ETag(Base):

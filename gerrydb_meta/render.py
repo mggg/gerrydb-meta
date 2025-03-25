@@ -232,14 +232,6 @@ def _init_gpkg_graph_extension(conn: sqlite3.Connection, layer_name: str):
         )
         """
     )
-    conn.execute(
-        f"""
-        CREATE TABLE gerrydb_graph_node_area (
-            path  TEXT PRIMARY KEY REFERENCES {layer_name}(path),
-            area  REAL NOT NULL
-        )
-        """
-    )
 
     conn.executemany(
         """
@@ -253,13 +245,6 @@ def _init_gpkg_graph_extension(conn: sqlite3.Connection, layer_name: str):
                 None,
                 "mggg_gerrydb",
                 "Edges of a dual graph (adjacency graph) of the view's geographies.",
-                "read-write",
-            ),
-            (
-                "gerrydb_graph_node_area",
-                None,
-                "mggg_gerrydb",
-                "Node areas of a dual graph (adjacency graph) of the view's geographies.",
                 "read-write",
             ),
         ],
@@ -564,10 +549,6 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
                 for edge in context.graph_edges
             ),
         )
-        # conn.executemany(
-        #    "INSERT INTO gerrydb_graph_node_area (path, area) VALUES (?, ?)",
-        #    ((node.path, node.area) for node in context.graph_areas),
-        # )
 
     log.debug("Inserting graph edges took %s seconds", time.perf_counter() - start)
     start = time.perf_counter()
@@ -792,11 +773,6 @@ def graph_to_gpkg(
                 for edge in context.graph_edges
             ),
         )
-        # conn.executemany(
-        #    "INSERT INTO gerrydb_graph_node_area (path, area) VALUES (?, ?)",
-        #    ((node.path, node.area) for node in context.graph_areas),
-        # )
-
     log.debug("Inserting graph edges took %s seconds", time.perf_counter() - start)
     conn.commit()
     conn.close()
