@@ -7,6 +7,10 @@ from typing import Any, Collection, Tuple
 
 from sqlalchemy import exc, insert, update, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
@@ -274,10 +278,28 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         col: models.DataColumn,
         obj_meta: models.ObjectMeta,
     ) -> None:
-        """Adds aliases to a column."""
+        """Adds aliases to a column, skipping existing ones."""
+
+        # Fetch existing alias paths as a set of strings (not ORM objects)
+        existing_aliases = set(
+            db.execute(
+                select(models.ColumnRef.path)
+                .where(models.ColumnRef.namespace_id == col.namespace_id)
+                .where(models.ColumnRef.path.in_(alias_paths))
+            ).scalars()
+        )
+
         for alias_path in alias_paths:
+            normalized_path = normalize_path(alias_path)
+
+            if normalized_path in existing_aliases:
+                log.warning(
+                    f"Alias {alias_path} already exists for column {col.col_id}. Skipping."
+                )
+                continue  # Skip adding this alias
+
             alias_ref = models.ColumnRef(
-                path=normalize_path(alias_path),
+                path=normalized_path,
                 col_id=col.col_id,
                 namespace_id=col.namespace_id,
                 meta_id=obj_meta.meta_id,
@@ -285,17 +307,11 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             db.add(alias_ref)
 
             try:
-                db.flush()
-            except exc.SQLAlchemyError:
-                # TODO: Make this more specific--the primary goal is to capture the case
-                # where the reference already exists.
+                db.flush()  # Try to commit this alias
+            except IntegrityError as e:
+                db.rollback()  # Rollback only this failed insert
                 log.exception(
-                    "Failed to create aliases for new column.",
-                    col.canonical_path,
-                )
-                raise CreateValueError(
-                    "Failed to create aliases for new column. "
-                    "(One or more aliases may already exist.)"
+                    f"Failed to add alias {alias_path} for column {col.col_id}. Skipping."
                 )
 
 
