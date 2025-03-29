@@ -6,7 +6,18 @@ from typing import Tuple
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union, bindparam
+from sqlalchemy import (
+    Sequence,
+    cast,
+    exc,
+    func,
+    label,
+    or_,
+    select,
+    union,
+    bindparam,
+    and_,
+)
 from sqlalchemy import Table, Column, Integer, literal_column, insert
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.dialects import postgresql
@@ -123,6 +134,14 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
 
         return graph, etag
 
+    def all(self, db: Session, *, namespace: models.Namespace) -> list[models.View]:
+        """Retrieves all views in a namespace."""
+        return (
+            db.query(models.Graph)
+            .filter(models.Graph.namespace_id == namespace.namespace_id)
+            .all()
+        )
+
     def get(
         self, db: Session, *, path: str, namespace: models.Namespace
     ) -> models.Graph | None:
@@ -235,8 +254,15 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             ),
         ]
 
-        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery(
-            "geo_sub"
+        geo_sub = (
+            select(
+                models.Geography.geo_id,
+                models.Geography.path,
+            )
+            .where(
+                models.Geography.namespace_id == graph.namespace_id,
+            )
+            .subquery("geo_sub")
         )
         if graph.proj is not None:
             geo_col = geo_func.ST_Transform(
