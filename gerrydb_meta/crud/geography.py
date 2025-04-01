@@ -8,14 +8,14 @@ from typing import Collection
 
 from geoalchemy2.elements import WKBElement
 from sqlalchemy import and_, insert, or_, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import BulkCreateError, BulkPatchError
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 
 class CRGeography(NamespacedCRBase[models.Geography, None]):
@@ -42,6 +42,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             )
             .all()
         )
+        log.debug("EXISTING GEOS %s", existing_geos)
         if existing_geos:
             raise BulkCreateError(
                 "Cannot create geographies that already exist.",
@@ -79,6 +80,56 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             )
 
             try:
+                values_list = [
+                    {
+                        "geography": (
+                            None
+                            if obj_in.geography is None
+                            else WKBElement(obj_in.geography, srid=4269)
+                        ),
+                        "internal_point": (
+                            None
+                            if obj_in.internal_point is None
+                            else WKBElement(obj_in.internal_point, srid=4269)
+                        ),
+                    }
+                    for obj_in in objs_in
+                ]
+
+                # Note: We use on_conflict_do_update with the constraint name of the unique index.
+                # In the SET clause we “update” with the same values so that if there’s a conflict,
+                # nothing really changes.
+                # Note: This also produces gaps in the geo_bin_id index sequence, but that should
+                # be fine so long as we don't try to upload > 400 copies of the entire census
+                # geography table (there is a limit of ~4B rows for this index)
+                upsert_stmt = (
+                    pg_insert(models.GeoBin)
+                    .values(values_list)
+                    .on_conflict_do_update(
+                        constraint="uq_geo_bin_geometry_hash",
+                        set_={
+                            "geography": pg_insert(models.GeoBin).excluded.geography,
+                            "internal_point": pg_insert(
+                                models.GeoBin
+                            ).excluded.internal_point,
+                        },
+                    )
+                    .returning(models.GeoBin.geo_bin_id)
+                )
+
+                geo_bin_list = list(db.scalars(upsert_stmt))
+
+            except Exception as ex:
+                log.exception(
+                    "Geography insert failed, likely due to invalid geometries. Full error below: %s",
+                    ex,
+                )
+                raise BulkCreateError(
+                    "Failed to insert geometries. This is likely due to invalid Geometries; please"
+                    " ensure geometries can be encoded in WKB format."
+                ) from ex
+
+            try:
                 geo_versions = list(
                     db.scalars(
                         insert(models.GeoVersion).returning(models.GeoVersion),
@@ -86,30 +137,16 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                             {
                                 "import_id": geo_import.import_id,
                                 "geo_id": geo.geo_id,
-                                "geography": (
-                                    None
-                                    if obj_in.geography is None
-                                    else WKBElement(obj_in.geography, srid=4269)
-                                ),
-                                "internal_point": (
-                                    None
-                                    if obj_in.internal_point is None
-                                    else WKBElement(obj_in.internal_point, srid=4269)
-                                ),
                                 "valid_from": now,
+                                "geo_bin_id": bin_id,
                             }
-                            for geo, obj_in in zip(geos, objs_in)
+                            for geo, bin_id in zip(geos, geo_bin_list)
                         ],
                     )
                 )
 
             except Exception as ex:
-                log.exception(
-                    "Geography insert failed, likely due to invalid geometries."
-                )
-                raise BulkCreateError(
-                    "Failed to insert geometries. Geometries must be encoded in WKB format."
-                ) from ex
+                raise BulkCreateError("Failed at inserting GeoVersions.") from ex
 
             etag = self._update_etag(db, namespace)
 
@@ -124,6 +161,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         geo_import: models.GeoImport,
         namespace: models.Namespace,
     ) -> tuple[list[tuple[models.Geography, models.GeoVersion]], uuid.UUID]:
+        # FIXME: This does not have the new GeoBin table yet.
         """Updates geographies in bulk."""
         now = datetime.now(timezone.utc)
         existing_geos = (

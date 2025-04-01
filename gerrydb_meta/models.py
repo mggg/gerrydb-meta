@@ -5,11 +5,22 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from geoalchemy2 import Geography as SqlGeography
-from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, text, event
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    text,
+    event,
+    Index,
+)
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import (
     ForeignKey,
     Integer,
+    Column,
+    Computed,
     LargeBinary,
     MetaData,
     String,
@@ -17,8 +28,10 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects.postgresql import BYTEA
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 from sqlalchemy.sql import func
+from sqlalchemy.ext.associationproxy import association_proxy
 
 from gerrydb_meta.enums import (
     ColumnKind,
@@ -330,6 +343,47 @@ class GeoSetMember(Base):
     geo: Mapped["Geography"] = relationship("Geography", lazy="joined")
 
 
+class GeoBin(Base):
+    __tablename__ = "geo_bin"
+    geo_bin_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    # We remove the spatial index from the geography column for now because we
+    # are not checking interstections or anything like that with it for now.
+    geography = mapped_column(
+        SqlGeography(srid=4269, spatial_index=False), nullable=True
+    )
+    internal_point = mapped_column(
+        SqlGeography(geometry_type="POINT", srid=4269, spatial_index=False),
+        nullable=True,
+    )
+
+    # Add a generated column that stores a 128-bit binary hash of the geography.
+    # md5() returns a hex string, so we use decode(..., 'hex') to convert to BYTEA.
+    geometry_hash = Column(
+        BYTEA,
+        Computed("decode(md5(ST_AsBinary(geography)), 'hex')", persisted=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        # Enforce uniqueness on the generated column. This creates a unique index.
+        UniqueConstraint("geometry_hash", name="uq_geo_bin_geometry_hash"),
+        # Create a B-tree index on the binary representation of geography:
+        # this allows for fast equality checks so we don't duplicate binaries.
+        # As a note, the probability of a collision in this extremely low; the
+        # md5 hash produces a 128-bit output, so, using the standard approximation
+        # for the probability of a collision under the birthday paradox we get that
+        # the probability of a collision is <= 1 - exp[(n*(n-1))/(2*2^(128))
+        # where n is the number of distinct geometries in the table. For reference,
+        # when n = 10^18 the probability of a collision is ~0.1%, and for anything
+        # less than that, the probability of a collision is negligible. Hashing on
+        # the WKB representation of the geometry is also good since WKBs are practically
+        # random bytes from the perspective of the MD5 hash function.
+        Index("ix_geo_bin_geometry_hash", "geometry_hash"),
+    )
+
+
 class GeoVersion(Base):
     __tablename__ = "geo_version"
 
@@ -343,15 +397,14 @@ class GeoVersion(Base):
         DateTime(timezone=True), nullable=False
     )
     valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    geography = mapped_column(SqlGeography(srid=4269), nullable=True)
-    internal_point = mapped_column(
-        SqlGeography(geometry_type="POINT", srid=4269), nullable=True
-    )
+    geo_bin_id = mapped_column(Integer, ForeignKey("geo_bin.geo_bin_id"), nullable=True)
 
-    # NOTE: Maybe get rid of this?
-    parent: Mapped["Geography"] = relationship(
-        "Geography", back_populates="versions", lazy="joined"
-    )
+    # Create a relationship to GeoBits
+    geo_bin = relationship("GeoBin", backref="geo_versions", lazy="joined")
+
+    # Now use association_proxy to expose the geography and internal_point attributes directly
+    geography = association_proxy("geo_bin", "geography")
+    internal_point = association_proxy("geo_bin", "internal_point")
 
 
 class Geography(Base):
