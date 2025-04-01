@@ -579,7 +579,7 @@ def graph_to_gpkg(
     temp_dir = Path(tempfile.mkdtemp())
     gpkg_path = Path(temp_dir) / f"{render_uuid.hex}.gpkg"
 
-    log.debug("GPGK PATH %s", gpkg_path)
+    log.debug("GPKG PATH %s", gpkg_path)
 
     geo_layer_name = f"{context.graph.path}__geometry"
     internal_point_layer_name = f"{context.graph.path}__internal_points"

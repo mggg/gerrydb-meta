@@ -326,6 +326,7 @@ def geo_set_from_paths(
             does not have permissions to access the GeoSet or its associated
             geographic layer or locality.
     """
+    log.debug("TOP OF GEO SET FROM PATHS")
     if not scopes.can_read_localities():
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
@@ -337,6 +338,8 @@ def geo_set_from_paths(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Locality not found."
         )
+
+    log.debug("PAST BASIC CHECKS")
 
     layer_namespace, layer_path = parse_path(layer)
     layer_namespace_obj = namespace_with_read(

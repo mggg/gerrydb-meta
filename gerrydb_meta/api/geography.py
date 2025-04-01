@@ -15,6 +15,7 @@ from gerrydb_meta.api.base import (
 )
 from gerrydb_meta.api.deps import get_db, get_geo_import, get_obj_meta, get_scopes
 from gerrydb_meta.scopes import ScopeManager
+from uvicorn.config import logger as log
 
 
 class GeographyApi(NamespacedObjectApi):
@@ -39,6 +40,7 @@ class GeographyApi(NamespacedObjectApi):
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
+            log.debug("BEFORE CREATE BULK GEOMETRY")
             geos, etag = self.crud.create_bulk(
                 db=db,
                 objs_in=raw_geographies,

@@ -28,7 +28,6 @@ router = APIRouter()
 )
 def all_paths(
     *,
-    response: Response,
     namespace: str,
     fips: str,
     layer: str,
@@ -36,6 +35,7 @@ def all_paths(
     scopes: ScopeManager = Depends(get_scopes),
 ):
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
+
     if view_namespace_obj is None or not scopes.can_read_in_namespace(
         view_namespace_obj
     ):
