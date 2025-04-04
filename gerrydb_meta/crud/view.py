@@ -440,16 +440,16 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         # Add some casting the the geometry view and do the projection if needed
         if view.proj is not None:
             geo_col = geo_func.ST_Transform(
-                models.GeoVersion.geography.op("::")(literal_column("geometry")),
+                models.GeoBin.geography.op("::")(literal_column("geometry")),
                 int(view.proj.split(":")[1]),
             ).label("geography")
         elif view.loc.default_proj is not None:
             geo_col = geo_func.ST_Transform(
-                models.GeoVersion.geography.op("::")(literal_column("geometry")),
+                models.GeoBin.geography.op("::")(literal_column("geometry")),
                 int(view.loc.default_proj.split(":")[1]),
             ).label("geography")
         else:
-            geo_col = models.GeoVersion.geography.op("::")(
+            geo_col = models.GeoBin.geography.op("::")(
                 literal_column("geometry")
             ).label("geography")
 
@@ -459,11 +459,15 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 geo_col,
                 *column_labels,
             )
+            .select_from(models.GeoVersion)
             .join(
                 members_sub,
                 members_sub.c.geo_id == models.GeoVersion.geo_id,
             )
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .join(
+                models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
+            )
         )
 
         geo_query = geo_query.join(
@@ -474,13 +478,17 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         internal_point_query = (
             select(
                 geo_sub.c.path,
-                models.GeoVersion.internal_point,
+                models.GeoBin.internal_point,
             )
+            .select_from(models.GeoVersion)
             .join(
                 members_sub,
                 members_sub.c.geo_id == models.GeoVersion.geo_id,
             )
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .join(
+                models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
+            )
             .where(*timestamp_clauses)
         )
 

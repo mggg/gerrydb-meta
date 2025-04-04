@@ -423,6 +423,11 @@ class Geography(Base):
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
     versions: Mapped[list[GeoVersion]] = relationship("GeoVersion")
 
+    # Just a safety check to make sure that paths are unique within a namespace
+    __table_args__ = (
+        UniqueConstraint("path", "namespace_id", name="uq_geography_path_namespace"),
+    )
+
     @property
     def full_path(self):
         """Path with namespace prefix."""
