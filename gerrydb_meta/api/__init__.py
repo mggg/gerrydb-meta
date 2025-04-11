@@ -26,7 +26,9 @@ api_router.include_router(geography.router, prefix="/geographies", tags=["geogra
 api_router.include_router(
     geography.list_router, prefix="/__geography_list", tags=["geography_list"]
 )
-api_router.include_router(list_geo.router, prefix="/__list_geo", tags=["list_geo"])
+api_router.include_router(
+    geography.fork_router, prefix="/__geography_fork", tags=["geography_fork"]
+)
 api_router.include_router(
     geo_import.router, prefix="/geo-imports", tags=["geo-imports"]
 )
