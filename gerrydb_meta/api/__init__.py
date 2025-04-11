@@ -9,7 +9,6 @@ from gerrydb_meta.api import (
     geo_set,
     geography,
     graph,
-    list_geo,
     locality,
     namespace,
     obj_meta,
@@ -24,6 +23,9 @@ api_router.include_router(locality.router, prefix="/localities", tags=["localiti
 api_router.include_router(namespace.router, prefix="/namespaces", tags=["namespaces"])
 api_router.include_router(obj_meta.router, prefix="/meta", tags=["meta"])
 api_router.include_router(geography.router, prefix="/geographies", tags=["geographies"])
+api_router.include_router(
+    geography.list_router, prefix="/__geography_list", tags=["geography_list"]
+)
 api_router.include_router(list_geo.router, prefix="/__list_geo", tags=["list_geo"])
 api_router.include_router(
     geo_import.router, prefix="/geo-imports", tags=["geo-imports"]

@@ -2,8 +2,7 @@
 
 from http import HTTPStatus
 from typing import Callable
-
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, Header, Query
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import crud, models, schemas
@@ -19,6 +18,7 @@ from uvicorn.config import logger as log
 
 
 class GeographyApi(NamespacedObjectApi):
+
     def _create(self, router: APIRouter) -> Callable:
         @router.post(
             "/{namespace}",
@@ -88,6 +88,7 @@ class GeographyApi(NamespacedObjectApi):
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             geo_import: models.GeoImport = Depends(get_geo_import),
             scopes: ScopeManager = Depends(get_scopes),
+            allow_empty_polys: bool = Query(default=False),
         ):
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
@@ -97,6 +98,7 @@ class GeographyApi(NamespacedObjectApi):
                 objs_in=raw_geographies,
                 geo_import=geo_import,
                 namespace=namespace_obj,
+                allow_empty_polys=allow_empty_polys,
             )
             add_etag(response, etag)
             response_geos = [
@@ -121,6 +123,33 @@ class GeographyApi(NamespacedObjectApi):
             return MsgpackResponse(response_geos)
 
         return patch_route
+
+    def _get(self, router: APIRouter) -> Callable:
+        @router.get(
+            "/{namespace}/{path:path}",
+            response_model=self.get_schema,
+            name=f"Read {self.obj_name_singular}",
+        )
+        def get_route(
+            *,
+            response: Response,
+            namespace: str,
+            path: str,
+            db: Session = Depends(get_db),
+            scopes: ScopeManager = Depends(get_scopes),
+            if_none_match: str | None = Header(default=None),
+        ):
+            log.debug("GET %s/%s", namespace, path)
+            namespace_obj = self._namespace_with_read(
+                db=db, scopes=scopes, path=namespace
+            )
+            self._check_etag(db=db, namespace=namespace_obj, header=if_none_match)
+            etag = self.crud.etag(db, namespace_obj)
+            obj = self._obj(db=db, namespace=namespace_obj, path=path)
+            add_etag(response, etag)
+            return self.get_schema.from_orm(obj)
+
+        return get_route
 
     def router(self) -> APIRouter:
         """Generates a router with basic CR operations for geographies."""
