@@ -19,8 +19,7 @@ from gerrydb_meta.api.deps import get_db, get_obj_meta, get_scopes, no_perms
 from gerrydb_meta.crud.base import normalize_path
 from gerrydb_meta.exceptions import GerryValueError
 from gerrydb_meta.scopes import ScopeManager
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 
 # For path resolution across objects.
@@ -550,6 +549,7 @@ class NamespacedObjectApi:
             scopes: ScopeManager = Depends(get_scopes),
             if_none_match: str | None = Header(default=None),
         ):
+            log.debug("IN GET FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_read(
                 db=db, scopes=scopes, path=namespace
             )
@@ -575,6 +575,7 @@ class NamespacedObjectApi:
             scopes: ScopeManager = Depends(get_scopes),
             if_none_match: str | None = Header(default=None),
         ):
+            log.debug("IN GET ALL FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_read(
                 db=db, scopes=scopes, path=namespace
             )
@@ -603,6 +604,7 @@ class NamespacedObjectApi:
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
+            log.debug("IN POST FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
@@ -631,6 +633,7 @@ class NamespacedObjectApi:
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
+            log.debug("IN PATCH FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
