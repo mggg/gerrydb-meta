@@ -18,13 +18,16 @@ from gerrydb_meta.enums import ScopeType
 from gerrydb_meta.scopes import ScopeManager
 from uvicorn.config import logger as log
 import time
+import os
+
+GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 
 def get_db() -> Generator:
     try:
-        engine = create_engine(db_url, echo=False)
+        engine = create_engine(db_url, echo=GERRYDB_SQL_ECHO)
         Session = sessionmaker(engine)
         db = Session()
         yield db

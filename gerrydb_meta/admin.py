@@ -18,9 +18,14 @@ from sqlalchemy.orm import sessionmaker
 
 from gerrydb_meta.enums import NamespaceGroup, ScopeType
 from gerrydb_meta.models import ApiKey, ObjectMeta, User, UserScope
+from uvicorn.config import logger as log
+import os
 
-log = logging.getLogger()
-Session = sessionmaker(create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=False))
+GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
+
+Session = sessionmaker(
+    create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
+)
 
 API_KEY_CHARS = string.ascii_lowercase + string.digits
 
