@@ -1,5 +1,4 @@
 from http import HTTPStatus
-from enum import Enum
 import hashlib
 from shapely import Polygon
 
@@ -14,7 +13,6 @@ from gerrydb_meta.api.deps import (
     can_read_localities,
     get_db,
     get_scopes,
-    get_geo_import,
     get_user,
 )
 from gerrydb_meta.scopes import ScopeManager
@@ -29,6 +27,24 @@ fork_router = APIRouter()
 def __validate_source_and_target_namespaces(
     source_namespace: str, target_namespace: str, db: Session, scopes: ScopeManager
 ):
+    """
+    Validates that the user can fork between namespaces. Specifically, this function
+    checks to make sure that the user has read permissions in the source namespace
+    and write permissions in the target namespace.
+
+    Args:
+        source_namespace: The namespace of the source layer.
+        target_namespace: The namespace of the target layer.
+        db: The database session.
+        scopes: The authorization context.
+
+    Returns:
+        None
+
+    Raises:
+        HTTPException: If the source or target namespaces are not found or the user
+            does not have sufficient permissions to read or write in the namespaces.
+    """
     source_namespace_obj = crud.namespace.get(db=db, path=source_namespace)
 
     if source_namespace_obj is None or not scopes.can_read_in_namespace(
@@ -68,9 +84,39 @@ def __validate_forkability(
     target_layer: str,
     source_geo_hash_pairs: set[tuple[str, str]],
     target_geo_hash_pairs: set[tuple[str, str]],
-    allow_empty_target: bool = False,
+    allow_extra_source_geos: bool = False,
     allow_empty_polys: bool = False,
 ):
+    """
+    Checks whether or not the data in the source namespace/layer can be 'forked' to the
+    target namespace/layer. In order for data to be 'forkable' we require that all geometries
+    that exist in the target namespace/layer are identical to the geometries in the source
+    namespace/layer that share the same path relative to the namespace. We do not make any
+    assumptions about whether or not the source namespace/layer contains geometries that have
+    not been previously added to the target namespace/layer, and instead require that the
+    function caller explicitly determine what should be done in this case (error or allow).
+    The function will also raise an error when forking data from a source layer that contains
+    empty geometries and `allow_empty_polys` is `False` because the user will generally want
+    meaningful geometries to be attached to the data that they are working with.
+
+    Args:
+        source_namespace: The namespace of the source layer.
+        source_layer: The path of the source layer.
+        target_namespace: The namespace of the target layer.
+        target_layer: The path of the target layer.
+        source_geo_hash_pairs: The set of (path, hash) pairs of the source layer.
+        target_geo_hash_pairs: The set of (path, hash) pairs of the target layer.
+        allow_extra_source_geos: Whether or not to allow for the source layer to contain
+            geometries that are not present in the target layer.
+        allow_empty_polys: Whether or not to allow for the source layer to contain empty
+            polygons that will be forked over to the target layer.
+
+    Returns:
+        None
+
+    Raises:
+        HTTPException: If the source and target layers are not forkable.
+    """
     empty_polygon_wkb = Polygon().wkb
     empty_hash = hashlib.md5(WKBElement(empty_polygon_wkb, srid=4269).data).hexdigest()
 
@@ -79,7 +125,7 @@ def __validate_forkability(
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail=(
-                f"Cannot fork column values from layer '{source_layer}' in "
+                f"Cannot fork data from layer '{source_layer}' in "
                 f"'{source_namespace}' to layer '{target_layer}' in '{target_namespace}' because "
                 f"both the source and target layers do not contain any geographies."
             ),
@@ -91,7 +137,7 @@ def __validate_forkability(
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail=(
-                f"Cannot fork column values from layer '{source_layer}' in "
+                f"Cannot fork data from layer '{source_layer}' in "
                 f"'{source_namespace}' to layer '{target_layer}' in '{target_namespace}' because "
                 f"some of the source geographies have empty polygons and `allow_empty_polys` "
                 f"is False."
@@ -107,32 +153,45 @@ def __validate_forkability(
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail=(
-                f"Cannot fork column values from layer '{source_layer}' in "
-                f"'{source_namespace}' to layer '{target_layer}' in '{target_namespace}' because "
-                f"some geometries in the target namespace/layer are different from the "
-                f"geometries in the source namespace/layer."
+                f"Cannot fork data from layer '{source_layer}' in '{source_namespace}' "
+                f"to layer '{target_layer}' in '{target_namespace}' because some "
+                f"geometries in the target namespace/layer are different from the geometries "
+                f"in the source namespace/layer. Forking should only be used when attemting "
+                f"to add geometries from the source namespace/layer that were not previously "
+                f"present in the target namespace/layer to the target namespace/layer."
             ),
         )
     if len(diff_ts) > 0:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail=(
-                f"Cannot fork column values from layer '{source_layer}' in "
-                f"'{source_namespace}' to layer '{target_layer}' in '{target_namespace}' because some "
+                f"Cannot fork data from layer '{source_layer}' in '{source_namespace}' "
+                f"to layer '{target_layer}' in '{target_namespace}' because some "
                 f"geometries in the target namespace/layer are not present in the "
                 f"source namespace/layer."
             ),
         )
 
     log.debug(len(target_geo_hash_pairs))
-    if not (allow_empty_target and len(target_geo_hash_pairs) == 0):
+    if not allow_extra_source_geos and len(diff_st) > 0:
+        if len(target_geo_hash_pairs) == 0:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail=(
+                    f"Cannot fork data from layer '{source_layer}' in '{source_namespace}' "
+                    f"to layer '{target_layer}' in '{target_namespace}' because some "
+                    f"no geometries are present in the target namespace/layer and the parameter "
+                    f"`allow_extra_source_geos` was not passed as `True`."
+                ),
+            )
+
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail=(
-                f"Cannot fork column values from layer '{source_layer}' in "
-                f"'{source_namespace}' to layer '{target_layer}' in '{target_namespace}' because some "
-                f"geometries in the source namespace/layer are not present in the target "
-                f"namespace/layer.",
+                f"Cannot fork data from layer '{source_layer}' in '{source_namespace}' to layer "
+                f"'{target_layer}' in '{target_namespace}' because some geometries in the source "
+                f"namespace/layer are not present in the target namespace/layer and the "
+                f"parameter `allow_extra_source_geos` was not passed as `True`."
             ),
         )
 
@@ -150,10 +209,43 @@ def check_forkability(
     scopes: ScopeManager = Depends(get_scopes),
     source_namespace: Optional[str] = Query(default=None),
     source_layer: Optional[str] = Query(default=None),
-    allow_empty_target: bool = Query(default=False),
+    allow_extra_source_geos: bool = Query(default=False),
     allow_empty_polys: bool = Query(default=False),
 ):
-    log.debug("Checking if migration is possible")
+    """
+    Checks whether or not the data in the source namespace/layer can be 'forked' to the
+    target namespace/layer. In order for data to be 'forkable' we require that all geometries
+    that exist in the target namespace/layer are identical to the geometries in the source
+    namespace/layer that share the same path relative to the namespace. We do not make any
+    assumptions about whether or not the source namespace/layer contains geometries that have
+    not been previously added to the target namespace/layer, and instead require that the
+    function caller explicitly determine what should be done in this case (error or allow).
+    The function will also raise an error when forking data from a source layer that contains
+    empty geometries and `allow_empty_polys` is `False` because the user will generally want
+    meaningful geometries to be attached to the data that they are working with.
+
+    Note: The locality of the source and target namespace/layer pairs must be the same.
+
+    Args:
+        target_namespace: The namespace of the target layer.
+        loc_ref: The path of the locality to be forked.
+        target_layer: The path of the target layer.
+        source_namespace: The namespace of the source layer.
+        source_layer: The path of the source layer.
+        source_geo_hash_pairs: The set of (path, hash) pairs of the source layer.
+        target_geo_hash_pairs: The set of (path, hash) pairs of the target layer.
+        allow_extra_source_geos: Whether or not to allow for the source layer to contain
+            geometries that are not present in the target layer.
+        allow_empty_polys: Whether or not to allow for the source layer to contain empty
+            polygons that will be forked over to the target layer.
+
+    Returns:
+        list[Tuple[str, str]]: A list of (path, hash) pairs of the source layer.
+
+    Raises:
+        HTTPException: If the source and target layers are not forkable.
+    """
+    log.debug("Checking if forking is possible")
     _ = __validate_source_and_target_namespaces(
         source_namespace, target_namespace, db, scopes
     )
@@ -172,7 +264,7 @@ def check_forkability(
         target_layer=target_layer,
         source_geo_hash_pairs=source_geo_hash_pairs,
         target_geo_hash_pairs=target_geo_hash_pairs,
-        allow_empty_target=allow_empty_target,
+        allow_extra_source_geos=allow_extra_source_geos,
         allow_empty_polys=allow_empty_polys,
     )
 
@@ -194,11 +286,11 @@ def fork_geos_between_namespaces(
     scopes: ScopeManager = Depends(get_scopes),
     source_namespace: Optional[str] = Query(default=None),
     source_layer: Optional[str] = Query(default=None),
-    allow_empty_target: bool = Query(default=False),
+    allow_extra_source_geos: bool = Query(default=False),
     allow_empty_polys: bool = Query(default=False),
     notes: str = Query(default="THERE ARE NO NOTES"),
 ):
-    log.debug("Checking if migration is possible")
+    log.debug("Checking if forking is possible")
     source_namespace_obj, target_namespace_obj = (
         __validate_source_and_target_namespaces(
             source_namespace, target_namespace, db, scopes
@@ -233,17 +325,17 @@ def fork_geos_between_namespaces(
         target_layer=target_layer,
         source_geo_hash_pairs=source_geo_hash_pairs,
         target_geo_hash_pairs=target_geo_hash_pairs,
-        allow_empty_target=allow_empty_target,
+        allow_extra_source_geos=allow_extra_source_geos,
         allow_empty_polys=allow_empty_polys,
     )
     # We are now guaranteed that the missing paths do not have a conflicting
     # geography in the target namespace.
 
-    log.debug("Migrating the geos")
+    log.debug("Forking the geos")
 
     if notes == "THERE ARE NO NOTES":
         notes = (
-            f"Forked {len(target_geo_hash_pairs)} geographies from "
+            f"Forked {len(source_geo_hash_pairs)} geographies from "
             f"{source_namespace}/{loc_ref}/{source_layer} to "
             f"{target_namespace}/{loc_ref}/{target_layer} "
             f"by a direct call to the API."

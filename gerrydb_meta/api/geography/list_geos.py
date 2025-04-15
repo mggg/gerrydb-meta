@@ -34,55 +34,48 @@ class GetMode(str, Enum):
     path_hash_pair = "path_hash_pair"
 
 
+# FIXME: Add an "at" parameter to select a particular geo version
 def _get_path_hash_pairs(
     namespace: str, loc_ref: str, layer: str, db: Session
-) -> list[str]:
-    parent_loc = aliased(models.Locality)
+) -> list[tuple[str, str]]:
 
-    geo_objs = [
-        (pair[0], pair[1].hex())
-        for pair in (
-            db.query(models.Geography.path, models.GeoBin.geometry_hash)
-            .join(
-                models.GeoSetMember,
-                models.Geography.geo_id == models.GeoSetMember.geo_id,
-            )
-            .join(
-                models.GeoSetVersion,
-                models.GeoSetMember.set_version_id
-                == models.GeoSetVersion.set_version_id,
-            )
-            .join(
-                models.GeoVersion, models.Geography.geo_id == models.GeoVersion.geo_id
-            )
-            .join(
-                models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
-            )
-            .join(
-                models.GeoLayer,
-                models.GeoSetVersion.layer_id == models.GeoLayer.layer_id,
-            )
-            .join(
-                models.Namespace,
-                models.GeoLayer.namespace_id == models.Namespace.namespace_id,
-            )
-            .join(
-                models.Locality, models.GeoSetVersion.loc_id == models.Locality.loc_id
-            )
-            .join(parent_loc, models.Locality.parent_id == parent_loc.loc_id)
-            .join(models.LocalityRef, parent_loc.loc_id == models.LocalityRef.loc_id)
-            .filter(models.Namespace.path == namespace)
-            .filter(models.GeoLayer.path == layer)
-            .filter(models.LocalityRef.path == loc_ref)
-            .all()
+    log.debug("Getting path hash pairs for %s %s %s", namespace, loc_ref, layer)
+    query = (
+        db.query(models.Geography.path, models.GeoBin.geometry_hash)
+        .join(
+            models.GeoSetMember,
+            models.Geography.geo_id == models.GeoSetMember.geo_id,
         )
-    ]
+        .join(
+            models.GeoSetVersion,
+            models.GeoSetMember.set_version_id == models.GeoSetVersion.set_version_id,
+        )
+        .join(models.GeoVersion, models.Geography.geo_id == models.GeoVersion.geo_id)
+        .join(
+            models.GeoLayer,
+            models.GeoSetVersion.layer_id == models.GeoLayer.layer_id,
+        )
+        .join(models.Locality, models.GeoSetVersion.loc_id == models.Locality.loc_id)
+        .join(models.LocalityRef, models.LocalityRef.loc_id == models.Locality.loc_id)
+        .join(
+            models.Namespace,
+            models.GeoLayer.namespace_id == models.Namespace.namespace_id,
+        )
+        .join(models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id)
+        .filter(models.Namespace.path == namespace)
+        .filter(models.GeoLayer.path == layer)
+        .filter(models.LocalityRef.path == loc_ref)
+        .filter(models.GeoVersion.valid_to.is_(None))
+    )
+
+    log.debug("Querying")
+    log.debug(query)
+    geo_objs = [(pair[0], pair[1].hex()) for pair in (query.all())]
     return geo_objs
 
 
+# FIXME: Add an "at" parameter to select a particular geo version
 def __get_paths(namespace: str, loc_ref: str, layer: str, db: Session) -> list[str]:
-    parent_loc = aliased(models.Locality)
-
     log.debug("Getting paths")
     geo_objs = [
         obj[0]
@@ -98,21 +91,29 @@ def __get_paths(namespace: str, loc_ref: str, layer: str, db: Session) -> list[s
                 == models.GeoSetVersion.set_version_id,
             )
             .join(
+                models.GeoVersion, models.Geography.geo_id == models.GeoVersion.geo_id
+            )
+            .join(
                 models.GeoLayer,
                 models.GeoSetVersion.layer_id == models.GeoLayer.layer_id,
+            )
+            .join(
+                models.Locality, models.GeoSetVersion.loc_id == models.Locality.loc_id
+            )
+            .join(
+                models.LocalityRef, models.LocalityRef.loc_id == models.Locality.loc_id
             )
             .join(
                 models.Namespace,
                 models.GeoLayer.namespace_id == models.Namespace.namespace_id,
             )
             .join(
-                models.Locality, models.GeoSetVersion.loc_id == models.Locality.loc_id
+                models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
             )
-            .join(parent_loc, models.Locality.parent_id == parent_loc.loc_id)
-            .join(models.LocalityRef, parent_loc.loc_id == models.LocalityRef.loc_id)
             .filter(models.Namespace.path == namespace)
             .filter(models.GeoLayer.path == layer)
             .filter(models.LocalityRef.path == loc_ref)
+            .filter(models.GeoVersion.valid_to.is_(None))
             .all()
         )
     ]

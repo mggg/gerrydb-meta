@@ -59,15 +59,6 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         obj_paths: list[str],
         namespace: models.Namespace,
     ) -> None:
-        existing_geos = self.__get_existing_geos(
-            db=db, obj_paths=obj_paths, namespace=namespace
-        )
-
-        if existing_geos:
-            raise BulkCreateError(
-                "Cannot create geographies that already exist.",
-                paths=[geo.path for geo in existing_geos],
-            )
         # Need to check for unique paths since otherwise the db will just
         # insert the first occurrence which could be confusing. (This error
         # should almost never be raised in practice.)
@@ -79,10 +70,20 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 paths=[path for path in paths if paths.count(path) > 1],
             )
 
+        existing_geos = self.__get_existing_geos(
+            db=db, obj_paths=paths, namespace=namespace
+        )
+
+        if existing_geos:
+            raise BulkCreateError(
+                "Cannot create geographies that already exist.",
+                paths=[geo.path for geo in existing_geos],
+            )
+
         return
 
     def __get_missing_geo_bins(
-        self, db: Session, hash_dict: dict[str, schemas.GeographyBase]
+        self, db: Session, hash_dict: dict[str, list[schemas.GeographyBase]]
     ):
         hash_keys = list(hash_dict.keys())
 
@@ -111,6 +112,9 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         existing_hsh_to_bin_dict: dict[str, int],
         missing_hashes: set[str],
     ) -> dict[str, int]:
+        empty_polygon_wkb = WKBElement(Polygon().wkb, srid=4269)
+        empty_point_wkb = WKBElement(Point().wkb, srid=4269)
+
         try:
             values_list = []
             for h in missing_hashes:
@@ -118,18 +122,16 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 # This is only an issue when there are empty geographies
                 # Which are set to empty polygons.
                 obj_in = hash_dict[h][0]
-                empty_point_wkb = Point().wkb
-                empty_polygon_wkb = Polygon().wkb
 
                 values_list.append(
                     {
                         "geography": (
-                            WKBElement(empty_polygon_wkb, srid=4269)
+                            empty_polygon_wkb
                             if obj_in.geography is None
                             else WKBElement(obj_in.geography, srid=4269)
                         ),
                         "internal_point": (
-                            WKBElement(empty_point_wkb, srid=4269)
+                            empty_point_wkb
                             if obj_in.internal_point is None
                             else WKBElement(obj_in.internal_point, srid=4269)
                         ),
@@ -164,15 +166,17 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         objs_in: list[schemas.GeographyBase],
     ) -> tuple[dict[str, int], dict[str, str]]:
         empty_polygon_wkb = Polygon().wkb
+        empty_poly_hash = hashlib.md5(
+            WKBElement(empty_polygon_wkb, srid=4269).data
+        ).hexdigest()
+
         hash_obj_dict = {}
 
         for obj_in in objs_in:
             new_hash = (
                 hashlib.md5(WKBElement(obj_in.geography, srid=4269).data).hexdigest()
                 if obj_in.geography
-                else hashlib.md5(
-                    WKBElement(empty_polygon_wkb, srid=4269).data
-                ).hexdigest()
+                else empty_poly_hash
             )
             if new_hash not in hash_obj_dict:
                 hash_obj_dict[new_hash] = [obj_in]
@@ -189,13 +193,13 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 existing_hsh_to_bin_dict=hash_bin_dict,
                 missing_hashes=missing_hashes,
             )
+
         path_hash_dict = {
             o.path: hsh for hsh, objs_lst in hash_obj_dict.items() for o in objs_lst
         }
 
         try:
             assert set(hash_bin_dict.keys()) == set(hash_obj_dict.keys())
-            assert len(set(hash_bin_dict.keys())) == len(hash_bin_dict.keys())
             assert len(path_hash_dict) == len(objs_in)
         except AssertionError as ex:
             log.exception(ex)
@@ -317,10 +321,6 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         obj_paths: list[str],
         namespace: models.Namespace,
     ) -> list[models.Geography]:
-        existing_geos = self.__get_existing_geos(
-            db=db, obj_paths=obj_paths, namespace=namespace
-        )
-
         # This is technically caught by the next error, but this is more
         # informative.
         paths = [normalize_path(path, case_sensitive_uid=True) for path in obj_paths]
@@ -331,10 +331,12 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 paths=[path for path in paths if paths.count(path) > 1],
             )
 
-        if len(existing_geos) < len(obj_paths):
-            missing = set(
-                normalize_path(path, case_sensitive_uid=True) for path in obj_paths
-            ) - set(geo.path for geo in existing_geos)
+        existing_geos = self.__get_existing_geos(
+            db=db, obj_paths=paths, namespace=namespace
+        )
+
+        if len(existing_geos) < len(paths):
+            missing = set(paths) - set(geo.path for geo in existing_geos)
             raise BulkPatchError(
                 "Cannot update geographies that do not exist.", paths=list(missing)
             )
@@ -367,7 +369,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         objs_in: list[schemas.GeographyPatch],
         namespace: models.Namespace,
         allow_empty_polys: bool,
-    ):
+    ) -> dict[str, str]:
         empty_polygon_wkb = Polygon().wkb
         empty_hash = hashlib.md5(
             WKBElement(empty_polygon_wkb, srid=4269).data
@@ -381,7 +383,9 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 if obj_in.geography
                 else empty_hash
             )
-            new_path_hash_set.add((obj_in.path, new_hash))
+            new_path_hash_set.add(
+                (normalize_path(obj_in.path, case_sensitive_uid=True), new_hash)
+            )
 
         old_path_hash_set = set(
             (pair[0], pair[1].hex())
@@ -407,7 +411,9 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             )
         )
 
-        assert len(old_path_hash_set) == len(new_path_hash_set)
+        assert set(dict(old_path_hash_set).keys()) == set(
+            dict(new_path_hash_set).keys()
+        )
 
         diff_set = new_path_hash_set - old_path_hash_set
         if any([pair[1] == empty_hash for pair in diff_set]) and not allow_empty_polys:
@@ -525,7 +531,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         )
         self.__validate_patch_geos(db=db, objs_in=objs_to_update, namespace=namespace)
 
-        return
+        raise NotImplementedError("This method is not finished yet.")
 
     def upsert_bulk(
         self,
@@ -558,7 +564,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         # Sanity check to make sure that the paths don't already exist before we start
         self.__validate_create_geos(
             db=db,
-            obj_paths=list(create_geos_path_hash.keys()),
+            obj_paths=list([pair[0] for pair in create_geos_path_hash]),
             namespace=target_namespace,
         )
 
