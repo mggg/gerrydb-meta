@@ -13,6 +13,7 @@ from gerrydb_meta.api.base import geos_from_paths, namespace_write_error_msg
 from gerrydb_meta.api.deps import can_read_localities, get_db, get_obj_meta, get_scopes
 from gerrydb_meta.crud.base import normalize_path
 from gerrydb_meta.scopes import ScopeManager
+from uvicorn.config import logger as log
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ def map_locality(
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    log.debug("TOP OF MAP LOCALITY")
     layer_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if layer_namespace_obj is None or not scopes.can_write_in_namespace(
         layer_namespace_obj
@@ -58,6 +60,8 @@ def map_locality(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Geographic layer not found."
         )
+
+    log.debug("Mapping locality %s to layer %s", loc_obj, layer_obj)
 
     crud.geo_layer.map_locality(
         db=db,

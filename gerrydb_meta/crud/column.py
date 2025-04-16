@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Collection, Tuple
 
-from sqlalchemy import exc, insert, update, text
+from sqlalchemy import exc, insert, update, tuple_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import IntegrityError
@@ -17,8 +17,7 @@ from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.enums import ColumnType
 from gerrydb_meta.exceptions import ColumnValueTypeError, CreateValueError
 from gerrydb_meta.utils import create_column_value_partition_text
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 # Maps the `ColumnType` enum to columns in `ColumnValue`.
 COLUMN_TYPE_TO_VALUE_COLUMN = {
@@ -179,10 +178,14 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         now = datetime.now(timezone.utc)
 
         # Validate column data.
-        rows = []
+        rows_dict = {}
+        new_row_pairs = set()
         validation_errors = []
         for geo, value in values:
             suffix = f"column value for geography {geo.full_path}"
+            if geo.geo_id in rows_dict:
+                raise ValueError(f"Duplicate geography ID {geo.geo_id} found.")
+
             if col.type == ColumnType.FLOAT and isinstance(value, int):
                 # Silently promote int -> float.
                 value = float(value)
@@ -194,15 +197,14 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 validation_errors.append(f"Expected string {suffix}")
             elif col.type == ColumnType.BOOL and not isinstance(value, bool):
                 validation_errors.append(f"Expected boolean {suffix}")
-            rows.append(
-                {
-                    "col_id": col.col_id,
-                    "geo_id": geo.geo_id,
-                    "meta_id": obj_meta.meta_id,
-                    "valid_from": now,
-                    val_column: value,
-                }
-            )
+            rows_dict[geo.geo_id] = {
+                "col_id": col.col_id,
+                "geo_id": geo.geo_id,
+                "meta_id": obj_meta.meta_id,
+                "valid_from": now,
+                val_column: value,
+            }
+            new_row_pairs.add((geo.geo_id, value))
 
         if validation_errors:
             raise ColumnValueTypeError(errors=validation_errors)
@@ -213,6 +215,36 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         # make sure partition exists for column
         db.execute(create_column_value_partition_text(column_id=col.col_id))
 
+        old_row_pairs = set()
+        for item in (
+            db.query(models.ColumnValue)
+            .filter(
+                models.ColumnValue.col_id == col.col_id,
+                models.ColumnValue.geo_id.in_(geo_ids),
+                models.ColumnValue.valid_to.is_(None),
+            )
+            .all()
+        ):
+            if item.val_float is not None:
+                old_row_pairs.add((item.geo_id, item.val_float))
+            elif item.val_int is not None:
+                old_row_pairs.add((item.geo_id, item.val_int))
+            elif item.val_str is not None:
+                old_row_pairs.add((item.geo_id, item.val_str))
+            elif item.val_bool is not None:
+                old_row_pairs.add((item.geo_id, item.val_bool))
+            else:
+                raise ValueError("Unexpected value type.")
+
+        geo_ids_to_insert = set(rows_dict.keys())
+        if old_row_pairs != set():
+            assert len(old_row_pairs) == len(new_row_pairs)
+            geo_ids_to_insert = set()
+            for geo_id, value in new_row_pairs - old_row_pairs:
+                geo_ids_to_insert.add(geo_id)
+
+        rows = [rows_dict[geo_id] for geo_id in geo_ids_to_insert]
+
         with_tuples = (
             db.query(
                 models.ColumnValue.col_id,
@@ -221,30 +253,25 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             )
             .filter(
                 models.ColumnValue.col_id == col.col_id,
-                models.ColumnValue.geo_id.in_(geo_ids),
+                models.ColumnValue.geo_id.in_(geo_ids_to_insert),
                 models.ColumnValue.valid_to.is_(None),
             )
             .all()
         )
 
-        with_values = ["_".join([str(val) for val in tup]) for tup in with_tuples]
-
         with db.begin(nested=True):
             db.execute(insert(models.ColumnValue), rows)
             # Optimization: most column values are only set once, so we don't
             # need to invalidate old versions unless we previously detected them.
-            if with_values:
+            if with_tuples:
                 db.execute(
                     update(models.ColumnValue)
                     .where(
-                        "_".join(
-                            [
-                                str(models.ColumnValue.col_id),
-                                str(models.ColumnValue.geo_id),
-                                str(models.ColumnValue.valid_from),
-                            ]
-                        )
-                        in with_values
+                        tuple_(
+                            models.ColumnValue.col_id,
+                            models.ColumnValue.geo_id,
+                            models.ColumnValue.valid_from,
+                        ).in_(with_tuples)
                     )
                     .values(valid_to=now)
                 )

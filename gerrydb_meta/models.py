@@ -514,6 +514,9 @@ class DataColumn(Base):
         "ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id"
     )
 
+    def __repr__(self):
+        return f"DataColumn(canonical_ref={self.canonical_ref.full_path}, namespace={self.namespace.path})"
+
 
 class ColumnRef(Base):
     __tablename__ = "column_ref"
@@ -897,6 +900,20 @@ class ViewTemplateColumnSetMember(Base):
     member: Mapped[ColumnSet] = relationship("ColumnSet", lazy="joined")
 
 
+class ViewGeoSetVersions(Base):
+    __tablename__ = "view_geo_set_versions"
+
+    view_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("view.view_id"), nullable=False, primary_key=True
+    )
+    set_version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("geo_set_version.set_version_id"),
+        nullable=False,
+        primary_key=True,
+    )
+
+
 class View(Base):
     __tablename__ = "view"
     __table_args__ = (UniqueConstraint("namespace_id", "path"),)
@@ -918,10 +935,6 @@ class View(Base):
     )
     layer_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("geo_layer.layer_id"), nullable=False
-    )
-    # Technically redundant with (loc_id, layer_id) but very handy.
-    set_version_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("geo_set_version.set_version_id"), nullable=False
     )
     at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from google.cloud import storage
 from google.oauth2.service_account import Credentials
 from sqlalchemy.orm import Session
+from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import add_etag, namespace_with_read, parse_path
@@ -27,9 +28,9 @@ from gerrydb_meta.api.deps import (
 )
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
+from gerrydb_meta.exceptions import ViewConflictError
 import time
 
-log = logging.getLogger()
 
 router = APIRouter()
 GPKG_MEDIA_TYPE = "application/geopackage+sqlite3"
@@ -113,16 +114,24 @@ def create_view(
                 status_code=HTTPStatus.NOT_FOUND, detail="Dual graph not found."
             )
 
-    view_obj, etag = crud.view.create(
-        db=db,
-        obj_in=obj_in,
-        obj_meta=obj_meta,
-        namespace=view_namespace_obj,
-        template=template_obj,
-        locality=locality_obj,
-        layer=layer_obj,
-        graph=graph_obj,
-    )
+    try:
+        view_obj, etag = crud.view.create(
+            db=db,
+            obj_in=obj_in,
+            obj_meta=obj_meta,
+            namespace=view_namespace_obj,
+            template=template_obj,
+            locality=locality_obj,
+            layer=layer_obj,
+            graph=graph_obj,
+        )
+    except Exception as e:
+        if isinstance(e, ViewConflictError):
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail=f"Cannot create view. {e}",
+            )
+        raise e
     add_etag(response, etag)
     return schemas.ViewMeta.from_orm(view_obj)
 

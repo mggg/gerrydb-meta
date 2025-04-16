@@ -339,6 +339,13 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
     geo_layer_name = context.view.path
     internal_point_layer_name = f"{geo_layer_name}__internal_points"
 
+    if context.view.proj is not None:
+        proj_args = ["-t_srs", context.view.proj]
+    elif context.view.loc.default_proj is not None:
+        proj_args = ["-t_srs", context.view.loc.default_proj]
+    else:
+        proj_args = []  # leave in original projection (conventionally EPSG:4269)
+
     start = time.perf_counter()
     log.debug("Before ogr2ogr")
     base_args = [
@@ -346,6 +353,7 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         "GPKG",
         str(gpkg_path),
         db_config,
+        *proj_args,
     ]
 
     subprocess_command_list = [
@@ -382,13 +390,6 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
     log.debug("ogr2ogr took %s seconds", time.perf_counter() - start)
     start = time.perf_counter()
     conn = sqlite3.connect(gpkg_path)
-
-    conn.execute(
-        f"""
-        ALTER TABLE {geo_layer_name}
-        RENAME COLUMN geom to geography
-        """
-    )
 
     try:
         geo_row_count = conn.execute(
@@ -438,7 +439,7 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
             check=True,
             capture_output=True,
         )
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as ex:
         # Watch out for accidentally leaking credentials via logging here.
         # Production deployments should use a PostgreSQL connection service file
         # to pass credentials to ogr2ogr instead of passing a raw connection string.
