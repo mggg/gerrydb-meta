@@ -133,42 +133,45 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
     def __get_all_path_hashes_in_set_version(
         self, db: Session, valid_at: datetime, set_version_id: int
     ):
-        return (
-            db.query(models.Geography.path, models.GeoBin.geometry_hash)
-            .select_from(models.GeoSetVersion)
-            .filter(
-                models.GeoSetVersion.set_version_id == set_version_id,
+        return [
+            (item[0], item[1])
+            for item in (
+                db.query(models.Geography.path, models.GeoBin.geometry_hash)
+                .select_from(models.GeoSetVersion)
+                .filter(
+                    models.GeoSetVersion.set_version_id == set_version_id,
+                )
+                .join(
+                    models.GeoSetMember,
+                    models.GeoSetVersion.set_version_id
+                    == models.GeoSetMember.set_version_id,
+                )
+                .join(
+                    models.GeoVersion,
+                    models.GeoSetMember.geo_id == models.GeoVersion.geo_id,
+                )
+                .filter(
+                    models.GeoVersion.valid_from <= valid_at,
+                    or_(
+                        models.GeoVersion.valid_to.is_(None),
+                        models.GeoVersion.valid_to >= valid_at,
+                    ),
+                )
+                .join(
+                    models.Geography,
+                    models.GeoVersion.geo_id == models.Geography.geo_id,
+                )
+                .join(
+                    models.GeoBin,
+                    models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id,
+                )
             )
-            .join(
-                models.GeoSetMember,
-                models.GeoSetVersion.set_version_id
-                == models.GeoSetMember.set_version_id,
-            )
-            .join(
-                models.GeoVersion,
-                models.GeoSetMember.geo_id == models.GeoVersion.geo_id,
-            )
-            .filter(
-                models.GeoVersion.valid_from <= valid_at,
-                or_(
-                    models.GeoVersion.valid_to.is_(None),
-                    models.GeoVersion.valid_to >= valid_at,
-                ),
-            )
-            .join(
-                models.Geography,
-                models.GeoVersion.geo_id == models.Geography.geo_id,
-            )
-            .join(
-                models.GeoBin,
-                models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id,
-            )
-        )
+        ]
 
     def __get_all_set_col_ids(
         self, db: Session, valid_at: datetime, template_version_id: int
     ):
-        return (
+        query = (
             db.query(models.GeoSetVersion.set_version_id, models.ColumnRef.path)
             .select_from(models.GeoSetVersion)
             .filter(
@@ -203,15 +206,29 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 models.ColumnRef.col_id == models.ColumnValue.col_id,
             )
             .join(
+                models.ColumnSetMember,
+                models.ColumnSetMember.ref_id == models.ColumnRef.ref_id,
+            )
+            .outerjoin(
                 models.ViewTemplateColumnMember,
                 models.ViewTemplateColumnMember.ref_id == models.ColumnRef.ref_id,
             )
-            .filter(
-                models.ViewTemplateColumnMember.template_version_id
-                == template_version_id
+            .outerjoin(
+                models.ViewTemplateColumnSetMember,
+                models.ViewTemplateColumnSetMember.set_id
+                == models.ColumnSetMember.set_id,
             )
-            .distinct()
+            .filter(
+                or_(
+                    models.ViewTemplateColumnMember.template_version_id
+                    == template_version_id,
+                    models.ViewTemplateColumnSetMember.template_version_id
+                    == template_version_id,
+                )
+            )
         )
+
+        return [(item[0], item[1]) for item in query.distinct()]
 
     def __validate_geo_set_compatabilty(
         self,

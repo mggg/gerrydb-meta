@@ -189,7 +189,8 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             if col.type == ColumnType.FLOAT and isinstance(value, int):
                 # Silently promote int -> float.
                 value = float(value)
-            elif col.type == ColumnType.FLOAT and not isinstance(value, float):
+
+            if col.type == ColumnType.FLOAT and not isinstance(value, float):
                 validation_errors.append(f"Expected integer or floating-point {suffix}")
             elif col.type == ColumnType.INT and not isinstance(value, int):
                 validation_errors.append(f"Expected integer {suffix}")
@@ -197,14 +198,15 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 validation_errors.append(f"Expected string {suffix}")
             elif col.type == ColumnType.BOOL and not isinstance(value, bool):
                 validation_errors.append(f"Expected boolean {suffix}")
-            rows_dict[geo.geo_id] = {
-                "col_id": col.col_id,
-                "geo_id": geo.geo_id,
-                "meta_id": obj_meta.meta_id,
-                "valid_from": now,
-                val_column: value,
-            }
-            new_row_pairs.add((geo.geo_id, value))
+            else:
+                rows_dict[geo.geo_id] = {
+                    "col_id": col.col_id,
+                    "geo_id": geo.geo_id,
+                    "meta_id": obj_meta.meta_id,
+                    "valid_from": now,
+                    val_column: value,
+                }
+                new_row_pairs.add((geo.geo_id, value))
 
         if validation_errors:
             raise ColumnValueTypeError(errors=validation_errors)

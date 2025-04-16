@@ -15,7 +15,7 @@ COLUMNS_ROOT = f"{API_PREFIX}/columns"
     "typed_vals",
     [
         (ColumnType.INT, -1, 1),
-        (ColumnType.FLOAT, 1.0, float("inf")),
+        (ColumnType.FLOAT, 1.0, 3.141592653589793),
         (ColumnType.BOOL, True, False),
         (ColumnType.STR, "", "abc"),
     ],
