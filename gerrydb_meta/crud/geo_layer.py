@@ -11,8 +11,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import CreateValueError
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 
 class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
@@ -25,6 +24,8 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
         namespace: models.Namespace,
     ) -> Tuple[models.GeoLayer, uuid.UUID]:
         """Creates a new geographic layer."""
+        log.debug("TOP OF CREATE GEO LAYER")
+
         with db.begin(nested=True):
             # Create a path to the column.
             canonical_path = normalize_path(obj_in.path)
@@ -89,7 +90,38 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
                 "to a geographic layer."
             )
 
+        new_geo_ids = set(geo.geo_id for geo in geographies)
+
+        log.debug("NEW GEO IDS: %s", new_geo_ids)
+
         with db.begin(nested=True):
+            # First check to see if we need to create a new geo set
+            old_geo_ids = set(
+                [
+                    item[0]
+                    for item in db.query(models.GeoSetMember.geo_id)
+                    .join(
+                        models.GeoSetVersion,
+                        models.GeoSetMember.set_version_id
+                        == models.GeoSetVersion.set_version_id,
+                    )
+                    .all()
+                ]
+            )
+
+            log.debug("OLD GEO IDS: %s", old_geo_ids)
+
+            if old_geo_ids == new_geo_ids:
+                # No need to create a new set
+                log.debug(
+                    f"Attempted to create a new geo set for layer {layer.full_path}"
+                    f" in the namespace {layer.namespace.path} at locality "
+                    f" {locality.canonical_ref} but the new set is identical"
+                    f" to the old set."
+                )
+                db.flush()
+                return
+
             # Deprecate old version if present.
             db.execute(
                 update(models.GeoSetVersion)

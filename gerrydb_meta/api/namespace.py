@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
+from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import add_etag, check_etag

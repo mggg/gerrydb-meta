@@ -104,6 +104,35 @@ def create_graph(
 
 
 @router.get(
+    "/{namespace}",
+    response_model=list[schemas.GraphMeta],
+    dependencies=[Depends(can_read_localities)],
+)
+def all_graphs(
+    *,
+    response: Response,
+    namespace: str,
+    db: Session = Depends(get_db),
+    scopes: ScopeManager = Depends(get_scopes),
+):
+    graph_namespace_obj = crud.namespace.get(db=db, path=namespace)
+    if graph_namespace_obj is None or not scopes.can_read_in_namespace(
+        graph_namespace_obj
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=(
+                f'Namespace "{namespace}" not found, or you do not have '
+                "sufficient permissions to write views in this namespace."
+            ),
+        )
+    graph_objs = crud.graph.all(db=db, namespace=graph_namespace_obj)
+    etag = crud.graph.etag(db, graph_namespace_obj)
+    add_etag(response, etag)
+    return [schemas.GraphMeta.from_orm(graph_obj) for graph_obj in graph_objs]
+
+
+@router.get(
     "/{namespace}/{path:path}",
     response_model=schemas.GraphMeta,
     dependencies=[Depends(can_read_localities)],

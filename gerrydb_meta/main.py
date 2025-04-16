@@ -15,7 +15,7 @@ from gerrydb_meta.exceptions import (
     CreateValueError,
 )
 
-from uvicorn.config import LOGGING_CONFIG, logger
+from uvicorn.config import logger
 
 from io import BytesIO
 import json
@@ -93,7 +93,7 @@ async def log_400_errors(request: Request, call_next):
     response = await call_next(request)
 
     # Check for the specific status code
-    if response.status_code in [400, 422]:
+    if response.status_code in [400, 403, 409, 422]:
 
         # If the response is a StreamingResponse, you need to iterate over the body
         # and consume it to log the content
