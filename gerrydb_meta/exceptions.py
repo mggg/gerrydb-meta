@@ -40,3 +40,11 @@ class ColumnValueTypeError(GerryValueError):
 
 class GerryPathError(Exception):
     """Raised when an invalid path is provided. Generally, this means invalid characters are present"""
+
+
+class ViewCreateError(Exception):
+    """Raised when a view cannot be created on the server side"""
+
+
+class ViewConflictError(Exception):
+    """Raised when a view cannot be created on the server side"""

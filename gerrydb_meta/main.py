@@ -15,7 +15,7 @@ from gerrydb_meta.exceptions import (
     CreateValueError,
 )
 
-from uvicorn.config import LOGGING_CONFIG, logger
+from uvicorn.config import logger
 
 from io import BytesIO
 import json
@@ -77,7 +77,14 @@ def bulk_create_error(request: Request, exc: BulkCreateError):
     )
 
 
-app.add_middleware(GZipMiddleware)
+# It's best to keep the compression level at 1 for GeoPackages. GZIP has trouble getting good
+# compression ratios on anything since the WKBs used to represent the geometries in the GeoPackage
+# look relatively random. The remaining columns in the SQLite database are not very large, and
+# compress pretty well with a small compression level. Setting the compression level above 1
+# gets incredibly marginal improvements, but massively increases the compute time for the
+# compression. Anything else come in the form of a Schema, and those are generally too small
+# for a high compression level to do much.
+app.add_middleware(GZipMiddleware, compresslevel=1)
 app.include_router(api_router, prefix=API_PREFIX)
 
 
@@ -86,7 +93,7 @@ async def log_400_errors(request: Request, call_next):
     response = await call_next(request)
 
     # Check for the specific status code
-    if response.status_code in [400, 422]:
+    if response.status_code in [400, 403, 409, 422]:
 
         # If the response is a StreamingResponse, you need to iterate over the body
         # and consume it to log the content
@@ -146,3 +153,11 @@ async def log_400_errors(request: Request, call_next):
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/middlewares")
+def list_middlewares():
+    middleware_info = [
+        {"class": str(m.cls), "options": m.options} for m in app.user_middleware
+    ]
+    return {"middlewares": middleware_info}

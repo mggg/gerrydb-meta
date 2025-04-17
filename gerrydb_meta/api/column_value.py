@@ -10,6 +10,7 @@ from gerrydb_meta.api.base import geos_from_paths, namespace_write_error_msg
 from gerrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 from gerrydb_meta.crud.base import normalize_path
 from gerrydb_meta.scopes import ScopeManager
+from uvicorn.config import logger as log
 
 router = APIRouter()
 
@@ -28,6 +29,7 @@ def set_column_values(
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    log.debug("IN THE PUT METHOD OF COLUMN VALUES")
     col_path = normalize_path(path)
     col_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if col_namespace_obj is None or not scopes.can_write_in_namespace(

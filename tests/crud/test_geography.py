@@ -4,6 +4,7 @@ from gerrydb_meta import models
 from gerrydb_meta.exceptions import *
 from shapely import Point, Polygon
 from shapely import wkb
+from geoalchemy2 import WKBElement
 import pytest
 
 square_corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
@@ -146,9 +147,9 @@ def test_crud_geography_create_bulk_wkb_fail(db_with_meta):
             obj_meta=meta,
         )
 
-    assert (
-        str(e.value)
-        == "Failed to insert geometries. Geometries must be encoded in WKB format."
+    assert str(e.value) == (
+        "Failed to insert geometries. This is likely due to invalid Geometries; please ensure "
+        "geometries can be encoded in WKB format."
     )
 
 
@@ -218,7 +219,7 @@ def test_crud_geography_patch_bulk_vacuous_update(db_with_meta):
         namespace=ns,
     )
 
-    assert geo[0][1].geography == None
+    assert geo[0][1].geography == WKBElement(Polygon().wkb, srid=4269)
 
 
 def test_crud_geography_patch_bulk_redundant_update_fail(db_with_meta):

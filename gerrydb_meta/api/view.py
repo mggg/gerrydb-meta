@@ -10,10 +10,11 @@ from typing import Generator
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from google.cloud import storage
 from google.oauth2.service_account import Credentials
 from sqlalchemy.orm import Session
+from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import add_etag, namespace_with_read, parse_path
@@ -27,11 +28,11 @@ from gerrydb_meta.api.deps import (
 )
 from gerrydb_meta.render import view_to_gpkg
 from gerrydb_meta.scopes import ScopeManager
+from gerrydb_meta.exceptions import ViewConflictError
+import time
 
-log = logging.getLogger()
 
 router = APIRouter()
-CHUNK_SIZE = 32 * 1024 * 1024  # for gzipping rendered views
 GPKG_MEDIA_TYPE = "application/geopackage+sqlite3"
 
 
@@ -113,16 +114,24 @@ def create_view(
                 status_code=HTTPStatus.NOT_FOUND, detail="Dual graph not found."
             )
 
-    view_obj, etag = crud.view.create(
-        db=db,
-        obj_in=obj_in,
-        obj_meta=obj_meta,
-        namespace=view_namespace_obj,
-        template=template_obj,
-        locality=locality_obj,
-        layer=layer_obj,
-        graph=graph_obj,
-    )
+    try:
+        view_obj, etag = crud.view.create(
+            db=db,
+            obj_in=obj_in,
+            obj_meta=obj_meta,
+            namespace=view_namespace_obj,
+            template=template_obj,
+            locality=locality_obj,
+            layer=layer_obj,
+            graph=graph_obj,
+        )
+    except Exception as e:
+        if isinstance(e, ViewConflictError):
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail=f"Cannot create view. {e}",
+            )
+        raise e
     add_etag(response, etag)
     return schemas.ViewMeta.from_orm(view_obj)
 
@@ -140,6 +149,10 @@ def get_view(
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    """
+    Returns a ViewMeta object containing information about a view, but not the
+    view itself.
+    """
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if view_namespace_obj is None or not scopes.can_read_in_namespace(
         view_namespace_obj
@@ -198,7 +211,7 @@ def all_views(
     "/{namespace}/{path:path}",
     status_code=HTTPStatus.CREATED,
     dependencies=[Depends(can_read_localities)],
-    response_class=StreamingResponse,
+    response_class=FileResponse,
 )
 def render_view(
     *,
@@ -209,6 +222,7 @@ def render_view(
     user: models.User = Depends(get_user),
     scopes: ScopeManager = Depends(get_scopes),
 ):
+    log.debug("TOP OF VIEW RENDER")
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
     if view_namespace_obj is None or not scopes.can_read_in_namespace(
         view_namespace_obj
@@ -264,15 +278,20 @@ def render_view(
                 "Falling back to direct streaming."
             )
 
+    log.debug("BEFORE RENDER")
+    start = time.perf_counter()
     etag = crud.view.etag(db, view_namespace_obj)
     render_ctx = crud.view.render(db=db, view=view_obj)
+    log.debug("Time to render: %s", time.perf_counter() - start)
+    start = time.perf_counter()
     render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
-
+    log.debug("Time to write GPKG: %s", time.perf_counter() - start)
+    log.debug("AFTER GPKG")
     if has_gcs_context:
         try:
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
-            subprocess.run(["gzip", "-k", str(gpkg_path)], check=True)
+            subprocess.run(["gzip", "-k", "-1", str(gpkg_path)], check=True)
 
             blob_path = f"{render_uuid.hex}.gpkg.gz"
             blob = bucket.blob(blob_path)
@@ -306,18 +325,11 @@ def render_view(
             )
             raise ex
 
-    return StreamingResponse(
-        _async_read_and_delete(gpkg_path),
+    return FileResponse(
+        gpkg_path,
         media_type=GPKG_MEDIA_TYPE,
         headers={
             "ETag": etag.hex,
             "X-GerryDB-View-Render-ID": render_uuid.hex,
         },
     )
-
-
-async def _async_read_and_delete(path: Path) -> Generator[bytes, None, None]:
-    """Asynchronously reads a temporary file, then deletes it."""
-    with open(path, "rb") as fp:
-        yield fp.read()
-    path.unlink()

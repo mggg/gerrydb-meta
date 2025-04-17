@@ -10,6 +10,9 @@ from gerrydb_meta.admin import GerryAdmin
 from gerrydb_meta.models import Base
 
 from pathlib import Path
+import os
+
+GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 
 
 @click.command()
@@ -33,7 +36,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bo
     Expects the `GERRYDB_DATABASE_URI` environment variable to be set to
     a PostgreSQL connection string.
     """
-    engine = create_engine(os.getenv("GERRYDB_DATABASE_URI"))
+    engine = create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
     db = sessionmaker(engine)()
 
     if reset:

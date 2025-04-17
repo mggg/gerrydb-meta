@@ -241,6 +241,10 @@ class GeographyPatch(GeographyBase):
     """Geographic unit data received on PATCH."""
 
 
+class GeographyUpsert(GeographyBase):
+    """Geographic unit data received on UPSERT (PUT)."""
+
+
 class Geography(GeographyBase):
     """Geographic unit data returned by the database."""
 

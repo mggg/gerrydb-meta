@@ -1,15 +1,13 @@
 """Administration tools for GerryDB."""
 
 import csv
-import logging
 import os
-import random
+import secrets
 import string
 from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha512
 from pathlib import Path
-from typing import Optional
 
 import click
 from sqlalchemy import create_engine
@@ -18,9 +16,14 @@ from sqlalchemy.orm import sessionmaker
 
 from gerrydb_meta.enums import NamespaceGroup, ScopeType
 from gerrydb_meta.models import ApiKey, ObjectMeta, User, UserScope
+from uvicorn.config import logger as log
+import os
 
-log = logging.getLogger()
-Session = sessionmaker(create_engine(os.getenv("GERRYDB_DATABASE_URI")))
+GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
+
+Session = sessionmaker(
+    create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
+)
 
 API_KEY_CHARS = string.ascii_lowercase + string.digits
 
@@ -33,7 +36,16 @@ def _generate_api_key() -> tuple[str, bytes]:
             (1) The raw key.
             (2) A binary digest of the SHA512 hash of the key.
     """
-    key = "".join(random.choice(API_KEY_CHARS) for _ in range(64))
+    key = "".join(secrets.choice(API_KEY_CHARS) for _ in range(64))
+    test_key = "7w7uv9mi575n2dhlmg3wqba2imv1aqdys387tpbtpermujy1tuyqbxetygx8u3fr"
+    redraws = 0
+    while key == test_key and redraws < 3:
+        key = "".join(secrets.choice(API_KEY_CHARS) for _ in range(64))
+        redraws += 1
+
+    if redraws >= 3:
+        raise RuntimeError("Failed to generate a unique API key.")
+
     key_hash = sha512(key.encode("utf-8")).digest()
     return key, key_hash
 
@@ -75,7 +87,7 @@ class GerryAdmin:
         Returns a new user. If `super_user`, grants user global privileges.
 
         By default, a new user is only allowed to read from public namespaces.
-        In order to write or do anythin else, an admin must grant the user
+        In order to write or do anything else, an admin must grant the user
         permissions on the back end.
 
 

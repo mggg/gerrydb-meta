@@ -16,13 +16,18 @@ from gerrydb_meta import crud, models
 from gerrydb_meta.db import db_url, ogr2ogr_db_config
 from gerrydb_meta.enums import ScopeType
 from gerrydb_meta.scopes import ScopeManager
+from uvicorn.config import logger as log
+import time
+import os
+
+GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 
 def get_db() -> Generator:
     try:
-        engine = create_engine(db_url)
+        engine = create_engine(db_url, echo=GERRYDB_SQL_ECHO)
         Session = sessionmaker(engine)
         db = Session()
         yield db
@@ -82,12 +87,16 @@ def get_obj_meta(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Object metadata ID is not a valid UUID hex string.",
         )
-
+    # NOTE: this sleep needs to be here otherwise you can try to query the db before
+    # it has committed the metadata object
+    time.sleep(0.1)
+    log.debug("Retrieving ObjectMeta: %s", meta_uuid)  # Debugging line
     obj_meta = crud.obj_meta.get(db=db, id=meta_uuid)
+    log.debug("Retrieved ObjectMeta for: %s", obj_meta.uuid)  # Debugging line
     if obj_meta is None:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail="Unknown object metadata ID.",
+            detail="Metadata object could not be found in the database.",
         )
     if obj_meta.created_by != user.user_id:
         raise HTTPException(
