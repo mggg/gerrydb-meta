@@ -29,6 +29,7 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
         with db.begin(nested=True):
             # Create a path to the column.
             canonical_path = normalize_path(obj_in.path)
+            log.debug("CANONICAL PATH: %s", canonical_path)
             geo_layer = models.GeoLayer(
                 path=canonical_path,
                 description=obj_in.description,

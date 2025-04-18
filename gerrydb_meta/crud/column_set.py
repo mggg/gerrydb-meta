@@ -59,6 +59,16 @@ class CRColumnSet(NamespacedCRBase[models.ColumnSet, schemas.ColumnSetCreate]):
             if len(col_ids) > len(set(col_ids)):
                 raise CreateValueError("Columns in a column set must be unique.")
 
+            all_paths = list(
+                item[0]
+                for item in db.query(models.ColumnRef.path)
+                .filter(models.ColumnRef.col_id.in_(col_ids))
+                .all()
+            )
+
+            if len(all_paths) > len(set(all_paths)):
+                raise CreateValueError("Columns in a column set must be unique.")
+
             for idx, ref_obj in enumerate(refs):
                 db.add(
                     models.ColumnSetMember(

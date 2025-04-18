@@ -171,7 +171,53 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
     def __get_all_set_col_ids(
         self, db: Session, valid_at: datetime, template_version_id: int
     ):
-        query = (
+        col_query = (
+            db.query(models.GeoSetVersion.set_version_id, models.ColumnRef.path)
+            .select_from(models.GeoSetVersion)
+            .filter(
+                models.GeoSetVersion.valid_from <= valid_at,
+                or_(
+                    models.GeoSetVersion.valid_to.is_(None),
+                    models.GeoSetVersion.valid_to >= valid_at,
+                ),
+            )
+            .join(
+                models.GeoSetMember,
+                models.GeoSetMember.set_version_id
+                == models.GeoSetVersion.set_version_id,
+            )
+            .join(
+                models.Geography,
+                models.Geography.geo_id == models.GeoSetMember.geo_id,
+            )
+            .join(
+                models.ColumnValue,
+                models.Geography.geo_id == models.ColumnValue.geo_id,
+            )
+            .filter(
+                models.ColumnValue.valid_from <= valid_at,
+                or_(
+                    models.ColumnValue.valid_to.is_(None),
+                    models.ColumnValue.valid_to >= valid_at,
+                ),
+            )
+            .join(
+                models.ColumnRef,
+                models.ColumnRef.col_id == models.ColumnValue.col_id,
+            )
+            .join(
+                models.ViewTemplateColumnMember,
+                models.ViewTemplateColumnMember.ref_id == models.ColumnRef.ref_id,
+            )
+            .filter(
+                or_(
+                    models.ViewTemplateColumnMember.template_version_id
+                    == template_version_id,
+                )
+            )
+        )
+
+        col_set_query = (
             db.query(models.GeoSetVersion.set_version_id, models.ColumnRef.path)
             .select_from(models.GeoSetVersion)
             .filter(
@@ -209,26 +255,24 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 models.ColumnSetMember,
                 models.ColumnSetMember.ref_id == models.ColumnRef.ref_id,
             )
-            .outerjoin(
-                models.ViewTemplateColumnMember,
-                models.ViewTemplateColumnMember.ref_id == models.ColumnRef.ref_id,
-            )
-            .outerjoin(
+            .join(
                 models.ViewTemplateColumnSetMember,
                 models.ViewTemplateColumnSetMember.set_id
                 == models.ColumnSetMember.set_id,
             )
             .filter(
                 or_(
-                    models.ViewTemplateColumnMember.template_version_id
-                    == template_version_id,
                     models.ViewTemplateColumnSetMember.template_version_id
                     == template_version_id,
                 )
             )
         )
 
-        return [(item[0], item[1]) for item in query.distinct()]
+        ret = [(item[0], item[1]) for item in col_query.distinct()] + [
+            (item[0], item[1]) for item in col_set_query.distinct()
+        ]
+
+        return ret
 
     def __validate_geo_set_compatabilty(
         self,
@@ -238,6 +282,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         template_version_id: int,
     ) -> tuple[list[int], int]:
 
+        log.debug("TOP OF VALIDATE GEO SET COMPATABILITY")
         curr_ns_set_version_id = list(
             db.query(models.GeoSetVersion.set_version_id)
             .select_from(models.GeoSetVersion)
