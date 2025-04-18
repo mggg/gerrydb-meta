@@ -367,7 +367,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                     "columns that you are trying to make a view for have the same "
                     "geographies. The following columns sets have different "
                     "geographies: \n"
-                    f"\t{set_version_to_cols_dict[all_set_version_ids[0]]}"
+                    f"\t{set_version_to_cols_dict[list(all_set_version_ids)[0]]}"
                 )
         all_set_version_ids.add(curr_ns_set_version_id)
         return (
