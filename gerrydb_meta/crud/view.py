@@ -42,25 +42,6 @@ PLAN_BATCH_SIZE = 10000
 GRAPH_BATCH_SIZE = 100000
 
 
-def _geo_set_version_id(
-    db: Session, locality: models.Locality, layer: models.GeoLayer, at: datetime
-) -> int | None:
-    """Gets the primary key of a GeoSetVersion by (locality, layer, at)."""
-    return (
-        db.query(models.GeoSetVersion.set_version_id)
-        .filter(
-            models.GeoSetVersion.loc_id == locality.loc_id,
-            models.GeoSetVersion.layer_id == layer.layer_id,
-            models.GeoSetVersion.valid_from <= at,
-            or_(
-                models.GeoSetVersion.valid_to.is_(None),
-                models.GeoSetVersion.valid_to >= at,
-            ),
-        )
-        .scalar()
-    )
-
-
 def _view_columns(
     db: Session, template_version_id: int
 ) -> dict[str, models.DataColumn]:
@@ -169,7 +150,12 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         ]
 
     def __get_all_set_col_ids(
-        self, db: Session, valid_at: datetime, template_version_id: int
+        self,
+        db: Session,
+        available_layer_ids: list[int],
+        loc_id: int,
+        valid_at: datetime,
+        template_version_id: int,
     ):
         col_query = (
             db.query(models.GeoSetVersion.set_version_id, models.ColumnRef.path)
@@ -180,6 +166,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                     models.GeoSetVersion.valid_to.is_(None),
                     models.GeoSetVersion.valid_to >= valid_at,
                 ),
+                models.GeoSetVersion.layer_id.in_(available_layer_ids),
+                models.GeoSetVersion.loc_id == loc_id,
             )
             .join(
                 models.GeoSetMember,
@@ -226,6 +214,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                     models.GeoSetVersion.valid_to.is_(None),
                     models.GeoSetVersion.valid_to >= valid_at,
                 ),
+                models.GeoSetVersion.layer_id.in_(available_layer_ids),
+                models.GeoSetVersion.loc_id == loc_id,
             )
             .join(
                 models.GeoSetMember,
@@ -268,9 +258,13 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             )
         )
 
-        ret = [(item[0], item[1]) for item in col_query.distinct()] + [
-            (item[0], item[1]) for item in col_set_query.distinct()
-        ]
+        col_results = [(item[0], item[1]) for item in col_query.distinct()]
+        col_set_resuls = [(item[0], item[1]) for item in col_set_query.distinct()]
+
+        log.debug("COL RESULTS: %s", col_results)
+        log.debug("COL SET RESULTS: %s", col_set_resuls)
+
+        ret = col_results + col_set_resuls
 
         return ret
 
@@ -278,11 +272,21 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         self,
         db: Session,
         namespace: models.Namespace,
+        locality: models.Locality,
+        layer: models.GeoLayer,
         valid_at: datetime,
         template_version_id: int,
     ) -> tuple[list[int], int]:
 
         log.debug("TOP OF VALIDATE GEO SET COMPATABILITY")
+        available_layer_ids = list(
+            item[0]
+            for item in db.query(models.GeoLayer.layer_id)
+            .filter(models.GeoLayer.path == layer.path)
+            .all()
+        )
+
+        log.debug("AVAILABLE LAYER IDS: %s", available_layer_ids)
         curr_ns_set_version_id = list(
             db.query(models.GeoSetVersion.set_version_id)
             .select_from(models.GeoSetVersion)
@@ -292,6 +296,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                     models.GeoSetVersion.valid_to.is_(None),
                     models.GeoSetVersion.valid_to >= valid_at,
                 ),
+                models.GeoSetVersion.loc_id == locality.loc_id,
+                models.GeoSetVersion.layer_id.in_(available_layer_ids),
             )
             .join(
                 models.GeoSetMember,
@@ -324,11 +330,16 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         set_version_to_cols_dict = {}
         for set_version_id, col_id in self.__get_all_set_col_ids(
-            db=db, valid_at=valid_at, template_version_id=template_version_id
+            db=db,
+            available_layer_ids=available_layer_ids,
+            loc_id=locality.loc_id,
+            valid_at=valid_at,
+            template_version_id=template_version_id,
         ):
             set_version_to_cols_dict.setdefault(set_version_id, set()).add(col_id)
 
         all_set_version_ids = set(set_version_to_cols_dict.keys())
+        log.debug("ALL SET VERSION IDS: %s", all_set_version_ids)
 
         if len(all_set_version_ids) == 0:
             raise CreateValueError(
@@ -352,6 +363,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             )
         }
 
+        log.debug("ALL SET VERSION IDS: %s", all_set_version_ids)
+        log.debug("CURR NS SET VERSION ID: %s", curr_ns_set_version_id)
         for set_version_id in all_set_version_ids:
             new_set_dict = {
                 item[0]: item[1]
@@ -360,6 +373,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 )
             }
             if new_set_dict != orig_set_dict:
+                # log.debug(new_set_dict)
+                # log.debug(orig_set_dict)
                 raise ViewConflictError(
                     "Cannot create view. Some of the geographies are defined "
                     "on a geo_layer that does not have the same geometries as "
@@ -417,6 +432,8 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             self.__validate_geo_set_compatabilty(
                 db=db,
                 namespace=namespace,
+                locality=locality,
+                layer=layer,
                 valid_at=valid_at,
                 template_version_id=template_version_id,
             )
