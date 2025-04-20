@@ -5,9 +5,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from gerrydb_meta.admin import GerryAdmin, grant_scope
-from gerrydb_meta.models import Base
+from gerrydb_meta.models import ApiKey
 from gerrydb_meta.enums import ScopeType
 
+from hashlib import sha512
 from pathlib import Path
 from typing import Optional
 
@@ -64,12 +65,19 @@ def main(
 
     admin = GerryAdmin(session=db)
     user = admin.user_create(name=name, email=email)
+    if key:
+        key_hash = sha512(key.encode("utf-8")).digest()
+        print(f"Key hash: {key_hash.hex()}")
+        db.add(ApiKey(user=user, key_hash=key_hash))
+
     api_key = key if key else admin.key_create(user=user)
 
     print(f"Created user {user} with API key {api_key}")
 
     for s in scope:
-        grant_scope(db=db, user=user, scope=scope_type_dict[s])
+        grant_scope(
+            db=db, user=user, scope=scope_type_dict[s], namespace_group=namespace_group
+        )
         print(f"Granted {scope_type_dict[s]} scope to {user}")
 
     db.commit()

@@ -26,7 +26,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy import insert
 from sqlalchemy.sql import text, column
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, NoResultFound
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
@@ -287,7 +287,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         )
 
         log.debug("AVAILABLE LAYER IDS: %s", available_layer_ids)
-        curr_ns_set_version_id = list(
+        curr_ns_query = (
             db.query(models.GeoSetVersion.set_version_id)
             .select_from(models.GeoSetVersion)
             .filter(
@@ -318,12 +318,13 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .first()
         )
 
-        if len(curr_ns_set_version_id) == 0:
+        if curr_ns_query is None:
             raise CreateValueError(
-                "Cannot instantiate view: no set of geographies exists "
-                "satisfying locality, layer, and time constraints "
-                "in the current namespace."
+                "No set of geographies exists in the current namespace "
+                "satisfying locality and layer constraints."
             )
+
+        curr_ns_set_version_id = list(curr_ns_query)
 
         assert len(curr_ns_set_version_id) == 1
         curr_ns_set_version_id = curr_ns_set_version_id[0]
@@ -348,7 +349,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 "for the columns in the view template."
             )
 
-        all_set_version_ids.remove(curr_ns_set_version_id)
+        all_set_version_ids.discard(curr_ns_set_version_id)
 
         if len(all_set_version_ids) == 0:
             return [curr_ns_set_version_id], curr_ns_set_version_id

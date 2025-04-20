@@ -8,12 +8,11 @@ from sqlalchemy.orm import Session
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import (
-    NamespacedObjectApi,
     add_etag,
     geo_set_from_paths,
     geos_from_paths,
 )
-from gerrydb_meta.api.base import add_etag, namespace_with_read, parse_path
+from gerrydb_meta.api.base import add_etag
 from gerrydb_meta.scopes import ScopeManager
 from gerrydb_meta.render import graph_to_gpkg
 from gerrydb_meta.api.deps import (
@@ -25,7 +24,7 @@ from gerrydb_meta.api.deps import (
     get_user,
 )
 from uvicorn.config import logger as log
-from fastapi.responses import RedirectResponse, StreamingResponse, FileResponse
+from fastapi.responses import FileResponse
 import time
 
 GPKG_MEDIA_TYPE = "application/geopackage+sqlite3"

@@ -297,6 +297,25 @@ def fork_geos_between_namespaces(
         )
     )
 
+    locality = crud.locality.get_by_ref(db=db, path=loc_ref)
+    layer = crud.geo_layer.get(db=db, path=target_layer, namespace=target_namespace_obj)
+
+    if locality is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=(
+                f"Locality '{loc_ref}' not found in namespace '{target_namespace}'."
+            ),
+        )
+
+    if layer is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=(
+                f"Layer '{target_layer}' not found in namespace '{target_namespace}'."
+            ),
+        )
+
     # Now check that you are migrating from a public namespace.
     # At this point, the user has already shown that they have read access to
     # the source namespace, so we can give them information about that namespace
@@ -348,7 +367,7 @@ def fork_geos_between_namespaces(
         db=db, obj_meta=meta_obj, namespace=target_namespace_obj
     )
 
-    return crud.geography.fork_bulk(
+    geo_ret = crud.geography.fork_bulk(
         db=db,
         source_namespace=source_namespace_obj,
         target_namespace=target_namespace_obj,
@@ -356,3 +375,13 @@ def fork_geos_between_namespaces(
         geo_import=geo_import,
         obj_meta=meta_obj,
     )
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=layer,
+        locality=locality,
+        geographies=[item[0] for item in geo_ret[0]],
+        obj_meta=meta_obj,
+    )
+
+    return geo_ret
