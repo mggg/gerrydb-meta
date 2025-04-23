@@ -6,12 +6,11 @@ from typing import Tuple
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
+from uvicorn.config import logger as log
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import CRBase
 from gerrydb_meta.exceptions import CreateValueError
-
-log = logging.getLogger()
 
 
 class CRNamespace(CRBase[models.Namespace, schemas.NamespaceCreate]):

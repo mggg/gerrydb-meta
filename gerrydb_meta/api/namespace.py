@@ -8,8 +8,15 @@ from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import add_etag, check_etag
-from gerrydb_meta.api.deps import can_create_namespace, get_db, get_obj_meta, get_scopes
+from gerrydb_meta.api.deps import (
+    can_create_namespace,
+    get_db,
+    get_obj_meta,
+    get_scopes,
+)
 from gerrydb_meta.scopes import ScopeManager
+from gerrydb_meta.enums import ScopeType
+from gerrydb_meta.admin import GerryAdmin, grant_scope
 
 router = APIRouter()
 
@@ -68,4 +75,21 @@ def create_namespace(
 ) -> models.Namespace:
     namespace, etag = crud.namespace.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
     add_etag(response, etag)
+
+    # Now grant the appropriate scopes to the user.
+    user = db.query(models.User).get(obj_meta.created_by)
+
+    if not ScopeManager(user=user).can_read_in_namespace(namespace):
+        grant_scope(
+            db=db,
+            user=user,
+            scopes=[
+                ScopeType.NAMESPACE_READ,
+                ScopeType.NAMESPACE_WRITE,
+                ScopeType.NAMESPACE_WRITE_DERIVED,
+            ],
+            namespace_id=namespace.namespace_id,
+            meta=obj_meta,
+        )
+
     return namespace
