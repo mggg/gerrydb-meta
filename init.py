@@ -28,7 +28,19 @@ GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
     help="Sets the API key for the new user to a known value. "
     "FOR TESTING USE ONLY!!!",
 )
-def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bool):
+@click.option(
+    "--overwrite-config",
+    is_flag=True,
+    help="Overwrites the existing config file if it exists.",
+)
+def main(
+    name: str,
+    email: str,
+    reset: bool,
+    init_schema: bool,
+    use_test_key: bool,
+    overwrite_config: bool,
+):
     """Initializes a GerryDB instance with a superuser. Creates a .gerrydb/config file
     if none exists using localhost:8000 and the generated API key. Would connect
     to local database, not production.
@@ -75,7 +87,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bo
             print(f'key = "{api_key}"', file=config_fp)
 
     else:
-        overwrite = ""
+        overwrite = "y" if overwrite_config else ""
         while overwrite not in ["y", "n"]:
             overwrite = input(
                 "A .gerrydb/config file already exists, would you like to overwrite it? Y/N: "

@@ -33,9 +33,14 @@ import os
 
 GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 
-Session = sessionmaker(
-    create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
-)
+if os.getenv("GERRYDB_RUN_TESTS"):
+    Session = sessionmaker(
+        create_engine(os.getenv("GERRYDB_TEST_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
+    )
+else:
+    Session = sessionmaker(
+        create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
+    )
 
 API_KEY_CHARS = string.ascii_lowercase + string.digits
 
@@ -452,6 +457,7 @@ class GerryAdmin:
         if user_confirmation.lower() != "y":
             raise ValueError("User aborted API key creation.")
 
+        print()
         raw_key = "7w7uv9mi575n2dhlmg3wqba2imv1aqdys387tpbtpermujy1tuyqbxetygx8u3fr"
         key_hash = sha512(raw_key.encode("utf-8")).digest()
         log.info("Generated new ***TESTING*** API key for %s.", user)
