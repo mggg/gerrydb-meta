@@ -51,7 +51,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool, use_test_key: bo
         Base.metadata.create_all(engine)
 
     admin = GerryAdmin(session=db)
-    user = admin.initial_user_create(name=name, email=email, super_user=True)
+    user = admin.initial_user_create(name=name, email=email)
 
     if use_test_key:
         api_key = admin.create_test_key(user=user)
