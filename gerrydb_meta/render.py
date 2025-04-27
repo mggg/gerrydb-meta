@@ -417,6 +417,7 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         context.internal_point_query,
         "-nln",
         internal_point_layer_name,
+        "-skipfailures",  # Empty points are read as a failure
         "-nlt",
         "POINT",
     ]

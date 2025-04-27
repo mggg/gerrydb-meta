@@ -245,6 +245,10 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             for geo_id, value in new_row_pairs - old_row_pairs:
                 geo_ids_to_insert.add(geo_id)
 
+        # No values have changed, so we can skip the insert.
+        if geo_ids_to_insert == set():
+            return
+
         rows = [rows_dict[geo_id] for geo_id in geo_ids_to_insert]
 
         with_tuples = (

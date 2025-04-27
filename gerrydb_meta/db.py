@@ -6,6 +6,7 @@ import urllib.parse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from uvicorn.config import logger as log
 
 if os.getenv("INSTANCE_CONNECTION_NAME"):
     username = os.environ["DB_USER"]
@@ -21,6 +22,10 @@ if os.getenv("INSTANCE_CONNECTION_NAME"):
 else:
     # Local development: use Postgres URL direcrly.
     db_url = os.getenv("GERRYDB_DATABASE_URI")
+    if os.getenv("GERRYDB_RUN_TESTS"):
+        db_url = os.getenv("GERRYDB_TEST_DATABASE_URI")
+
     ogr2ogr_db_config = f"PG:{db_url}"
 
+log.debug("Using database URL: %s", db_url)
 Session = sessionmaker(create_engine(db_url))

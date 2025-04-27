@@ -8,7 +8,7 @@ from shapely.geometry import Point, Polygon
 import hashlib
 import binascii
 
-from geoalchemy2.elements import WKBElement
+from geoalchemy2.elements import WKBElement, WKTElement
 from sqlalchemy import and_, insert, or_, update, select, func
 from sqlalchemy.orm import Session
 
@@ -113,7 +113,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         missing_hashes: set[str],
     ) -> dict[str, int]:
         empty_polygon_wkb = WKBElement(Polygon().wkb, srid=4269)
-        empty_point_wkb = WKBElement(Point().wkb, srid=4269)
+        empty_point_wkb = WKTElement("POINT EMPTY", srid=4269)
 
         try:
             values_list = []

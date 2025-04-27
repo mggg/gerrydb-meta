@@ -93,8 +93,6 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
 
         new_geo_ids = set(geo.geo_id for geo in geographies)
 
-        log.debug("NEW GEO IDS: %s", new_geo_ids)
-
         with db.begin(nested=True):
             # First check to see if we need to create a new geo set
             old_geo_ids = set(
@@ -109,8 +107,6 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
                     .all()
                 ]
             )
-
-            log.debug("OLD GEO IDS: %s", old_geo_ids)
 
             if old_geo_ids == new_geo_ids:
                 # No need to create a new set

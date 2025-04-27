@@ -156,7 +156,7 @@ def __validate_forkability(
                 f"Cannot fork data from layer '{source_layer}' in '{source_namespace}' "
                 f"to layer '{target_layer}' in '{target_namespace}' because some "
                 f"geometries in the target namespace/layer are different from the geometries "
-                f"in the source namespace/layer. Forking should only be used when attemting "
+                f"in the source namespace/layer. Forking should only be used when attempting "
                 f"to add geometries from the source namespace/layer that were not previously "
                 f"present in the target namespace/layer to the target namespace/layer."
             ),
@@ -172,7 +172,6 @@ def __validate_forkability(
             ),
         )
 
-    log.debug(len(target_geo_hash_pairs))
     if not allow_extra_source_geos and len(diff_st) > 0:
         if len(target_geo_hash_pairs) == 0:
             raise HTTPException(

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.admin import GerryAdmin
 from gerrydb_meta.api.deps import get_db
-from gerrydb_meta.enums import NamespaceGroup, ScopeType
+from gerrydb_meta.enums import NamespaceGroup, ScopeType, GroupPermissions
 from gerrydb_meta.main import app
 
 from .scopes import grant_namespaced_scope, grant_scope
@@ -52,7 +52,16 @@ def ctx_no_scopes_factory(db):
         # TODO: replace with `crud` calls.
         nonlocal user_idx
         admin = GerryAdmin(db)
-        user = admin.user_create(name="Test User", email=f"test{user_idx}@example.com")
+        try:
+            creator = admin.initial_user_create("admin@example.com", "admin")
+        except Exception:
+            creator = admin.user_find_by_email("admin@example.com")
+        user = admin.user_create(
+            name="Test User",
+            email=f"test{user_idx}@example.com",
+            group_perm=GroupPermissions.PUBLIC,
+            creator=creator,
+        )
         user_idx += 1
         api_key = admin.key_create(user)
         db.flush()

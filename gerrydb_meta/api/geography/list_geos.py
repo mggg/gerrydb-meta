@@ -117,7 +117,6 @@ def __get_paths(namespace: str, loc_ref: str, layer: str, db: Session) -> list[s
             .all()
         )
     ]
-    log.debug(geo_objs)
     return geo_objs
 
 

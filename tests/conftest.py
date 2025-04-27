@@ -27,7 +27,7 @@ def db_schema(db_engine):
     """SQLAlchemy ORM session maker with GerryDB schema initialized."""
     with db_engine.connect() as conn:
         init_transaction = conn.begin()
-        conn.execute(text("DROP SCHEMA IF EXISTS gerrydb"))
+        conn.execute(text("DROP SCHEMA IF EXISTS gerrydb CASCADE"))
         conn.execute(text("CREATE SCHEMA gerrydb"))
         init_transaction.commit()
 

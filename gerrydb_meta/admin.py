@@ -475,6 +475,7 @@ class GerryAdmin:
 @click.group()
 def cli():
     """Administration tools for GerryDB."""
+    pass
 
 
 @contextmanager
@@ -510,7 +511,7 @@ def create_first_user(user_email: str, name: str):
 @click.option("-u", "--user-email", required=True)
 @click.option("--name", required=True)
 @click.option(
-    "--group-type",
+    "--group-perm",
     type=click.Choice([g.value for g in GroupPermissions], case_sensitive=False),
     default=GroupPermissions.PUBLIC.value,
     required=True,
