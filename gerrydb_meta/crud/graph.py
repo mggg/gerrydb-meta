@@ -264,20 +264,11 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             )
             .subquery("geo_sub")
         )
-        if graph.proj is not None:
-            geo_col = geo_func.ST_Transform(
-                models.GeoBin.geography.op("::")(literal_column("geometry")),
-                int(graph.proj.split(":")[1]),
-            ).label("geography")
-        else:
-            geo_col = models.GeoBin.geography.op("::")(
-                literal_column("geometry")
-            ).label("geography")
 
         geo_query = (
             select(
                 geo_sub.c.path,
-                geo_col,
+                models.GeoBin.geography,
             )
             .select_from(models.GeoVersion)
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
@@ -286,7 +277,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             )
         )
 
-        geo_query = geo_query.where(*timestamp_clauses)
+        geo_query = geo_query.distinct().where(*timestamp_clauses)
 
         internal_point_query = (
             select(
@@ -304,16 +295,13 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         geo_meta_ids, geo_meta = self._geo_meta(db, graph)
         geo_valid_from_dates = self._geo_valid_dates(db, graph)
 
-        cte = geo_query.cte(name="testy_boy")
-        final_query = select(literal_column("*")).select_from(cte)
-
         # Query generation: substitute in literals and remove the
         # ST_AsBinary() calls added by GeoAlchemy2.
         full_geo_query = re.sub(
             _ST_ASBINARY_REGEX,
             r"\1",
             str(
-                final_query.compile(
+                geo_query.compile(
                     dialect=postgresql.dialect(),
                     compile_kwargs={"literal_binds": True},
                 )

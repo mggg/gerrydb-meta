@@ -586,6 +586,11 @@ def graph_to_gpkg(
     geo_layer_name = f"{context.graph.path}__geometry"
     internal_point_layer_name = f"{context.graph.path}__internal_points"
 
+    if context.graph.proj is not None:
+        proj_args = ["-t_srs", context.graph.proj]
+    else:
+        proj_args = []  # leave in original projection (conventionally EPSG:4269)
+
     start = time.perf_counter()
     log.debug("Before ogr2ogr")
     base_args = [
@@ -593,6 +598,7 @@ def graph_to_gpkg(
         "GPKG",
         str(gpkg_path),
         db_config,
+        *proj_args,
     ]
 
     subprocess_command_list = [
@@ -629,13 +635,6 @@ def graph_to_gpkg(
     start = time.perf_counter()
     conn = sqlite3.connect(gpkg_path)
 
-    conn.execute(
-        f"""
-        ALTER TABLE {geo_layer_name}
-        RENAME COLUMN geom to geography
-    """
-    )
-
     subprocess_command_list = [
         "ogr2ogr",
         *base_args,
@@ -644,6 +643,7 @@ def graph_to_gpkg(
         context.internal_point_query,
         "-nln",
         internal_point_layer_name,
+        "-skipfailures",  # Empty points are read as a failure
         "-nlt",
         "POINT",
     ]

@@ -758,23 +758,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         geo_query = geo_query.join(column_sub, column_sub.c.path == geo_sub.c.path)
         geo_query = geo_query.distinct().where(*timestamp_clauses)
 
-        # from geoalchemy2.functions import ST_Transform, ST_AsEWKB
-
-        # native_srid = 4269
-        # target_srid = (
-        #     int(view.proj.split(":")[1])
-        #     if view.proj
-        #     else int(view.loc.default_proj.split(":")[1])
-        # )
-        # geom_native = cast(
-        #     models.GeoBin.internal_point,
-        #     Geometry("POINT", srid=native_srid),
-        # )
-
-        # internal_point_expr = ST_AsEWKB(ST_Transform(geom_native, target_srid)).label(
-        #     "internal_point"
-        # )
-
         internal_point_query = (
             select(
                 geo_sub.c.path,
