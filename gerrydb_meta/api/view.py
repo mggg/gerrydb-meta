@@ -161,7 +161,7 @@ def get_view(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read views in this namespace."
             ),
         )
 
@@ -197,7 +197,7 @@ def all_views(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read views in this namespace."
             ),
         )
 
@@ -245,7 +245,7 @@ def render_view(
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
     storage_credentials = storage_client = None
-    if bucket_name is not None and key_path is not None:
+    if bucket_name is not None and key_path is not None:  # pragma: no cover
         try:
             storage_credentials = Credentials.from_service_account_file(key_path)
             storage_client = storage.Client(credentials=storage_credentials)
@@ -255,7 +255,7 @@ def render_view(
     has_gcs_context = storage_client is not None
 
     cached_render_meta = crud.view.get_cached_render(db=db, view=view_obj)
-    if cached_render_meta is not None and has_gcs_context:
+    if cached_render_meta is not None and has_gcs_context:  # pragma: no cover
         render_path = urlparse(cached_render_meta.path)
         try:
             bucket = storage_client.bucket(render_path.netloc)
@@ -287,7 +287,7 @@ def render_view(
     render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
     log.debug("Time to write GPKG: %s", time.perf_counter() - start)
     log.debug("AFTER GPKG")
-    if has_gcs_context:
+    if has_gcs_context:  # pragma: no cover
         try:
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")

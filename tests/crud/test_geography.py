@@ -4,6 +4,7 @@ from gerrydb_meta import models
 from gerrydb_meta.exceptions import *
 from shapely import Point, Polygon
 from shapely import wkb
+from shapely.geometry import box
 from geoalchemy2 import WKBElement
 import pytest
 
@@ -55,6 +56,14 @@ def test_crud_geography_create_bulk(db_with_meta):
 
     assert geo[0][0].path == "central_atlantis"
     assert geo[1][0].path == "western_atlantis"
+
+    assert set(
+        crud.geography._CRGeography__get_existing_paths(
+            db,
+            obj_paths=["central_atlantis", "western_atlantis", "does_not_exist"],
+            namespace=ns,
+        )
+    ) == set(["central_atlantis", "western_atlantis"])
 
 
 def test_crud_geography_create_bulk_redundant_fail(db_with_meta):
@@ -354,3 +363,53 @@ def test_crud_geography_patch_bulk_all_squares(db_with_meta):
     )
 
     assert wkb.loads(geo[0][1].geography.desc) == square
+
+
+def test_crud_geography_patch_bulk_errors_nonemtpy_to_empty(db_with_meta):
+    db, meta = db_with_meta
+
+    ns = make_atlantis_ns(db, meta)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
+    geo, _ = crud.geography.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.GeographyCreate(
+                path="central_atlantis",
+                geography=box(0, 0, 1, 1).wkb,
+                internal_point=Point(0, 0).wkb,
+            ),
+            schemas.GeographyCreate(
+                path="western_atlantis",
+                geography=box(0, 0, 1, 1).wkb,
+                internal_point=Point(0, 0).wkb,
+            ),
+        ],
+        obj_meta=meta,
+        geo_import=geo_import,
+        namespace=ns,
+    )
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
+    with pytest.raises(
+        BulkPatchError,
+        match=(
+            "When updating geographies, found that some new geographies are empty polygons when "
+            "a previous version of the same geography in the target namespace was not empty. To "
+            "allow for this, set the `allow_empty_polys` parameter to `True`."
+        ),
+    ):
+        _ = crud.geography.patch_bulk(
+            db=db,
+            objs_in=[
+                schemas.GeographyPatch(
+                    path="central_atlantis",
+                    geography=Polygon().wkb,
+                    internal_point=Point().wkb,
+                ),
+            ],
+            geo_import=geo_import,
+            namespace=ns,
+        )

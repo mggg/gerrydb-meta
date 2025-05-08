@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.enums import NamespaceGroup, ScopeType
 from gerrydb_meta.main import API_PREFIX
+import random
 
 from .scopes import grant_scope
 
@@ -101,32 +102,35 @@ def test_api_namespace_read__missing(ctx_with_namespace_rc_all):
 
 def test_api_namespace_create_read__private(ctx_with_namespace_rc_public):
     ctx = ctx_with_namespace_rc_public
+    private_ns_name = f"{__name__}_private_{random.randint(0, 10000)}"
+    # Have admin create a private namespace.
     crud.namespace.create(
         db=ctx.db,
         obj_in=schemas.NamespaceCreate(
-            path="private", description="secret!", public=False
+            path=private_ns_name, description="secret!", public=False
         ),
-        obj_meta=ctx.meta,
+        obj_meta=ctx.admin_meta,
     )
-    read_response = ctx.client.get(f"{NAMESPACES_ROOT}/private")
+    read_response = ctx.client.get(f"{NAMESPACES_ROOT}/{private_ns_name}")
     assert read_response.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_api_namespace_all__private(ctx_with_namespace_rc_public):
     ctx = ctx_with_namespace_rc_public
+    private_ns_name = f"{__name__}_private_{random.randint(0, 10000)}"
     crud.namespace.create(
         db=ctx.db,
         obj_in=schemas.NamespaceCreate(
-            path="private", description="secret!", public=False
+            path=private_ns_name, description="secret!", public=False
         ),
-        obj_meta=ctx.meta,
+        obj_meta=ctx.admin_meta,
     )
     crud.namespace.create(
         db=ctx.db,
         obj_in=schemas.NamespaceCreate(
             path="public", description="not secret!", public=True
         ),
-        obj_meta=ctx.meta,
+        obj_meta=ctx.admin_meta,
     )
 
     list_response = ctx.client.get(f"{NAMESPACES_ROOT}/")

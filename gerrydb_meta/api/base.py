@@ -341,6 +341,9 @@ def geo_set_from_paths(
     log.debug("PAST BASIC CHECKS")
 
     layer_namespace, layer_path = parse_path(layer)
+    if layer_namespace is None:
+        layer_namespace = namespace
+
     layer_namespace_obj = namespace_with_read(
         db=db,
         scopes=scopes,

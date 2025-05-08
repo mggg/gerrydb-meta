@@ -1,3 +1,5 @@
+import pytest
+from gerrydb_meta.exceptions import CreateValueError
 from gerrydb_meta import crud, schemas, models
 
 
@@ -56,8 +58,13 @@ def test_crud_geo_layer_get(db_with_meta):
     assert crud.geo_layer.get(db=db, path="atlantis", namespace=ns) == geo_layer
 
 
-def test_crud_geo_layer_map_locality(db_with_meta):
+import logging
+
+
+def test_crud_geo_layer_map_locality(db_with_meta, caplog):
     db, meta = db_with_meta
+
+    caplog.set_level(logging.DEBUG, logger="uvicorn.error")
 
     ns = make_atlantis_ns(db, meta)
 
@@ -131,6 +138,33 @@ def test_crud_geo_layer_map_locality(db_with_meta):
 
     assert "/atlantis/central_atlantis" in geo_set_paths
     assert "/atlantis/western_atlantis" in geo_set_paths
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=geo_layer,
+        locality=loc[0],
+        geographies=geography_list,
+        obj_meta=meta,
+    )
+    assert (
+        f"Attempted to create a new geo set for layer {geo_layer.full_path}"
+        f" in the namespace {geo_layer.namespace.path} at locality "
+        f" {loc[0].canonical_ref} but the new set is identical"
+        f" to the old set."
+    ) in caplog.text
+
+    bad_geo_list = geography_list.copy()
+    bad_geo_list[0].namespace_id = 2
+    with pytest.raises(
+        CreateValueError, match="Cannot map geographies in multiple namespaces"
+    ):
+        crud.geo_layer.map_locality(
+            db=db,
+            layer=geo_layer,
+            locality=loc[0],
+            geographies=bad_geo_list,
+            obj_meta=meta,
+        )
 
 
 def test_crud_geo_layer_get_set_by_locality(db_with_meta):

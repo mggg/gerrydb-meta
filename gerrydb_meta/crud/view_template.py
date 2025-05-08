@@ -86,8 +86,9 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
                     )
                     if any(canon_paths.intersection(found_columns_paths)):
                         raise CreateValueError(
-                            "Cannot create view template with duplicate column "
-                            f"references: {member.path}"
+                            "Error creating view template the following column "
+                            "was referenced elsewhere either in "
+                            f"the column list or in the column set: {member.path}"
                         )
                     found_columns_paths.update(canon_paths)
                     db.add(
@@ -114,10 +115,6 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
                         )
                         .all()
                     )
-                    if len(col_ids) != len(set(col_ids)):
-                        raise CreateValueError(
-                            f"Found duplicate column references in column set: '{member.path}'"
-                        )
 
                     canon_paths = set(
                         item[0]
@@ -128,8 +125,9 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
 
                     if any(canon_paths.intersection(found_columns_paths)):
                         raise CreateValueError(
-                            "Cannot create view template found column in column set "
-                            f"'{member.path}' that was previously added or appears in "
+                            f"Cannot create view template. Found column "
+                            f"'{tuple(canon_paths.intersection(found_columns_paths))}' in "
+                            f"column set '{member.path}' that was previously added or appears in "
                             "another column set."
                         )
 

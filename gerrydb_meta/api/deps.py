@@ -25,7 +25,7 @@ GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 API_KEY_PATTERN = re.compile(r"[0-9a-z]{64}")
 
 
-def get_db() -> Generator:
+def get_db() -> Generator:  # pragma: no cover
     try:
         engine = create_engine(db_url, echo=GERRYDB_SQL_ECHO)
         Session = sessionmaker(engine)
@@ -37,7 +37,7 @@ def get_db() -> Generator:
         engine.dispose()
 
 
-def get_ogr2ogr_db_config() -> str:
+def get_ogr2ogr_db_config() -> str:  # pragma: no cover
     return ogr2ogr_db_config
 
 
@@ -92,7 +92,6 @@ def get_obj_meta(
     time.sleep(0.1)
     log.debug("Retrieving ObjectMeta: %s", meta_uuid)  # Debugging line
     obj_meta = crud.obj_meta.get(db=db, id=meta_uuid)
-    log.debug("Retrieved ObjectMeta for: %s", obj_meta.uuid)  # Debugging line
     if obj_meta is None:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -103,6 +102,7 @@ def get_obj_meta(
             status_code=HTTPStatus.FORBIDDEN,
             detail="Cannot use metadata object created by another user.",
         )
+    log.debug("Retrieved ObjectMeta for: %s", obj_meta.uuid)  # Debugging line
     return obj_meta
 
 
@@ -126,14 +126,14 @@ def get_geo_import(
         )
 
     try:
-        meta_uuid = UUID(x_gerrydb_geo_import_id)
+        geo_import_uuid = UUID(x_gerrydb_geo_import_id)
     except ValueError:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="GeoImport ID is not a valid UUID hex string.",
         )
 
-    geo_import = crud.geo_import.get(db=db, uuid=meta_uuid)
+    geo_import = crud.geo_import.get(db=db, uuid=geo_import_uuid)
     if geo_import is None or not scopes.can_read_in_namespace(geo_import.namespace):
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,

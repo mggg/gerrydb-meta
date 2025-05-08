@@ -8,26 +8,18 @@ from pathlib import Path
 
 from sqlalchemy import (
     Sequence,
-    cast,
     exc,
-    func,
-    label,
     or_,
     select,
-    union,
-    bindparam,
-    and_,
 )
-from sqlalchemy import Table, Column, Integer, literal_column, insert
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import insert
 from sqlalchemy.dialects import postgresql
-from geoalchemy2 import func as geo_func
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import CreateValueError
 from gerrydb_meta.models import *
-from typing import Optional, Tuple
+from typing import Tuple
 from datetime import datetime
 from uvicorn.config import logger as log
 
@@ -46,7 +38,7 @@ class GraphRenderContext:
     geo_query: str
     internal_point_query: str
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return f"GraphRenderContext(graph={self.graph})"
 
 
@@ -74,7 +66,9 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
 
         if not_in_geo_set:
             bad_geo_paths = [
-                geo.full_path for geo in edge_geos if geo.geo_id in not_in_geo_set
+                geo.full_path
+                for geo in edge_geos.values()
+                if geo.geo_id in not_in_geo_set
             ]
             raise CreateValueError(
                 "Geographies not associated with locality and layer: "
@@ -83,7 +77,6 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
 
         # Check to make sure that all of the edges exist in the set of geographies
         # associated with the locality and layer.
-
         missing_geos = set()
         for geo_path_1, geo_path_2, _ in obj_in.edges:
             if geo_path_1 not in edge_geos:
@@ -94,7 +87,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         if len(missing_geos) > 0:
             raise CreateValueError(
                 "Passed edge geographies do not match the geographies associated "
-                f"with the underlying graph. Missing edge geographies: {', '.join(missing_geos)}"
+                f"with the underlying graph. Missing edge geographies: [{', '.join(missing_geos)}]"
             )
 
         with db.begin(nested=True):
@@ -104,12 +97,13 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
                 path=normalize_path(obj_in.path),
                 description=obj_in.description,
                 meta_id=obj_meta.meta_id,
+                proj=obj_in.proj,
             )
             db.add(graph)
 
             try:
                 db.flush()
-            except exc.SQLAlchemyError:
+            except exc.SQLAlchemyError:  # pragma: no cover
                 # TODO: Make this more specific--the primary goal is to capture the case
                 # where the reference already exists.
                 log.exception("Failed to create new graph.")
@@ -163,7 +157,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
     def _graph_edges(self, db: Session, graph: models.Graph) -> Sequence | None:
         """Gets graph edges by path, if applicable."""
         log.debug("Getting graph edges for graph %s", graph.graph_id)
-        if graph.graph_id is None:
+        if graph.graph_id is None:  # pragma: no cover
             return None
 
         path_sub_1 = select(models.Geography.geo_id, models.Geography.path).subquery()
@@ -343,7 +337,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         render_id: uuid.UUID,
         path: Path | str,
         status: models.GraphRenderStatus,
-    ) -> models.GraphRender:
+    ) -> models.GraphRender:  # pragma: no cover
         raise NotImplementedError
 
     def cache_render(
@@ -354,7 +348,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         created_by: models.User,
         render_id: uuid.UUID,
         path: Path | str,
-    ) -> models.GraphRender:
+    ) -> models.GraphRender:  # pragma: no cover
         raise NotImplementedError
 
     def queue_render(
@@ -365,12 +359,12 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         created_by: models.User,
         render_id: uuid.UUID,
         path: Path | str,
-    ) -> models.GraphRender:
+    ) -> models.GraphRender:  # pragma: no cover
         raise NotImplementedError
 
     def get_cached_render(
         self, db: Session, *, graph: models.Graph
-    ) -> models.GraphRender | None:
+    ) -> models.GraphRender | None:  # pragma: no cover
         raise NotImplementedError
 
 

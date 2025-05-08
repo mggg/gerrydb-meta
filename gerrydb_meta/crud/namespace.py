@@ -8,9 +8,12 @@ from sqlalchemy import exc
 from sqlalchemy.orm import Session
 from uvicorn.config import logger as log
 
+import gerrydb_meta.admin as admin_module
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import CRBase
 from gerrydb_meta.exceptions import CreateValueError
+from gerrydb_meta.scopes import ScopeManager
+from gerrydb_meta.enums import ScopeType
 
 
 class CRNamespace(CRBase[models.Namespace, schemas.NamespaceCreate]):
@@ -42,6 +45,25 @@ class CRNamespace(CRBase[models.Namespace, schemas.NamespaceCreate]):
         etag = self._update_etag(db)
         db.flush()
 
+        # Now grant the appropriate scopes to the user.
+        user = (
+            db.query(models.User)
+            .filter(models.User.user_id == obj_meta.created_by)
+            .one()
+        )
+
+        if not ScopeManager(user=user).can_read_in_namespace(namespace):
+            admin_module.grant_scope(
+                db=db,
+                user=user,
+                scopes=[
+                    ScopeType.NAMESPACE_READ,
+                    ScopeType.NAMESPACE_WRITE,
+                    ScopeType.NAMESPACE_WRITE_DERIVED,
+                ],
+                namespace_id=namespace.namespace_id,
+                meta=obj_meta,
+            )
         return namespace, etag
 
     def get(self, db: Session, path: str) -> models.Namespace:

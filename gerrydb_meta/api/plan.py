@@ -5,6 +5,7 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
+from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import (
@@ -38,16 +39,6 @@ class PlanApi(NamespacedObjectApi):
             plan_namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
-            if plan_namespace_obj is None or not scopes.can_write_in_namespace(
-                plan_namespace_obj
-            ):
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=(
-                        f'Namespace "{namespace}" not found, or you do not have '
-                        "sufficient permissions to write plans in this namespace."
-                    ),
-                )
 
             geo_set_version = geo_set_from_paths(
                 locality=obj_in.locality,

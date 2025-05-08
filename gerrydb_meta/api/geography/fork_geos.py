@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from geoalchemy2 import WKBElement
 from typing import Optional
+from datetime import datetime, timezone
 
 from gerrydb_meta import crud
 import gerrydb_meta.models as models
@@ -131,6 +132,19 @@ def __validate_forkability(
             ),
         )
 
+    # This should never happen, but it's possible if the source and target namespaces
+    # get switched on accident.
+    if len(source_geo_hash_pairs) == 0:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail=(
+                f"Cannot fork data from layer '{source_layer}' in "
+                f"'{source_namespace}' to layer '{target_layer}' in '{target_namespace}' because "
+                f"the source layer does not contain any geographies. Please check to make sure "
+                f"that the source and target namespaces are correct."
+            ),
+        )
+
     if not allow_empty_polys and any(
         [pair[1] == empty_hash for pair in source_geo_hash_pairs]
     ):
@@ -210,6 +224,7 @@ def check_forkability(
     source_layer: Optional[str] = Query(default=None),
     allow_extra_source_geos: bool = Query(default=False),
     allow_empty_polys: bool = Query(default=False),
+    return_target_hashes: bool = Query(default=False),
 ):
     """
     Checks whether or not the data in the source namespace/layer can be 'forked' to the
@@ -244,52 +259,6 @@ def check_forkability(
     Raises:
         HTTPException: If the source and target layers are not forkable.
     """
-    log.debug("Checking if forking is possible")
-    _ = __validate_source_and_target_namespaces(
-        source_namespace, target_namespace, db, scopes
-    )
-
-    source_geo_hash_pairs = set(
-        _get_path_hash_pairs(source_namespace, loc_ref, source_layer, db)
-    )
-    target_geo_hash_pairs = set(
-        _get_path_hash_pairs(target_namespace, loc_ref, target_layer, db)
-    )
-
-    __validate_forkability(
-        source_namespace=source_namespace,
-        source_layer=source_layer,
-        target_namespace=target_namespace,
-        target_layer=target_layer,
-        source_geo_hash_pairs=source_geo_hash_pairs,
-        target_geo_hash_pairs=target_geo_hash_pairs,
-        allow_extra_source_geos=allow_extra_source_geos,
-        allow_empty_polys=allow_empty_polys,
-    )
-
-    return source_geo_hash_pairs
-
-
-@fork_router.post(
-    "/{target_namespace}/{loc_ref}/{target_layer}",
-    response_model=None,
-    dependencies=[Depends(can_read_localities)],
-)
-def fork_geos_between_namespaces(
-    *,
-    target_namespace: str,
-    loc_ref: str,
-    target_layer: str,
-    db: Session = Depends(get_db),
-    user: models.User = Depends(get_user),
-    scopes: ScopeManager = Depends(get_scopes),
-    source_namespace: Optional[str] = Query(default=None),
-    source_layer: Optional[str] = Query(default=None),
-    allow_extra_source_geos: bool = Query(default=False),
-    allow_empty_polys: bool = Query(default=False),
-    notes: str = Query(default="THERE ARE NO NOTES"),
-):
-    log.debug("Checking if forking is possible")
     source_namespace_obj, target_namespace_obj = (
         __validate_source_and_target_namespaces(
             source_namespace, target_namespace, db, scopes
@@ -329,11 +298,25 @@ def fork_geos_between_namespaces(
             ),
         )
 
+    valid_at = datetime.now(timezone.utc)
+
     source_geo_hash_pairs = set(
-        _get_path_hash_pairs(source_namespace, loc_ref, source_layer, db)
+        _get_path_hash_pairs(
+            namespace=source_namespace,
+            loc_ref=loc_ref,
+            layer=source_layer,
+            db=db,
+            valid_at=valid_at,
+        )
     )
     target_geo_hash_pairs = set(
-        _get_path_hash_pairs(target_namespace, loc_ref, target_layer, db)
+        _get_path_hash_pairs(
+            namespace=target_namespace,
+            loc_ref=loc_ref,
+            layer=target_layer,
+            db=db,
+            valid_at=valid_at,
+        )
     )
 
     _ = __validate_forkability(
@@ -346,6 +329,58 @@ def fork_geos_between_namespaces(
         allow_extra_source_geos=allow_extra_source_geos,
         allow_empty_polys=allow_empty_polys,
     )
+
+    if return_target_hashes:
+        return source_geo_hash_pairs, target_geo_hash_pairs
+
+    return source_geo_hash_pairs  # pragma: no cover
+
+
+@fork_router.post(
+    "/{target_namespace}/{loc_ref}/{target_layer}",
+    response_model=None,
+    dependencies=[Depends(can_read_localities)],
+)
+def fork_geos_between_namespaces(
+    *,
+    target_namespace: str,
+    loc_ref: str,
+    target_layer: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_user),
+    scopes: ScopeManager = Depends(get_scopes),
+    source_namespace: Optional[str] = Query(default=None),
+    source_layer: Optional[str] = Query(default=None),
+    allow_extra_source_geos: bool = Query(default=False),
+    allow_empty_polys: bool = Query(default=False),
+    notes: str = Query(default="THERE ARE NO NOTES"),
+):
+    log.debug("Checking if forking is possible")
+
+    source_geo_hash_pairs, target_geo_hash_pairs = check_forkability(
+        target_namespace=target_namespace,
+        loc_ref=loc_ref,
+        target_layer=target_layer,
+        db=db,
+        scopes=scopes,
+        source_namespace=source_namespace,
+        source_layer=source_layer,
+        allow_extra_source_geos=allow_extra_source_geos,
+        allow_empty_polys=allow_empty_polys,
+        return_target_hashes=True,
+    )
+
+    # We are doing some double work here, but it's not a big deal because
+    # getting namespaces, localities, and layers is fast in the DB.
+    source_namespace_obj, target_namespace_obj = (
+        __validate_source_and_target_namespaces(
+            source_namespace, target_namespace, db, scopes
+        )
+    )
+
+    locality = crud.locality.get_by_ref(db=db, path=loc_ref)
+    layer = crud.geo_layer.get(db=db, path=target_layer, namespace=target_namespace_obj)
+
     # We are now guaranteed that the missing paths do not have a conflicting
     # geography in the target namespace.
 

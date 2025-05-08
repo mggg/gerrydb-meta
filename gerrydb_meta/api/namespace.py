@@ -76,20 +76,4 @@ def create_namespace(
     namespace, etag = crud.namespace.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
     add_etag(response, etag)
 
-    # Now grant the appropriate scopes to the user.
-    user = db.query(models.User).get(obj_meta.created_by)
-
-    if not ScopeManager(user=user).can_read_in_namespace(namespace):
-        grant_scope(
-            db=db,
-            user=user,
-            scopes=[
-                ScopeType.NAMESPACE_READ,
-                ScopeType.NAMESPACE_WRITE,
-                ScopeType.NAMESPACE_WRITE_DERIVED,
-            ],
-            namespace_id=namespace.namespace_id,
-            meta=obj_meta,
-        )
-
     return namespace

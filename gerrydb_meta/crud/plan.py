@@ -41,10 +41,25 @@ class CRPlan(NamespacedCRBase[models.Plan, schemas.PlanCreate]):
                 geo for geo in assignments if geo.geo_id in geo_ids_not_in_set
             ]
             raise CreateValueError(
-                "Geographies not in set defined by locality "
+                "Some geographies in the assigment are not in set defined by locality "
                 f'"{geo_set_version.loc.canonical_ref.path}" and geographic layer '
                 f'"{geo_set_version.layer.full_path}": '
                 f"{', '.join(geo.full_path for geo in geos_not_in_set)}"
+            )
+
+        unassigned_geo_ids = set_geo_ids - assignment_geo_ids
+        if unassigned_geo_ids:
+            unassigned_geos = list(
+                db.scalars(
+                    select(models.Geography).filter(
+                        models.Geography.geo_id.in_(unassigned_geo_ids)
+                    )
+                )
+            )
+            raise CreateValueError(
+                "Failed to create a plan object. Some of the geographies in the layer "
+                "do not appear to have been assigned to a district:"
+                f"{', '.join(geo.full_path for geo in unassigned_geos)}"
             )
 
         with db.begin(nested=True):

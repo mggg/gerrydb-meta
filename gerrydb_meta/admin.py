@@ -33,11 +33,11 @@ import os
 
 GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 
-if os.getenv("GERRYDB_RUN_TESTS"):
+if os.getenv("GERRYDB_RUN_TESTS"):  # pragma: no cover
     Session = sessionmaker(
         create_engine(os.getenv("GERRYDB_TEST_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
     )
-else:
+else:  # pragma: no cover
     Session = sessionmaker(
         create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
     )
@@ -73,12 +73,14 @@ def _generate_api_key() -> tuple[str, bytes]:
     # makes me feel better
     test_key = "7w7uv9mi575n2dhlmg3wqba2imv1aqdys387tpbtpermujy1tuyqbxetygx8u3fr"
     redraws = 0
-    while key == test_key and redraws < 3:
-        key = "".join(secrets.choice(API_KEY_CHARS) for _ in range(64))
-        redraws += 1
+    while key == test_key and redraws < 3:  # pragma: no cover
+        key = "".join(
+            secrets.choice(API_KEY_CHARS) for _ in range(64)
+        )  # pragma: no cover
+        redraws += 1  # pragma: no cover
 
-    if redraws >= 3:
-        raise RuntimeError("Failed to generate a unique API key.")
+    if redraws >= 3:  # pragma: no cover
+        raise RuntimeError("Failed to generate a unique API key.")  # pragma: no cover
 
     key_hash = sha512(key.encode("utf-8")).digest()
     return key, key_hash
@@ -166,10 +168,15 @@ def check_admin(db: SessionType, user: User) -> bool:
         .first()
     )
 
-    print("Admin group: %s", admin_group)
-    print("Admin scope: %s", admin_scope)
     if admin_group is None and admin_scope is None:
-        raise ValueError(f"{user} is not an admin")
+        return False
+
+    return True
+
+
+def validate_admin(db: SessionType, user: User):
+    if not check_admin(db, user):
+        raise ValueError("User is not an admin.")
 
 
 @dataclass(frozen=True)
@@ -193,10 +200,14 @@ class GerryAdmin:
         """
 
         if self.session.query(User).count() > 0:
-            raise ValueError("Cannot create the first user in the database.")
+            raise ValueError(
+                "Cannot create the first user in the database (users already exist)."
+            )
 
-        if self.session.query(UserGroup).count() > 0:
-            raise ValueError("Cannot create the first user in the database.")
+        if self.session.query(UserGroup).count() > 0:  # pragma: no cover
+            raise ValueError(  # pragma: no cover
+                "Cannot create the first user in the database (user groups already exist)."
+            )
 
         user = User(email=email, name=name)
         log.info("Created new user: %s", user)
@@ -226,6 +237,14 @@ class GerryAdmin:
         )
 
         self.add_user_to_group(user=user, group=group, meta=meta_obj)
+
+        grant_user_group_scope(
+            db=self.session,
+            group=group,
+            scopes=ScopeType.ALL,
+            meta=meta_obj,
+            namespace_group=NamespaceGroup.ALL,
+        )
 
         return user
 
@@ -280,13 +299,14 @@ class GerryAdmin:
         if group_perm == GroupPermissions.ADMIN:
             group = self.user_group_find_by_name(GroupPermissions.ADMIN)
 
-            if group is None:
-                group = self.user_group_create(
+            # This should never happen, but just in case.
+            if group is None:  # pragma: no cover
+                group = self.user_group_create(  # pragma: no cover
                     name=GroupPermissions.ADMIN,
                     description="Users with admin privileges in the database.",
                     meta=meta_obj,
                 )
-                grant_user_group_scope(
+                grant_user_group_scope(  # pragma: no cover
                     db=self.session,
                     group=group,
                     scopes=ScopeType.ALL,
@@ -295,9 +315,9 @@ class GerryAdmin:
                 )
 
         elif group_perm == GroupPermissions.CONTRIBUTOR:
-            group = self.user_group_find_by_name(GroupPermissions.CONTRIBUTOR)
-
-            if group is None:
+            try:
+                group = self.user_group_find_by_name(GroupPermissions.CONTRIBUTOR)
+            except ValueError:
                 group = self.user_group_create(
                     name=GroupPermissions.CONTRIBUTOR,
                     description="Users with contributor privileges in the database.",
@@ -327,10 +347,9 @@ class GerryAdmin:
                     meta=meta_obj,
                 )
         else:
-            group = self.user_group_find_by_name("public")
-            print("Found public group: %s", group)
-
-            if group is None:
+            try:
+                group = self.user_group_find_by_name("public")
+            except ValueError:
                 group = self.user_group_create(
                     name=GroupPermissions.PUBLIC,
                     description="Users that can read data from public namespaces.",
@@ -367,7 +386,6 @@ class GerryAdmin:
 
         user_group = UserGroup(name=name, description=description, meta_id=meta.meta_id)
 
-        print("Created user group: %s", user_group)
         self.session.add(user_group)
         self.session.flush()
         self.session.refresh(user_group)
@@ -378,6 +396,8 @@ class GerryAdmin:
         user_group = (
             self.session.query(UserGroup).filter(UserGroup.name == name).first()
         )
+        if user_group is None:
+            raise ValueError(f"No user group found with name {name}.")
         log.info("Found %s.", user_group)
         return user_group
 
@@ -416,7 +436,7 @@ class GerryAdmin:
         """Returns an existing user by email or raises a `ValueError`."""
         user = self.session.query(User).filter(User.user_id == id).first()
         if user is None:
-            raise ValueError(f"No user found with email {id}.")
+            raise ValueError(f"No user found with id {id}.")
         log.info("Found %s.", user)
         return user
 
@@ -438,7 +458,7 @@ class GerryAdmin:
         self.session.add(ApiKey(user=user, key_hash=key_hash))
         return raw_key
 
-    def create_test_key(self, user: User) -> str:
+    def create_test_key(self, user: User, force: bool = False) -> str:
         """
         Creates a known API key for testing purposes.
 
@@ -448,14 +468,15 @@ class GerryAdmin:
         Returns:
             The raw API key.
         """
-        user_confirmation = input(
-            f"You are about to create a TESTING API key for user {user}. "
-            f"This API key is NOT secure and should be considered public knowledge. "
-            "Are you sure you want to continue? Y/N: "
-        )
+        if not force:
+            user_confirmation = input(
+                f"You are about to create a TESTING API key for user {user}. "
+                f"This API key is NOT secure and should be considered public knowledge. "
+                "Are you sure you want to continue? Y/N: "
+            )
 
-        if user_confirmation.lower() != "y":
-            raise ValueError("User aborted API key creation.")
+            if user_confirmation.lower() != "y":
+                raise ValueError("User aborted API key creation.")
 
         print()
         raw_key = "7w7uv9mi575n2dhlmg3wqba2imv1aqdys387tpbtpermujy1tuyqbxetygx8u3fr"
@@ -464,7 +485,7 @@ class GerryAdmin:
         self.session.add(ApiKey(user=user, key_hash=key_hash))
         return raw_key
 
-    def key_by_raw(self, raw_key: User) -> ApiKey:
+    def key_by_raw(self, raw_key: str) -> ApiKey:
         """Returns an existing API by raw value or raises a `ValueError`."""
         key_hash = sha512(raw_key.encode("utf-8")).digest()
         db_key = self.session.query(ApiKey).filter(ApiKey.key_hash == key_hash).first()
@@ -521,7 +542,7 @@ def create_first_user(user_email: str, name: str):
     type=click.Choice([g.value for g in GroupPermissions], case_sensitive=False),
     default=GroupPermissions.PUBLIC.value,
     required=True,
-    help="Which group to add the user into (public, private, admin).",
+    help="Which group to add the user into (public, contributor, admin).",
 )
 @click.option("-c", "--creator-email", required=True)
 def user_create(user_email, name, group_perm, creator_email):
@@ -531,11 +552,7 @@ def user_create(user_email, name, group_perm, creator_email):
     gp_enum = GroupPermissions(group_perm.lower())
     with admin_context() as admin:
         creator = admin.user_find_by_email(creator_email)
-
-        if creator is None:
-            raise ValueError(f"No user found with email {creator_email}.")
-
-        check_admin(admin.session, creator)
+        validate_admin(admin.session, creator)
 
         user = admin.user_create(
             email=user_email, name=name, group_perm=gp_enum, creator=creator
@@ -551,13 +568,13 @@ def user_create(user_email, name, group_perm, creator_email):
 def usergroup_create(name: str, description: str, creator_email: str):
     with admin_context() as admin:
         creator = admin.user_find_by_email(creator_email)
+        validate_admin(admin.session, creator)
 
-        if creator is None:
-            raise ValueError(f"No user found with email {creator_email}.")
-
-        check_admin(admin.session, creator)
-
-        if admin.user_group_find_by_name(name) is not None:
+        try:
+            admin.user_group_find_by_name(name)
+        except ValueError:
+            pass
+        else:
             raise ValueError(f"User group '{name}' already exists.")
 
         meta_obj = obj_meta.create(
@@ -619,12 +636,7 @@ def user_grant(
         user = admin.user_find_by_email(user_email)
         creator = admin.user_find_by_email(creator_email)
 
-        if user is None:
-            raise ValueError(f"No user found with email {user_email}.")
-        if creator is None:
-            raise ValueError(f"No user found with email {creator_email}.")
-
-        check_admin(admin.session, creator)
+        validate_admin(admin.session, creator)
 
         namespace_id = None
         if namespace is not None:
@@ -665,17 +677,7 @@ def user_add_group(user_email: str, group: str, creator_email: str):
         group = admin.user_group_find_by_name(group)
         creator = admin.user_find_by_email(creator_email)
 
-        if any(users) is None:
-            none_users = [
-                email for email, user in zip(user_email, users) if user is None
-            ]
-            raise ValueError(f"No user(s) found with email(s) {none_users}.")
-        if group is None:
-            raise ValueError(f"No group found with name {group}.")
-        if creator is None:
-            raise ValueError(f"No user found with email {creator_email}.")
-
-        check_admin(admin.session, creator)
+        validate_admin(admin.session, creator)
 
         meta_obj = obj_meta.create(
             db=admin.session,
@@ -731,12 +733,7 @@ def usergroup_grant(
         creator = admin.user_find_by_email(creator_email)
         group = admin.user_group_find_by_name(group)
 
-        if creator is None:
-            raise ValueError(f"No user found with email {creator_email}.")
-        if group is None:
-            raise ValueError(f"No group found with name {group}.")
-
-        check_admin(admin.session, creator)
+        validate_admin(admin.session, creator)
 
         namespace_id = None
         if namespace is not None:
@@ -772,7 +769,7 @@ def usergroup_grant(
 @click.option("--roster", "roster_path", type=click.Path(path_type=Path), required=True)
 @click.option("--keys", "keys_path", type=click.Path(path_type=Path), required=True)
 @click.option("-c", "--creator-email", required=True)
-def user_create(roster_path: Path, keys_path: Path, creator_email: str):
+def bulk_user_create(roster_path: Path, keys_path: Path, creator_email: str):
     """Creates users with active API keys in bulk.
 
     Expects a roster CSV with `name`, `email`, and `group_perm` columns.
@@ -784,10 +781,7 @@ def user_create(roster_path: Path, keys_path: Path, creator_email: str):
     with admin_context() as admin, open(roster_path, newline="") as roster_fp:
         creator = admin.user_find_by_email(creator_email)
 
-        if creator is None:
-            raise ValueError(f"No user found with email {creator_email}.")
-
-        check_admin(admin.session, creator)
+        validate_admin(admin.session, creator)
 
         meta_obj = obj_meta.create(
             db=admin.session,
@@ -854,11 +848,9 @@ def user_check_admin(email: str):
     """Checks if a user is an admin."""
     with admin_context() as admin:
         user = admin.user_find_by_email(email)
-        if user is None:
-            raise ValueError(f"No user found with email {email}.")
         is_admin = check_admin(admin.session, user)
         print(f"User {user} is an admin: {is_admin}")
 
 
 if __name__ == "__main__":
-    cli()
+    cli()  # pragma: no cover

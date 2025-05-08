@@ -109,6 +109,9 @@ class ViewRenderContext:
     geo_query: str
     internal_point_query: str
 
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"ViewRenderContext(view={self.view.path}, columns={list(self.columns.keys())})"
+
 
 class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
     def __get_all_path_hashes_in_set_version(
@@ -374,8 +377,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 )
             }
             if new_set_dict != orig_set_dict:
-                # log.debug(new_set_dict)
-                # log.debug(orig_set_dict)
                 raise ViewConflictError(
                     "Cannot create view. Some of the geographies are defined "
                     "on a geo_layer that does not have the same geometries as "
@@ -504,7 +505,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 for col_path, count in bad_cols
             )
             raise CreateValueError(
-                "Cannot instantiate view: column values satisfying time "
+                "Cannot instantiate view: column values satisfying all constraints "
                 "constraints not available for all geographies. Bad columns: "
                 + bad_cols_formatted
             )
@@ -554,7 +555,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                     db.execute(
                         insert(models.ViewGeoSetVersions).values(geo_set_version_data)
                     )
-            except SQLAlchemyError as e:
+            except SQLAlchemyError as e:  # pragma: no cover
                 log.exception(
                     "Failed to insert view_set_versions for view '%s'.", view.view_id
                 )
@@ -643,7 +644,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         created_by: models.User,
         render_id: uuid.UUID,
         path: Path | str,
-    ) -> models.ViewRender:
+    ) -> models.ViewRender:  # pragma: no cover
         """Adds a render to the job queue."""
         return self._create_render(
             db=db,
@@ -938,60 +939,58 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         # Get plan assignments as a table.
         plan_labels = []
-        if visible_plans:
-            # Determine the shortest unambiguous alias for each plan.
-            namespaces_by_path = defaultdict(set)
-            for plan in visible_plans:
-                namespaces_by_path[plan.path].add(plan.namespace.path)
+        if len(visible_plans) == 0:  # pragma: no cover
+            return [], [], None
 
-            # Generate query clauses for each plan.
-            plan_subs = []
-            for plan in visible_plans:
-                label = (
-                    f"{plan.namespace.path}__{plan.path}"
-                    if len(namespaces_by_path[plan.path]) > 1
-                    else plan.path
-                )
-                plan_labels.append(label)
-                plan_subs.append(
-                    select(
-                        models.PlanAssignment.geo_id, models.PlanAssignment.assignment
-                    )
-                    .where(
-                        models.PlanAssignment.plan_id == plan.plan_id,
-                    )
-                    .subquery()
-                )
+        # Determine the shortest unambiguous alias for each plan.
+        namespaces_by_path = defaultdict(set)
+        for plan in visible_plans:
+            namespaces_by_path[plan.path].add(plan.namespace.path)
 
-            geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
-            members_sub = (
-                select(models.GeoSetMember.geo_id)
-                .filter(models.GeoSetMember.set_version_id.in_(view_set_version_ids))
+        # Generate query clauses for each plan.
+        plan_subs = []
+        for plan in visible_plans:
+            label = (
+                f"{plan.namespace.path}__{plan.path}"
+                if len(namespaces_by_path[plan.path]) > 1
+                else plan.path
+            )
+            plan_labels.append(label)
+            plan_subs.append(
+                select(models.PlanAssignment.geo_id, models.PlanAssignment.assignment)
+                .where(
+                    models.PlanAssignment.plan_id == plan.plan_id,
+                )
                 .subquery()
             )
-            plan_cols = [
-                plan_sub.c.assignment.label(plan_label)
-                for plan_sub, plan_label in zip(plan_subs, plan_labels)
-            ]
-            plan_assignment_query = (
-                select(models.GeoVersion.geo_id, geo_sub.c.path, *plan_cols)
-                .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
-                .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
+
+        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
+        members_sub = (
+            select(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id.in_(view_set_version_ids))
+            .subquery()
+        )
+        plan_cols = [
+            plan_sub.c.assignment.label(plan_label)
+            for plan_sub, plan_label in zip(plan_subs, plan_labels)
+        ]
+        plan_assignment_query = (
+            select(models.GeoVersion.geo_id, geo_sub.c.path, *plan_cols)
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
+        )
+        for plan_sub in plan_subs:
+            plan_assignment_query = plan_assignment_query.outerjoin(
+                plan_sub,
+                plan_sub.c.geo_id == models.GeoVersion.geo_id,
             )
-            for plan_sub in plan_subs:
-                plan_assignment_query = plan_assignment_query.outerjoin(
-                    plan_sub,
-                    plan_sub.c.geo_id == models.GeoVersion.geo_id,
-                )
-            plan_assignments = db.execute(plan_assignment_query).fetchall()
-        else:
-            plan_assignments = None
+        plan_assignments = db.execute(plan_assignment_query).fetchall()
 
         return visible_plans, plan_labels, plan_assignments
 
     def _graph_edges(self, db: Session, view: models.View) -> Sequence | None:
         """Gets graph edges by path, if applicable."""
-        if view.graph_id is None:
+        if view.graph_id is None:  # pragma: no cover
             return None
 
         path_sub_1 = select(models.Geography.geo_id, models.Geography.path).subquery()

@@ -12,8 +12,10 @@ from http import HTTPStatus
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, aliased
-from typing import Optional
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from datetime import datetime, timezone
+from typing import Optional, Annotated
 
 from gerrydb_meta import crud
 import gerrydb_meta.models as models
@@ -23,7 +25,6 @@ from gerrydb_meta.api.deps import (
     get_scopes,
 )
 from gerrydb_meta.scopes import ScopeManager
-from sqlalchemy import text
 from uvicorn.config import logger as log
 
 list_router = APIRouter()
@@ -34,9 +35,8 @@ class GetMode(str, Enum):
     path_hash_pair = "path_hash_pair"
 
 
-# FIXME: Add an "at" parameter to select a particular geo version
 def _get_path_hash_pairs(
-    namespace: str, loc_ref: str, layer: str, db: Session
+    namespace: str, loc_ref: str, layer: str, db: Session, valid_at: datetime
 ) -> list[tuple[str, str]]:
 
     log.debug("Getting path hash pairs for %s %s %s", namespace, loc_ref, layer)
@@ -65,7 +65,15 @@ def _get_path_hash_pairs(
         .filter(models.Namespace.path == namespace)
         .filter(models.GeoLayer.path == layer)
         .filter(models.LocalityRef.path == loc_ref)
-        .filter(models.GeoVersion.valid_to.is_(None))
+        .filter(
+            models.GeoVersion.valid_from <= valid_at,
+            (
+                or_(
+                    models.GeoVersion.valid_to.is_(None),
+                    models.GeoVersion.valid_to >= valid_at,
+                )
+            ),
+        )
     )
 
     log.debug("Querying")
@@ -74,13 +82,16 @@ def _get_path_hash_pairs(
     return geo_objs
 
 
-# FIXME: Add an "at" parameter to select a particular geo version
-def __get_paths(namespace: str, loc_ref: str, layer: str, db: Session) -> list[str]:
+def __get_paths(
+    namespace: str, loc_ref: str, layer: str, db: Session, valid_at: datetime
+) -> list[str]:
     log.debug("Getting paths")
     geo_objs = [
         obj[0]
         for obj in (
-            db.query(models.Geography.path)
+            db.query(
+                models.Geography.path,
+            )
             .join(
                 models.GeoSetMember,
                 models.Geography.geo_id == models.GeoSetMember.geo_id,
@@ -113,7 +124,15 @@ def __get_paths(namespace: str, loc_ref: str, layer: str, db: Session) -> list[s
             .filter(models.Namespace.path == namespace)
             .filter(models.GeoLayer.path == layer)
             .filter(models.LocalityRef.path == loc_ref)
-            .filter(models.GeoVersion.valid_to.is_(None))
+            .filter(
+                models.GeoVersion.valid_from <= valid_at,
+                (
+                    or_(
+                        models.GeoVersion.valid_to.is_(None),
+                        models.GeoVersion.valid_to > valid_at,
+                    )
+                ),
+            )
             .all()
         )
     ]
@@ -133,7 +152,12 @@ def all_paths(
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
     mode: GetMode = Query(default=GetMode.list_paths),
+    valid_at: Annotated[Optional[datetime], Query] = None,
 ):
+    if valid_at is None:
+        valid_at = datetime.now(timezone.utc)
+
+    log.info(valid_at)
     log.debug("Getting all paths")
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
 
@@ -145,14 +169,14 @@ def all_paths(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read data in this namespace."
             ),
         )
 
     if mode == GetMode.list_paths:
         log.debug("Getting geo paths")
-        return __get_paths(namespace, loc_ref, layer, db)
+        return __get_paths(namespace, loc_ref, layer, db, valid_at)
 
     if mode == GetMode.path_hash_pair:
         log.debug("Getting geo path hash pair")
-        return _get_path_hash_pairs(namespace, loc_ref, layer, db)
+        return _get_path_hash_pairs(namespace, loc_ref, layer, db, valid_at)

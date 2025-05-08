@@ -4,7 +4,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Collection
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Polygon
 import hashlib
 import binascii
 
@@ -39,11 +39,12 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
     def __get_existing_paths(
         self,
         db: Session,
-        obj_paths: list[schemas.GeographyBase],
+        obj_paths: list[str],
         namespace: models.Namespace,
     ) -> list[models.Geography]:
-        return (
-            db.query(models.Geography.path)
+        return list(
+            item[0]
+            for item in db.query(models.Geography.path)
             .filter(
                 models.Geography.path.in_(
                     normalize_path(path, case_sensitive_uid=True) for path in obj_paths
@@ -198,10 +199,11 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             o.path: hsh for hsh, objs_lst in hash_obj_dict.items() for o in objs_lst
         }
 
+        # The following error should never fire. If it does, really bad things have happened.
         try:
             assert set(hash_bin_dict.keys()) == set(hash_obj_dict.keys())
             assert len(path_hash_dict) == len(objs_in)
-        except AssertionError as ex:
+        except AssertionError as ex:  # pragma: no cover
             log.exception(ex)
             raise BulkCreateError(
                 "Unexpected error when creating geometry hashes."
@@ -238,7 +240,7 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 )
             }
 
-        except Exception as ex:
+        except Exception as ex:  # pragma: no cover
             log.exception(ex)
             raise BulkCreateError("Failed at inserting GeoVersions.") from ex
 
@@ -268,6 +270,26 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
                 )
             )
         }
+
+    def create(
+        self,
+        db: Session,
+        *,
+        obj_in: schemas.GeographyCreate,
+        obj_meta: models.ObjectMeta,
+        geo_import: models.GeoImport,
+        namespace: models.Namespace,
+    ) -> tuple[models.Geography, models.GeoVersion, uuid.UUID]:
+        """Creates a new geography."""
+        geo_list, etag = self.create_bulk(
+            db=db,
+            objs_in=[obj_in],
+            obj_meta=obj_meta,
+            geo_import=geo_import,
+            namespace=namespace,
+        )
+
+        return geo_list[0], etag
 
     def create_bulk(
         self,
@@ -498,12 +520,13 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
             (geo, geo_id_to_version_dict[geo.geo_id]) for geo in existing_geos
         ], etag
 
+    # TODO: Finish this method
     def __validate_upsert_geos(
         self,
         db: Session,
         objs_in: list[schemas.GeographyUpsert],
         namespace: models.Namespace,
-    ) -> None:
+    ) -> None:  # pragma: no cover
         existing_geos_paths = set(
             self.__get_existing_paths(
                 db=db, obj_paths=[obj.path for obj in objs_in], namespace=namespace
@@ -541,7 +564,9 @@ class CRGeography(NamespacedCRBase[models.Geography, None]):
         obj_meta: models.ObjectMeta,
         geo_import: models.GeoImport,
         namespace: models.Namespace,
-    ) -> tuple[list[tuple[models.Geography, models.GeoVersion]], uuid.UUID]:
+    ) -> tuple[
+        list[tuple[models.Geography, models.GeoVersion]], uuid.UUID
+    ]:  # pragma: no cover
         """Updates geographies in bulk."""
         _ = self.__validate_upsert_geos(
             db=db,

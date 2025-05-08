@@ -20,8 +20,8 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
         db: Session,
         *,
         obj_in: schemas.GeoLayerCreate,
-        obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
+        obj_meta: models.ObjectMeta,
     ) -> Tuple[models.GeoLayer, uuid.UUID]:
         """Creates a new geographic layer."""
         log.debug("TOP OF CREATE GEO LAYER")

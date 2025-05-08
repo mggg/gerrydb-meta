@@ -1,10 +1,15 @@
 """Tests for GerryDB REST API view template endpoints."""
 
 from http import HTTPStatus
+import pytest
+from fastapi import HTTPException
 
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
 from gerrydb_meta.main import API_PREFIX
+from gerrydb_meta.api.view_template import ViewTemplateApi
+from gerrydb_meta.api.deps import get_scopes
+import gerrydb_meta.models as models
 from tests.api import create_column
 from tests.api.scopes import grant_namespaced_scope, grant_scope
 
@@ -320,7 +325,7 @@ def test_api_view_template_create__join_constraint__private_xref_in_private_name
             description="Yet another private namespace",
             public=False,
         ),
-        obj_meta=ctx.meta,
+        obj_meta=ctx.admin_meta,
     )
     grant_namespaced_scope(
         db=ctx.db,
@@ -359,3 +364,42 @@ def test_api_view_template_create__join_constraint__private_xref_in_private_name
         create_response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     ), create_response.json()
     assert "Cannot create cross-namespace reference" in create_response.json()["detail"]
+
+
+def test_odd_errors(ctx_public_namespace_read_write):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+    db = ctx.db
+    user = models.User(email="rendertest@example.com", name="Render User")
+    db.add(user)
+    db.flush()
+    scopes = get_scopes(user)
+
+    with pytest.raises(HTTPException, match="Cannot read in public namespaces"):
+        ViewTemplateApi(
+            crud=crud.view_template,
+            get_schema=schemas.ViewTemplate,
+            create_schema=schemas.ViewTemplateCreate,
+            patch_schema=schemas.ViewTemplatePatch,
+            obj_name_singular="ViewTemplate",
+            obj_name_plural="ViewTemplates",
+        )._check_public(scopes)
+
+    n_cols = 101
+    for i in range(n_cols):
+        create_column(ctx, f"test{i}")
+
+    create_response = ctx.client.post(
+        f"{VIEW_TEMPLATES_ROOT}/{namespace}",
+        json={
+            "path": "too_many",
+            "description": "A view template with too many columns.",
+            "members": [f"/columns/{namespace}/test{i}" for i in range(n_cols)],
+        },
+    )
+
+    assert create_response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert (
+        "Maximum view template column count exceeded"
+        in create_response.json()["detail"]
+    )

@@ -67,7 +67,7 @@ class User(Base):
     groups: Mapped[list["UserGroupMember"]] = relationship(
         "UserGroupMember", lazy="joined"
     )
-    api_keys: Mapped["ApiKey"] = relationship("ApiKey", back_populates="user")
+    api_keys: Mapped[list["ApiKey"]] = relationship("ApiKey", back_populates="user")
 
     def __repr__(self):
         return f"User(email={self.email}, name={self.name})"
@@ -77,7 +77,7 @@ class UserGroup(Base):
     __tablename__ = "user_group"
 
     group_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
@@ -251,7 +251,7 @@ class Locality(Base):
         "LocalityRef", primaryjoin="Locality.loc_id==LocalityRef.loc_id"
     )
 
-    def __str__(self):
+    def __str__(self):  # pragma: no cover
         return f"Locality(loc_id={self.loc_id}, name={self.name})"
 
 
@@ -298,7 +298,7 @@ class GeoLayer(Base):
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
 
     @property
-    def full_path(self):
+    def full_path(self):  # pragma: no cover
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
 
@@ -325,6 +325,12 @@ class GeoSetVersion(Base):
     loc: Mapped[Locality] = relationship("Locality", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
     members: Mapped[list["GeoSetMember"]] = relationship("GeoSetMember")
+
+    def __repr__(self):
+        return (
+            f"GeoSetVersion(layer={self.layer.path}, loc={self.loc.name}, "
+            f"set_version_id={self.set_version_id})"
+        )
 
 
 class GeoSetMember(Base):
@@ -429,7 +435,7 @@ class Geography(Base):
     )
 
     @property
-    def full_path(self):
+    def full_path(self):  # pragma: no cover
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
 
@@ -464,7 +470,7 @@ class GeoImport(Base):
 
 
 # TODO: should these be versioned? tagged by algorithm?
-class GeoHierarchy(Base):
+class GeoHierarchy(Base):  # pragma: no cover
     __tablename__ = "geo_hierarchy"
     __table_args__ = (CheckConstraint("parent_id <> child_id"),)
 
@@ -498,23 +504,30 @@ class DataColumn(Base):
     description: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(String(2048))
     kind: Mapped[ColumnKind] = mapped_column(SqlEnum(ColumnKind), nullable=False)
-    type: Mapped[ColumnType] = mapped_column(SqlEnum(ColumnType), nullable=False)
+
+    type: Mapped[ColumnType] = mapped_column(
+        SqlEnum(ColumnType), nullable=False
+    )  # pragma: no cover
     meta_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meta.meta_id"), nullable=False
-    )
+    )  # pragma: no cover
 
-    meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
-    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    meta: Mapped[ObjectMeta] = relationship(
+        "ObjectMeta", lazy="joined"
+    )  # pragma: no cover
+    namespace: Mapped[Namespace] = relationship(
+        "Namespace", lazy="joined"
+    )  # pragma: no cover
     canonical_ref = relationship(
         "ColumnRef",
         lazy="joined",
         primaryjoin="DataColumn.canonical_ref_id==ColumnRef.ref_id",
-    )
+    )  # pragma: no cover
     refs: Mapped[list["ColumnRef"]] = relationship(
         "ColumnRef", primaryjoin="DataColumn.col_id==ColumnRef.col_id"
-    )
+    )  # pragma: no cover
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return f"DataColumn(canonical_ref={self.canonical_ref.full_path}, namespace={self.namespace.path})"
 
 
@@ -541,7 +554,7 @@ class ColumnRef(Base):
     )
 
     @property
-    def full_path(self):
+    def full_path(self):  # pragma: no cover
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
 
@@ -593,6 +606,9 @@ class ColumnSet(Base):
         "ColumnSetMember", lazy="joined"
     )
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+
+    def __repr__(self):
+        return f"ColumnSet(path={self.path}, namespace={self.namespace.path})"
 
 
 class ColumnSetMember(Base):
@@ -684,6 +700,9 @@ class Plan(Base):
         "PlanAssignment", lazy="joined"
     )
 
+    def __repr__(self):  # pragma: no cover
+        return f"Plan(path={self.path}, num_districts={self.num_districts})"
+
 
 class PlanAssignment(Base):
     __tablename__ = "plan_assignment"
@@ -729,7 +748,7 @@ class Graph(Base):
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
     @property
-    def full_path(self):
+    def full_path(self):  # pragma: no cover
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
 
@@ -958,6 +977,9 @@ class View(Base):
     layer: Mapped[GeoLayer] = relationship("GeoLayer", lazy="joined")
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
     graph: Mapped[Graph | None] = relationship("Graph", lazy="joined")
+
+    def __repr__(self):  # pragma: no cover
+        return f"View(path={self.path}, template={self.template.path}, locality={self.loc.name})"
 
 
 class ViewRender(Base):

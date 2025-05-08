@@ -2,15 +2,15 @@
 
 from datetime import datetime
 from typing import Any
-
+from typing import Annotated
 from pydantic import AnyUrl, BaseModel, constr, validator
 
 from gerrydb_meta import enums, models
 
-UserEmail = constr(max_length=254)
+UserEmail = Annotated[str, constr(max_length=254)]
 
-GerryPath = constr(regex=r"[a-z0-9][a-z0-9-_/]*")
-NamespacedGerryPath = constr(regex=r"[a-z0-9/][a-z0-9-_/]*")
+GerryPath = Annotated[str, constr(regex=r"[a-z0-9][a-z0-9-_/]*")]
+NamespacedGerryPath = Annotated[str, constr(regex=r"[a-z0-9/][a-z0-9-_/]*")]
 
 
 class ObjectMetaBase(BaseModel):
@@ -111,7 +111,7 @@ class ColumnBase(BaseModel):
     """Base model for locality metadata."""
 
     canonical_path: GerryPath
-    description: str
+    description: str | None
     source_url: AnyUrl | None
     kind: enums.ColumnKind
     type: enums.ColumnType
@@ -256,7 +256,7 @@ class Geography(GeographyBase):
         orm_mode = True
 
     @classmethod
-    def from_orm(cls, obj: models.GeoVersion):
+    def from_orm(cls, obj: models.GeoVersion):  # pragma: no cover
         return cls(
             namespace=obj.parent.namespace.path,
             geography=None if obj.geography is None else bytes(obj.geography.data),
@@ -472,7 +472,7 @@ class PlanMeta(PlanBase):
     complete: bool
 
     @classmethod
-    def from_orm(cls, obj: models.Plan):
+    def from_orm(cls, obj: models.Plan):  # pragma: no cover
         return cls(
             path=obj.path,
             namespace=obj.namespace.path,

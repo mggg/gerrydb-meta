@@ -76,7 +76,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             db.add(col)
             try:
                 db.flush()
-            except exc.SQLAlchemyError:
+            except exc.SQLAlchemyError:  # pragma: no cover
                 log.exception("Failed to create new column.")
                 raise CreateValueError("Failed to create new column.")
 
@@ -158,7 +158,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 else self.get_ref(db, path=column_path, namespace=alt_namespace)
             )
 
-        return self.get_ref(db, path=path, namespace=namespace)
+        return self.get_ref(db, path=column_path, namespace=namespace)
 
     def set_values(
         self,
@@ -182,9 +182,9 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         new_row_pairs = set()
         validation_errors = []
         for geo, value in values:
-            suffix = f"column value for geography {geo.full_path}"
+            suffix = f"column value for geography {geo.full_path} found {type(value)}"
             if geo.geo_id in rows_dict:
-                raise ValueError(f"Duplicate geography ID {geo.geo_id} found.")
+                raise ValueError(f"Duplicate geography path '{geo.path}' found.")
 
             if col.type == ColumnType.FLOAT and isinstance(value, int):
                 # Silently promote int -> float.
@@ -209,6 +209,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 new_row_pairs.add((geo.geo_id, value))
 
         if validation_errors:
+            log.error(validation_errors)
             raise ColumnValueTypeError(errors=validation_errors)
 
         # Add the new column values and invalidate the old ones where present.
@@ -235,8 +236,11 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 old_row_pairs.add((item.geo_id, item.val_str))
             elif item.val_bool is not None:
                 old_row_pairs.add((item.geo_id, item.val_bool))
-            else:
-                raise ValueError("Unexpected value type.")
+            else:  # pragma: no cover
+                # TODO: If this ever happens, add something that pings an admin.
+                assert (
+                    False
+                ), "Critical Error: No column value found."  # This should never happen
 
         geo_ids_to_insert = set(rows_dict.keys())
         if old_row_pairs != set():
@@ -246,7 +250,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 geo_ids_to_insert.add(geo_id)
 
         # No values have changed, so we can skip the insert.
-        if geo_ids_to_insert == set():
+        if geo_ids_to_insert == set():  # pragma: no cover
             return
 
         rows = [rows_dict[geo_id] for geo_id in geo_ids_to_insert]
@@ -322,14 +326,10 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             ).scalars()
         )
 
+        alias_paths = set(alias_paths) - existing_aliases
+
         for alias_path in alias_paths:
             normalized_path = normalize_path(alias_path)
-
-            if normalized_path in existing_aliases:
-                log.warning(
-                    f"Alias {alias_path} already exists for column {col.col_id}. Skipping."
-                )
-                continue  # Skip adding this alias
 
             alias_ref = models.ColumnRef(
                 path=normalized_path,
@@ -341,9 +341,9 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
 
             try:
                 db.flush()  # Try to commit this alias
-            except IntegrityError as e:
+            except IntegrityError:  # pragma: no cover
                 db.rollback()  # Rollback only this failed insert
-                log.exception(
+                log.error(
                     f"Failed to add alias {alias_path} for column {col.col_id}. Skipping."
                 )
 

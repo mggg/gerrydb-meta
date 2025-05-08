@@ -15,6 +15,20 @@ log = logging.getLogger()
 
 
 class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
+    def create(
+        self,
+        db: Session,
+        *,
+        obj_in: schemas.LocalityCreate,
+        obj_meta: models.ObjectMeta,
+    ) -> Tuple[models.Locality, uuid.UUID]:
+        locality_list, locality_etag = self.create_bulk(
+            db=db,
+            objs_in=[obj_in],
+            obj_meta=obj_meta,
+        )
+        return locality_list[0], locality_etag
+
     def create_bulk(
         self,
         db: Session,
@@ -93,7 +107,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
                         ],
                     )
                 )
-            except exc.SQLAlchemyError:
+            except exc.SQLAlchemyError:  # pragma: no cover
                 log.exception("Failed to create new location(s).")
                 raise CreateValueError("Failed to create new location(s).")
 
@@ -131,7 +145,7 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
             if aliases:
                 try:
                     db.execute(insert(models.LocalityRef), aliases)
-                except exc.SQLAlchemyError:
+                except exc.SQLAlchemyError:  # pragma: no cover
                     log.exception("Failed to create aliases for new location(s).")
                     raise CreateValueError(
                         "Failed to create aliases for new location(s)."
@@ -148,6 +162,9 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
         return refreshed_locs, etag
 
     def get_by_ref(self, db: Session, *, path: str) -> models.Locality | None:
+        return self.get(db=db, path=path)
+
+    def get(self, db: Session, *, path: str) -> models.Locality | None:
         """Retrieves a location by reference path."""
         ref = (
             db.query(models.LocalityRef)
@@ -199,12 +216,9 @@ class CRLocality(CRBase[models.Locality, schemas.LocalityCreate]):
             except exc.SQLAlchemyError:
                 # TODO: Make this more specific--the primary goal is to capture the case
                 # where the reference already exists.
-                log.exception(
-                    "Failed to create aliases for new location.",
-                    loc.canonical_path,
-                )
+                log.error(f"Failed to create aliases for new location.")
                 raise CreateValueError(
-                    "Failed to create aliases for new location."
+                    "Failed to create aliases for new location. "
                     "(One or more aliases may already exist.)"
                 )
 

@@ -47,7 +47,7 @@ def create_graph(
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
     scopes: ScopeManager = Depends(get_scopes),
-):
+) -> schemas.Graph:
     log.debug("TOP OF API CREATE GRAPH")
     start = time.perf_counter()
     namespace_obj = crud.namespace.get(db=db, path=namespace)
@@ -59,13 +59,13 @@ def create_graph(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read data in this namespace."
             ),
         )
     log.debug("Time to get namespace: %s", time.perf_counter() - start)
     start = time.perf_counter()
 
-    # This will raise the relevane errors if the locality or layer are not found.
+    # This will raise the relevent errors if the locality or layer are not found.
     geo_set_version = geo_set_from_paths(
         locality=obj_in.locality,
         layer=obj_in.layer,
@@ -122,7 +122,7 @@ def all_graphs(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read data in this namespace."
             ),
         )
     graph_objs = crud.graph.all(db=db, namespace=graph_namespace_obj)
@@ -157,7 +157,7 @@ def get_graph(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read data in this namespace."
             ),
         )
     log.debug("Time to get namespace: %s", time.perf_counter() - start)
@@ -197,7 +197,7 @@ def render_graph(
             status_code=HTTPStatus.NOT_FOUND,
             detail=(
                 f'Namespace "{namespace}" not found, or you do not have '
-                "sufficient permissions to write views in this namespace."
+                "sufficient permissions to read data in this namespace."
             ),
         )
 
@@ -208,6 +208,7 @@ def render_graph(
             detail=f"Graph not found in namespace.",
         )
 
+    # FIXME: Thsis needs to be fixed before we go to Beta
     # ==========================================================
     # ==========================================================
     #     Google Cloud Storage Redirect Still Needs Modified
@@ -224,7 +225,7 @@ def render_graph(
     #         log.exception("Failed to initialize Google Cloud Storage context.")
     #         storage_credentials = storage_client = None
     # has_gcs_context = storage_client is not None
-
+    #
     # cached_render_meta = crud.view.get_cached_render(db=db, view=view_obj)
     # if cached_render_meta is not None and has_gcs_context:
     #     render_path = urlparse(cached_render_meta.path)

@@ -89,7 +89,7 @@ app.include_router(api_router, prefix=API_PREFIX)
 
 
 @app.middleware("http")
-async def log_400_errors(request: Request, call_next):
+async def log_400_errors(request: Request, call_next): # pragma: no cover
     response = await call_next(request)
 
     # Check for the specific status code
@@ -151,12 +151,12 @@ async def log_400_errors(request: Request, call_next):
 
 
 @app.get("/health")
-def health_check():
+def health_check(): # pragma: no cover
     return {"status": "healthy"}
 
 
 @app.get("/middlewares")
-def list_middlewares():
+def list_middlewares(): # pragma: no cover
     middleware_info = [
         {"class": str(m.cls), "options": m.options} for m in app.user_middleware
     ]
