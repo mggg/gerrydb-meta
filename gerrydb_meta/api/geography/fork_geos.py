@@ -259,10 +259,11 @@ def check_forkability(
     Raises:
         HTTPException: If the source and target layers are not forkable.
     """
-    source_namespace_obj, target_namespace_obj = (
-        __validate_source_and_target_namespaces(
-            source_namespace, target_namespace, db, scopes
-        )
+    (
+        source_namespace_obj,
+        target_namespace_obj,
+    ) = __validate_source_and_target_namespaces(
+        source_namespace, target_namespace, db, scopes
     )
 
     locality = crud.locality.get_by_ref(db=db, path=loc_ref)
@@ -372,10 +373,11 @@ def fork_geos_between_namespaces(
 
     # We are doing some double work here, but it's not a big deal because
     # getting namespaces, localities, and layers is fast in the DB.
-    source_namespace_obj, target_namespace_obj = (
-        __validate_source_and_target_namespaces(
-            source_namespace, target_namespace, db, scopes
-        )
+    (
+        source_namespace_obj,
+        target_namespace_obj,
+    ) = __validate_source_and_target_namespaces(
+        source_namespace, target_namespace, db, scopes
     )
 
     locality = crud.locality.get_by_ref(db=db, path=loc_ref)

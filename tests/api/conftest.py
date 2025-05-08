@@ -49,7 +49,6 @@ def ctx_no_scopes_factory(db):
     def get_test_db() -> Generator:
         yield db
 
-
     def ctx_factory() -> TestContext:
         # TODO: replace with `crud` calls.
         admin = GerryAdmin(db)
@@ -81,7 +80,7 @@ def ctx_no_scopes_factory(db):
 
         app.dependency_overrides[get_db] = get_test_db
         headers = {"X-API-Key": api_key, "X-GerryDB-Meta-Id": str(meta.uuid)}
-        client = TestClient(app, headers = headers)
+        client = TestClient(app, headers=headers)
         return TestContext(
             db=db,
             client=client,
@@ -104,7 +103,7 @@ def ctx_no_scopes(ctx_no_scopes_factory):
 def ctx_superuser(ctx_no_scopes_factory):
     """FastAPI test client with API key authentication and maximum privileges."""
     ctx = ctx_no_scopes_factory()
-    grant_scope(ctx.db, ctx.user, ScopeType.ALL, namespace_group = NamespaceGroup.ALL)
+    grant_scope(ctx.db, ctx.user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL)
     yield ctx
 
 

@@ -10,14 +10,15 @@ import logging
 from gerrydb_meta.main import API_PREFIX
 
 
-
 def test_good_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
     ctx = ctx_superuser
     user = models.User(email="geo_settest@example.com", name="geo_set User")
     db.add(user)
     db.flush()
 
-    api_key = models.ApiKey(key_hash=b"geo_set_testing_key", user_id=user.user_id, user=user)
+    api_key = models.ApiKey(
+        key_hash=b"geo_set_testing_key", user_id=user.user_id, user=user
+    )
     db.add(api_key)
     db.flush()
 
@@ -77,7 +78,7 @@ def test_good_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
         objs_in=[
             schemas.LocalityCreate(
                 canonical_path="maine_geo_set",
-                parent_path=None, 
+                parent_path=None,
                 name="maine_geo_set",
                 aliases=["mar", "23r"],
                 default_proj="epsg:26919",
@@ -90,44 +91,51 @@ def test_good_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
 
     loc = loc[0]
 
-
     map_locality_response = ctx.client.put(
         f"{API_PREFIX}/layers/test_geo_ns/counties_geo_layer?locality=maine_geo_set",
-        json={
-            "paths": [g.path for g in geo_objs]
-        }
+        json={"paths": [g.path for g in geo_objs]},
     )
     map_locality_response.raise_for_status()
 
-    layer_out = db.query(models.GeoLayer).filter(
-        models.GeoLayer.path == "counties_geo_layer",
-        models.GeoLayer.namespace_id == ns.namespace_id,
-    ).first()
+    layer_out = (
+        db.query(models.GeoLayer)
+        .filter(
+            models.GeoLayer.path == "counties_geo_layer",
+            models.GeoLayer.namespace_id == ns.namespace_id,
+        )
+        .first()
+    )
     assert layer_out.path == "counties_geo_layer"
 
-    geo_set_out = db.query(models.GeoSetVersion).filter(
-        models.GeoSetVersion.layer_id == layer_out.layer_id,
-        models.GeoSetVersion.loc_id == loc.loc_id,
-    ).one()
+    geo_set_out = (
+        db.query(models.GeoSetVersion)
+        .filter(
+            models.GeoSetVersion.layer_id == layer_out.layer_id,
+            models.GeoSetVersion.loc_id == loc.loc_id,
+        )
+        .one()
+    )
 
-    geo_set_members = db.query(models.GeoSetMember).filter(
-        models.GeoSetMember.set_version_id == geo_set_out.set_version_id,
-    ).all()
+    geo_set_members = (
+        db.query(models.GeoSetMember)
+        .filter(
+            models.GeoSetMember.set_version_id == geo_set_out.set_version_id,
+        )
+        .all()
+    )
 
     assert len(geo_set_members) == len(geo_objs)
-    assert set([g.geo_id for g in geo_objs]) == set(
-        [g.geo_id for g in geo_set_members]
-    )
- 
+    assert set([g.geo_id for g in geo_objs]) == set([g.geo_id for g in geo_set_members])
 
     geo_set_version = geo_set_from_paths(
-        locality = loc.name,
-        layer = f"layers/{ns.path}/{layer_out.path}/",
-        namespace = ns.path,
-        db = db,
+        locality=loc.name,
+        layer=f"layers/{ns.path}/{layer_out.path}/",
+        namespace=ns.path,
+        db=db,
         scopes=get_scopes(ctx.admin_user),
     )
     assert geo_set_version.set_version_id == geo_set_out.set_version_id
+
 
 def test_errors_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
 
@@ -136,7 +144,9 @@ def test_errors_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
     db.add(user)
     db.flush()
 
-    api_key = models.ApiKey(key_hash=b"geo_set_bad_testing_key", user_id=user.user_id, user=user)
+    api_key = models.ApiKey(
+        key_hash=b"geo_set_bad_testing_key", user_id=user.user_id, user=user
+    )
     db.add(api_key)
     db.flush()
 
@@ -196,7 +206,7 @@ def test_errors_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
         objs_in=[
             schemas.LocalityCreate(
                 canonical_path="maine_geo_set_bad",
-                parent_path=None, 
+                parent_path=None,
                 name="maine_geo_set_bad",
                 aliases=["mar", "23r"],
                 default_proj="epsg:26919",
@@ -209,25 +219,19 @@ def test_errors_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
 
     loc = loc[0]
 
-
     bad_ns_response = ctx.client.put(
         f"{API_PREFIX}/layers/this_ns_is_bad/counties_geo_layer?locality=maine_geo_set_bad",
-        json={
-            "paths": [g.path for g in geo_objs]
-        }
+        json={"paths": [g.path for g in geo_objs]},
     )
     assert bad_ns_response.status_code == 404
     assert (
         "Namespace not found, or you do not have sufficient permissions to write geographic "
-        "layers in this namespace." 
+        "layers in this namespace."
     ) in bad_ns_response.json()["detail"]
-
 
     bad_loc_response = ctx.client.put(
         f"{API_PREFIX}/layers/test_geo_set_bad/counties_geo_layer?locality=bad_locality",
-        json={
-            "paths": [g.path for g in geo_objs]
-        }
+        json={"paths": [g.path for g in geo_objs]},
     )
 
     assert bad_loc_response.status_code == 404
@@ -235,10 +239,7 @@ def test_errors_map_layer_view(db, me_2010_gdf, ctx_superuser, caplog):
 
     bad_layer_response = ctx.client.put(
         f"{API_PREFIX}/layers/test_geo_set_bad/bad_layer?locality=maine_geo_set_bad",
-        json={
-            "paths": [g.path for g in geo_objs]
-        }
+        json={"paths": [g.path for g in geo_objs]},
     )
     assert bad_layer_response.status_code == 404
     assert "Geographic layer not found" in bad_layer_response.json()["detail"]
-

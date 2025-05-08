@@ -430,15 +430,16 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 "No template version found satisfying time constraints."
             )
 
-        all_set_version_ids, curr_ns_set_version_id = (
-            self.__validate_geo_set_compatabilty(
-                db=db,
-                namespace=namespace,
-                locality=locality,
-                layer=layer,
-                valid_at=valid_at,
-                template_version_id=template_version_id,
-            )
+        (
+            all_set_version_ids,
+            curr_ns_set_version_id,
+        ) = self.__validate_geo_set_compatabilty(
+            db=db,
+            namespace=namespace,
+            locality=locality,
+            layer=layer,
+            valid_at=valid_at,
+            template_version_id=template_version_id,
         )
 
         # Run the set version check on the db side of things

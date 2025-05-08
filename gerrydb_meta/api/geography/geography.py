@@ -18,7 +18,6 @@ from uvicorn.config import logger as log
 
 
 class GeographyApi(NamespacedObjectApi):
-
     def _create(self, router: APIRouter) -> Callable:
         @router.post(
             "/{namespace}",

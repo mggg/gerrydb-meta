@@ -85,21 +85,20 @@ def test_api_geo_import_create_all__private_namespace(
 
 def test_api_geo_import__obj_error_uuid(db):
     api = GeoImportApi(
-        crud = crud.geo_import,
+        crud=crud.geo_import,
         get_schema=schemas.GeoImport,
         create_schema=None,
         obj_name_singular="GeoImport",
         obj_name_plural="GeoImports",
     )
 
-
     with pytest.raises(HTTPException, match="GeoImport ID is not a valid UUID."):
-        api._obj(db = db, uuid = "invalid-uuid")
+        api._obj(db=db, uuid="invalid-uuid")
 
 
 def test_api_geo_bad_obj(db, monkeypatch):
     api = GeoImportApi(
-        crud = crud.geo_import,
+        crud=crud.geo_import,
         get_schema=schemas.GeoImport,
         create_schema=None,
         obj_name_singular="GeoImport",
@@ -111,8 +110,4 @@ def test_api_geo_bad_obj(db, monkeypatch):
 
     uuid = "123e4567-e89b-12d3-a456-426614174000"
     with pytest.raises(HTTPException, match="GeoImport not found."):
-        api._obj(db = db, uuid = uuid)
-
-
-
-
+        api._obj(db=db, uuid=uuid)

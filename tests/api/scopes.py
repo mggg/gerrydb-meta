@@ -20,7 +20,8 @@ def grant_scope(
         else:
             user = user_or_meta
             meta = models.ObjectMeta(
-                created_by=user.user_id, notes="Used for authorization configuration only."
+                created_by=user.user_id,
+                notes="Used for authorization configuration only.",
             )
             db.add(meta)
             db.flush()
@@ -41,6 +42,7 @@ def grant_scope(
         else:
             raise e
 
+
 def grant_namespaced_scope(
     db: Session,
     user_or_meta: models.User | models.ObjectMeta,
@@ -55,7 +57,8 @@ def grant_namespaced_scope(
         else:
             user = user_or_meta
             meta = models.ObjectMeta(
-                created_by=user.user_id, notes="Used for authorization configuration only."
+                created_by=user.user_id,
+                notes="Used for authorization configuration only.",
             )
             db.add(meta)
             db.flush()
