@@ -330,23 +330,74 @@ def __validate_query(query: str) -> bool:
         raise RuntimeError("The length of the geoquery passed to ogr2ogr is too long. ")
 
 
-def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID, Path]:
-    """Renders a view (with metadata) to a GeoPackage."""
-    render_uuid = uuid.uuid4()
-    temp_dir = Path(tempfile.mkdtemp())
-    gpkg_path = Path(temp_dir) / f"{render_uuid.hex}.gpkg"
+def __run_subprocess(
+    context: ViewRenderContext, subprocess_command_list: list[str]
+) -> None:
+    try:
+        subprocess.run(
+            subprocess_command_list,
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as ex:
+        # Watch out for accidentally leaking credentials via logging here.
+        # Production deployments should use a PostgreSQL connection service file
+        # to pass credentials to ogr2ogr instead of passing a raw connection string.
+        log.exception(
+            "Failed to export view with ogr2ogr. Query: %s", context.geo_query
+        )
+        log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
+        log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
+        raise RenderError("Failed to render view: geography query failed.")
 
-    geo_layer_name = context.view.path
-    internal_point_layer_name = f"{geo_layer_name}__internal_points"
 
-    if context.view.proj is not None:
-        proj_args = ["-t_srs", context.view.proj]
-    elif context.view.loc.default_proj is not None:
-        proj_args = ["-t_srs", context.view.loc.default_proj]
-    else:
-        proj_args = []  # leave in original projection (conventionally EPSG:4269)
+def __validate_geo_and_internal_point_rows_count(
+    conn: sqlite3.Connection,
+    geo_layer_name: str,
+    internal_point_layer_name: str,
+    *,
+    type: str,
+    expected_count: int | None = None,
+) -> None:
+    try:
+        geo_row_count = conn.execute(
+            f"SELECT COUNT(*) FROM {geo_layer_name}"
+        ).fetchone()[0]
+    except sqlite3.OperationalError as ex:
+        raise RenderError(
+            f"Failed to render {type}: geographic layer not found in GeoPackage.",
+        ) from ex
 
-    start = time.perf_counter()
+    try:
+        internal_point_row_count = conn.execute(
+            f"SELECT COUNT(*) FROM {internal_point_layer_name}"
+        ).fetchone()[0]
+    except sqlite3.OperationalError as ex:
+        raise RenderError(
+            f"Failed to render {type}: internal point layer not found in GeoPackage.",
+        ) from ex
+
+    if expected_count is not None and geo_row_count != expected_count:
+        raise RenderError(
+            f"Failed to render {type}: expected {expected_count} geographies "
+            f"in layer '{geo_layer_name}', got {geo_row_count} geographies."
+        )
+
+    if geo_row_count != internal_point_row_count:
+        raise RenderError(
+            f"Failed to render {type}: found {geo_row_count} geographies "
+            f"in layer '{geo_layer_name}', but {internal_point_row_count} internal points."
+        )
+
+
+def __insert_geopackage_geometries(
+    context: ViewRenderContext | GraphRenderContext,
+    db_config: str,
+    proj_args: list[str],
+    gpkg_path: Path,
+    geo_layer_name: str,
+    internal_point_layer_name: str,
+) -> None:
     log.debug("Before ogr2ogr")
     base_args = [
         "-f",
@@ -366,48 +417,13 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
     ]
 
     log.debug("View to gpkg subprocess command list %s", str(subprocess_command_list))
+
     subprocess_command = shlex.join(subprocess_command_list)
 
+    start = time.perf_counter()
     __validate_query(subprocess_command)
-
-    try:
-        subprocess.run(
-            subprocess_command_list,
-            check=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError as ex:
-        # Watch out for accidentally leaking credentials via logging here.
-        # Production deployments should use a PostgreSQL connection service file
-        # to pass credentials to ogr2ogr instead of passing a raw connection string.
-        log.exception(
-            "Failed to export view with ogr2ogr. Query: %s", context.geo_query
-        )
-        log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
-        log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
-        raise RenderError("Failed to render view: geography query failed.")
-
+    __run_subprocess(context, subprocess_command_list)
     log.debug("ogr2ogr took %s seconds", time.perf_counter() - start)
-    start = time.perf_counter()
-    conn = sqlite3.connect(gpkg_path)
-
-    try:
-        geo_row_count = conn.execute(
-            f"SELECT COUNT(*) FROM {geo_layer_name}"
-        ).fetchone()[0]
-    except sqlite3.OperationalError as ex:
-        raise RenderError(
-            "Failed to render view: geographic layer not found in GeoPackage.",
-        ) from ex
-
-    log.debug("Counting geography rows took %s seconds", time.perf_counter() - start)
-    start = time.perf_counter()
-    if geo_row_count != context.view.num_geos:
-        # Validate inner joins.
-        raise RenderError(
-            f"Failed to render view: expected {context.view.num_geos} geographies "
-            f"in layer, got {geo_row_count} geographies."
-        )
 
     subprocess_command_list = [
         "ogr2ogr",
@@ -426,88 +442,21 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         "Internal point query to gpkg subprocess command list %s",
         str(subprocess_command_list),
     )
+
     subprocess_command = shlex.join(subprocess_command_list)
 
-    __validate_query(subprocess_command)
-
-    log.debug(
-        "Validating internal point query took %s seconds", time.perf_counter() - start
-    )
     start = time.perf_counter()
-    try:
-        subprocess.run(
-            subprocess_command_list,
-            check=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError as ex:
-        # Watch out for accidentally leaking credentials via logging here.
-        # Production deployments should use a PostgreSQL connection service file
-        # to pass credentials to ogr2ogr instead of passing a raw connection string.
-        log.exception(
-            "Failed to export view with ogr2ogr. Query: %s",
-            context.internal_point_query,
-        )
-        log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
-        log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
-        raise RenderError("Failed to render view: internal point query failed.")
-
+    __validate_query(subprocess_command)
+    __run_subprocess(context, subprocess_command_list)
     log.debug(
         "Running internal point query took %s seconds", time.perf_counter() - start
     )
-    start = time.perf_counter()
-    try:
-        internal_point_row_count = conn.execute(
-            f"SELECT COUNT(*) FROM {internal_point_layer_name}"
-        ).fetchone()[0]
-    except sqlite3.OperationalError as ex:
-        raise RenderError(
-            "Failed to render view: internal point layer not found in GeoPackage.",
-        ) from ex
-    if internal_point_row_count != context.view.num_geos:
-        # Validate inner joins.
-        raise RenderError(
-            f"Failed to render view: expected {context.view.num_geos} points "
-            f"in layer, got {geo_row_count} geographies."
-        )
 
-    log.debug(
-        "Counting internal point rows took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
-    # Create indices and references on paths.
-    conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
-    conn.execute(
-        "CREATE UNIQUE INDEX idx_internal_point_path "
-        f"ON {internal_point_layer_name}(path)"
-    )
 
-    ## Add extended (non-geographic) data.
-    _init_base_gpkg_extensions(conn, geo_layer_name)
-
-    conn.executemany(
-        "INSERT INTO gerrydb_view_meta (key, value) VALUES (?, ?)",
-        (
-            (key, json.dumps(value).decode("utf-8"))
-            for key, value in ViewMeta.from_orm(context.view).dict().items()
-        ),
-    )
-    conn.executemany(
-        (
-            "INSERT INTO gpkg_data_columns (table_name, column_name, description) "
-            "VALUES (?, ?, ?)"
-        ),
-        (
-            (geo_layer_name, alias, col.description)
-            for alias, col in context.columns.items()
-        ),
-    )
-
-    log.debug(
-        "Updating table descriptions took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
-    # Insert geographic metadata objects.
+def __update_geo_attrs_gpkg(
+    conn: sqlite3.Connection,
+    context: ViewRenderContext | GraphRenderContext,
+):
     db_meta_id_to_gpkg_meta_id = {}
     for db_id, meta in context.geo_meta.items():
         cur = conn.execute(
@@ -516,16 +465,11 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         )
         db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
 
-    geo_attrs_dict = {}
-
     assert (
         context.geo_meta_ids.keys() == context.geo_valid_from_dates.keys()
     ), "Geographic metadata IDs and valid dates must be aligned."
 
-    log.debug(
-        "Updating geographic metadata took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
+    geo_attrs_dict = {}
     for path in context.geo_meta_ids.keys():
         geo_attrs_dict[path] = (
             context.geo_meta_ids[path],
@@ -540,38 +484,156 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
         ),
     )
 
-    log.debug("Inserting geo attrs took %s seconds", time.perf_counter() - start)
+
+def __update_view_metadata_gpkg(
+    conn: sqlite3.Connection,
+    geo_layer_name: str,
+    internal_point_layer_name: str,
+    context: ViewRenderContext | GraphRenderContext,
+):
+    # Create indices and references on paths.
+    conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
+    conn.execute(
+        "CREATE UNIQUE INDEX idx_internal_point_path "
+        f"ON {internal_point_layer_name}(path)"
+    )
+
+    # Add extended (non-geographic) data.
+    _init_base_gpkg_extensions(conn, geo_layer_name)
+
+    conn.executemany(
+        f"INSERT INTO gerrydb_view_meta (key, value) VALUES (?, ?)",
+        (
+            (key, json.dumps(value).decode("utf-8"))
+            for key, value in ViewMeta.from_orm(context.view).dict().items()
+        ),
+    )
+
+    conn.executemany(
+        (
+            "INSERT INTO gpkg_data_columns (table_name, column_name, description) "
+            "VALUES (?, ?, ?)"
+        ),
+        (
+            (geo_layer_name, alias, col.description)
+            for alias, col in context.columns.items()
+        ),
+    )
+
+
+def __insert_graph_edges(
+    context: ViewRenderContext | GraphRenderContext,
+    conn: sqlite3.Connection,
+    geo_layer_name: str,
+):
+    _init_gpkg_graph_extension(conn, geo_layer_name)
+    conn.executemany(
+        "INSERT INTO gerrydb_graph_edge (path_1, path_2, weights) VALUES (?, ?, ?)",
+        (
+            (edge.path_1, edge.path_2, json.dumps(edge.weights).decode("utf-8"))
+            for edge in context.graph_edges
+        ),
+    )
+
+
+def __insert_plan_assignments(
+    context: ViewRenderContext,
+    conn: sqlite3.Connection,
+    geo_layer_name: str,
+):
+    _init_gpkg_plans_extension(conn, geo_layer_name, context.plan_labels)
+    cols = ["path", *context.plan_labels]
+    placeholders = ", ".join(["?"] * len(cols))
+
+    conn.executemany(
+        (
+            f"INSERT INTO gerrydb_plan_assignment ({', '.join(cols)}) "
+            f"VALUES ({placeholders})"
+        ),
+        ([getattr(row, col) for col in cols] for row in context.plan_assignments),
+    )
+
+
+def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID, Path]:
+    """Renders a view (with metadata) to a GeoPackage."""
+    render_uuid = uuid.uuid4()
+    temp_dir = Path(tempfile.mkdtemp())
+    gpkg_path = Path(temp_dir) / f"{render_uuid.hex}.gpkg"
+
+    log.error("GPKG PATH %s", gpkg_path)
+
+    # render_uuid = uuid.UUID("743c4b525c9348cdb73f72ee1ea4aae9")
+    # temp_dir = Path("/tmp/tmpgki3t686")
+    # gpkg_path = "/tmp/tmpgki3t686/743c4b525c9348cdb73f72ee1ea4aae9.gpkg"
+    geo_layer_name = context.view.path
+    internal_point_layer_name = f"{geo_layer_name}__internal_points"
+
+    if context.view.proj is not None:
+        proj_args = ["-t_srs", context.view.proj]
+    else:
+        proj_args = []  # leave in original projection (conventionally EPSG:4269)
+
+    __insert_geopackage_geometries(
+        context,
+        db_config,
+        proj_args,
+        gpkg_path,
+        geo_layer_name,
+        internal_point_layer_name,
+    )
+
+    conn = sqlite3.connect(gpkg_path)
+
+    __validate_geo_and_internal_point_rows_count(
+        conn,
+        geo_layer_name,
+        internal_point_layer_name,
+        type="view",
+        expected_count=context.view.num_geos,
+    )
+
+    __update_view_metadata_gpkg(
+        conn, geo_layer_name, internal_point_layer_name, context
+    )
+    __update_geo_attrs_gpkg(conn, context)
+
     start = time.perf_counter()
     if context.graph_edges is not None:
-        _init_gpkg_graph_extension(conn, geo_layer_name)
-        conn.executemany(
-            "INSERT INTO gerrydb_graph_edge (path_1, path_2, weights) VALUES (?, ?, ?)",
-            (
-                (edge.path_1, edge.path_2, json.dumps(edge.weights).decode("utf-8"))
-                for edge in context.graph_edges
-            ),
-        )
-
+        __insert_graph_edges(context, conn, geo_layer_name)
     log.debug("Inserting graph edges took %s seconds", time.perf_counter() - start)
+
     start = time.perf_counter()
     if context.plan_assignments is not None:
-        _init_gpkg_plans_extension(conn, geo_layer_name, context.plan_labels)
-        cols = ["path", *context.plan_labels]
-        placeholders = ", ".join(["?"] * len(cols))
-
-        conn.executemany(
-            (
-                f"INSERT INTO gerrydb_plan_assignment ({', '.join(cols)}) "
-                f"VALUES ({placeholders})"
-            ),
-            ([getattr(row, col) for col in cols] for row in context.plan_assignments),
-        )
-
+        __insert_plan_assignments(context, conn, geo_layer_name)
     log.debug("Inserting plan assignments took %s seconds", time.perf_counter() - start)
+
     conn.commit()
     conn.close()
 
     return render_uuid, gpkg_path
+
+
+def __update_graph_metadata_gpkg(
+    conn: sqlite3.Connection,
+    geo_layer_name: str,
+    internal_point_layer_name: str,
+    context: GraphRenderContext,
+):
+    conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
+    conn.execute(
+        "CREATE UNIQUE INDEX idx_internal_point_path "
+        f"ON {internal_point_layer_name}(path)"
+    )
+
+    _init_base_graph_gpkg_extensions(conn, geo_layer_name)
+
+    conn.executemany(
+        "INSERT INTO gerrydb_graph_meta (key, value) VALUES (?, ?)",
+        (
+            (key, json.dumps(value).decode("utf-8"))
+            for key, value in GraphMeta.from_orm(context.graph).dict().items()
+        ),
+    )
 
 
 def graph_to_gpkg(
@@ -591,191 +653,31 @@ def graph_to_gpkg(
     else:
         proj_args = []  # leave in original projection (conventionally EPSG:4269)
 
-    start = time.perf_counter()
-    log.debug("Before ogr2ogr")
-    base_args = [
-        "-f",
-        "GPKG",
-        str(gpkg_path),
+    __insert_geopackage_geometries(
+        context,
         db_config,
-        *proj_args,
-    ]
-
-    subprocess_command_list = [
-        "ogr2ogr",
-        *base_args,
-        "-sql",
-        context.geo_query,
-        "-nln",
+        proj_args,
+        gpkg_path,
         geo_layer_name,
-    ]
+        internal_point_layer_name,
+    )
 
-    log.debug("Graph to gpkg subprocess command list %s", str(subprocess_command_list))
-    subprocess_command = shlex.join(subprocess_command_list)
-
-    __validate_query(subprocess_command)
-
-    try:
-        subprocess.run(
-            subprocess_command_list,
-            check=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError as ex:
-        # Watch out for accidentally leaking credentials via logging here.
-        # Production deployments should use a PostgreSQL connection service file
-        # to pass credentials to ogr2ogr instead of passing a raw connection string.
-        log.exception(
-            "Failed to export graph with ogr2ogr. Query: %s", context.geo_query
-        )
-        # log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
-        raise RenderError("Failed to render view: geography query failed.")
-
-    log.debug("ogr2ogr took %s seconds", time.perf_counter() - start)
-    start = time.perf_counter()
     conn = sqlite3.connect(gpkg_path)
 
-    subprocess_command_list = [
-        "ogr2ogr",
-        *base_args,
-        "-update",
-        "-sql",
-        context.internal_point_query,
-        "-nln",
-        internal_point_layer_name,
-        "-skipfailures",  # Empty points are read as a failure
-        "-nlt",
-        "POINT",
-    ]
-
-    log.debug(
-        "Internal point query to gpkg subprocess command list %s",
-        str(subprocess_command_list),
-    )
-    subprocess_command = shlex.join(subprocess_command_list)
-
-    __validate_query(subprocess_command)
-
-    log.debug(
-        "Validating internal point query took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
-    try:
-        subprocess.run(
-            subprocess_command_list,
-            check=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError:
-        # Watch out for accidentally leaking credentials via logging here.
-        # Production deployments should use a PostgreSQL connection service file
-        # to pass credentials to ogr2ogr instead of passing a raw connection string.
-        log.exception(
-            "Failed to export graph with ogr2ogr. Query: %s",
-            context.internal_point_query,
-        )
-        log.error("ogr2ogr stdout: %s", ex.stdout.decode("utf-8"))
-        log.error("ogr2ogr stderr: %s", ex.stderr.decode("utf-8"))
-        raise RenderError("Failed to render graph: internal point query failed.")
-
-    log.debug(
-        "Running internal point query took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
-
-    try:
-        geo_row_count = conn.execute(
-            f"SELECT COUNT(*) FROM {geo_layer_name}"
-        ).fetchone()[0]
-    except sqlite3.OperationalError as ex:
-        raise RenderError(
-            "Failed to render graph: geographic layer not found in GeoPackage.",
-        ) from ex
-    try:
-        internal_point_row_count = conn.execute(
-            f"SELECT COUNT(*) FROM {internal_point_layer_name}"
-        ).fetchone()[0]
-    except sqlite3.OperationalError as ex:
-        raise RenderError(
-            "Failed to render graph: internal point layer not found in GeoPackage.",
-        ) from ex
-    if geo_row_count != internal_point_row_count:
-        # Validate inner joins.
-        raise RenderError(
-            f"Failed to render graph: found {geo_row_count} geographies "
-            f"in layer, but {internal_point_row_count} internal points."
-        )
-
-    log.debug("Checking geography counts took %s seconds", time.perf_counter() - start)
-    start = time.perf_counter()
-
-    # Create indices and references on paths.
-    conn.execute(f"CREATE UNIQUE INDEX idx_geo_path ON {geo_layer_name}(path)")
-    conn.execute(
-        "CREATE UNIQUE INDEX idx_internal_point_path "
-        f"ON {internal_point_layer_name}(path)"
+    __validate_geo_and_internal_point_rows_count(
+        conn, geo_layer_name, internal_point_layer_name, type="graph"
     )
 
-    ## Add extended (non-geographic) data.
-    _init_base_graph_gpkg_extensions(conn, geo_layer_name)
-
-    conn.executemany(
-        "INSERT INTO gerrydb_graph_meta (key, value) VALUES (?, ?)",
-        (
-            (key, json.dumps(value).decode("utf-8"))
-            for key, value in GraphMeta.from_orm(context.graph).dict().items()
-        ),
+    __update_graph_metadata_gpkg(
+        conn, geo_layer_name, internal_point_layer_name, context
     )
+    __update_geo_attrs_gpkg(conn, context)
 
-    log.debug(
-        "Updating table descriptions took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
-    # Insert geographic metadata objects.
-    db_meta_id_to_gpkg_meta_id = {}
-    for db_id, meta in context.geo_meta.items():
-        cur = conn.execute(
-            "INSERT INTO gerrydb_geo_meta (value) VALUES (?)",
-            (json.dumps(ObjectMeta.from_orm(meta).dict()).decode("utf-8"),),
-        )
-        db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
-
-    geo_attrs_dict = {}
-
-    assert (
-        context.geo_meta_ids.keys() == context.geo_valid_from_dates.keys()
-    ), "Geographic metadata IDs and valid dates must be aligned."
-
-    log.debug(
-        "Updating geographic metadata took %s seconds", time.perf_counter() - start
-    )
-    start = time.perf_counter()
-    for path in context.geo_meta_ids.keys():
-        geo_attrs_dict[path] = (
-            context.geo_meta_ids[path],
-            context.geo_valid_from_dates[path],
-        )
-
-    conn.executemany(
-        "INSERT INTO gerrydb_geo_attrs (path, meta_id, valid_from) VALUES (?, ?, ?)",
-        (
-            (path, db_meta_id_to_gpkg_meta_id[db_id], valid_from)
-            for path, (db_id, valid_from) in geo_attrs_dict.items()
-        ),
-    )
-
-    log.debug("Inserting geo attrs took %s seconds", time.perf_counter() - start)
     start = time.perf_counter()
     if context.graph_edges is not None:
-        _init_gpkg_graph_extension(conn, geo_layer_name)
-        conn.executemany(
-            "INSERT INTO gerrydb_graph_edge (path_1, path_2, weights) VALUES (?, ?, ?)",
-            (
-                (edge.path_1, edge.path_2, json.dumps(edge.weights).decode("utf-8"))
-                for edge in context.graph_edges
-            ),
-        )
+        __insert_graph_edges(context, conn, geo_layer_name)
     log.debug("Inserting graph edges took %s seconds", time.perf_counter() - start)
+
     conn.commit()
     conn.close()
 
