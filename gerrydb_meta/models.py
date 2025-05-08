@@ -326,7 +326,7 @@ class GeoSetVersion(Base):
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
     members: Mapped[list["GeoSetMember"]] = relationship("GeoSetMember")
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return (
             f"GeoSetVersion(layer={self.layer.path}, loc={self.loc.name}, "
             f"set_version_id={self.set_version_id})"
@@ -607,7 +607,7 @@ class ColumnSet(Base):
     )
     namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return f"ColumnSet(path={self.path}, namespace={self.namespace.path})"
 
 

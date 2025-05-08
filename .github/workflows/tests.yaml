@@ -17,7 +17,7 @@ jobs:
         image: postgis/postgis
         # Provide the password for postgres
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: test
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
@@ -26,11 +26,11 @@ jobs:
           --health-retries 5
         ports:
           # Maps tcp port 5432 on service container to the host
-          - 5432:5432
+          - 54321:5432
 
     strategy:
       matrix:
-        python-version: ['3.11']
+        python-version: ['3.12']
         os: [ubuntu-latest]
     env:
       OS: ${{ matrix.os }}
@@ -38,26 +38,39 @@ jobs:
 
     steps:
     - uses: actions/checkout@main
+
     - name: Set up Python
       uses: actions/setup-python@master
       with:
         python-version: ${{ matrix.python-version }}
+
     - name: Install dependencies
       run: |
         pip install poetry
-        pip install .
-        pip install black isort
-        pip install pytest pytest-cov
+        poetry install --all-extras
+
+    - name: Install PostgreSQL client tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Install GDAL (ogr2ogr)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gdal-bin
+
     - name: Check formatting
       run: |
-        python -m black . --check
-        python -m isort . --diff
+        poetry run black . --check
+        poetry run isort . --diff
+
     - name: Run tests and generate coverage report
       run: |
-        pytest -v --cov=./ --cov-report=xml
+        poetry run pytest -v --cov=./ --cov-report=xml
       env:
-        GERRYDB_DATABASE_URI: postgresql://postgres:postgres@localhost:5432/postgres
-        GERRYDB_TEST_DATABASE_URI: postgresql://postgres:postgres@localhost:5432/postgres
+        GERRYDB_DATABASE_URI: postgresql://postgres:test@localhost:54321/postgres
+        GERRYDB_TEST_DATABASE_URI: postgresql://postgres:test@localhost:54321/postgres
+
     - name: Upload coverage to Codecov
       if: >-
         (github.event_name == 'push' && github.ref == 'refs/heads/dev')
