@@ -157,7 +157,6 @@ def all_paths(
     if valid_at is None:
         valid_at = datetime.now(timezone.utc)
 
-    log.info(valid_at)
     log.debug("Getting all paths")
     view_namespace_obj = crud.namespace.get(db=db, path=namespace)
 

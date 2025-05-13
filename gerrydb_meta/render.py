@@ -1,6 +1,5 @@
 """Extended GeoPackage rendering of views."""
 
-import logging
 import sqlite3
 import subprocess
 import tempfile
@@ -560,11 +559,6 @@ def view_to_gpkg(context: ViewRenderContext, db_config: str) -> tuple[uuid.UUID,
     temp_dir = Path(tempfile.mkdtemp())
     gpkg_path = Path(temp_dir) / f"{render_uuid.hex}.gpkg"
 
-    log.error("GPKG PATH %s", gpkg_path)
-
-    # render_uuid = uuid.UUID("743c4b525c9348cdb73f72ee1ea4aae9")
-    # temp_dir = Path("/tmp/tmpgki3t686")
-    # gpkg_path = "/tmp/tmpgki3t686/743c4b525c9348cdb73f72ee1ea4aae9.gpkg"
     geo_layer_name = context.view.path
     internal_point_layer_name = f"{geo_layer_name}__internal_points"
 

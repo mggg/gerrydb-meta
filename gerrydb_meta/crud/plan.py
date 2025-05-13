@@ -1,6 +1,5 @@
 """CRUD operations and transformations for districting plans."""
 
-import logging
 import uuid
 from typing import Tuple
 
@@ -10,8 +9,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import CreateValueError
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 
 class CRPlan(NamespacedCRBase[models.Plan, schemas.PlanCreate]):
@@ -26,6 +24,58 @@ class CRPlan(NamespacedCRBase[models.Plan, schemas.PlanCreate]):
         namespace: models.Namespace,
     ) -> Tuple[models.Plan, uuid.UUID]:
         """Creates a new districting plan."""
+        # Check if you can create a plan at all
+        plan_limit = (
+            db.query(models.PlanLimit)
+            .filter(
+                models.PlanLimit.namespace_id == namespace.namespace_id,
+                models.PlanLimit.layer_id == geo_set_version.layer.layer_id,
+                models.PlanLimit.loc_id == geo_set_version.loc_id,
+            )
+            .first()
+        )
+
+        if plan_limit is None:
+            with db.begin(nested=True):
+                plan_limit = models.PlanLimit(
+                    namespace_id=namespace.namespace_id,
+                    layer_id=geo_set_version.layer.layer_id,
+                    loc_id=geo_set_version.loc_id,
+                )
+                db.add(plan_limit)
+                db.flush()
+                db.refresh(plan_limit)
+
+        current_plan_count = (
+            db.query(models.Plan)
+            .join(
+                models.GeoSetVersion,
+                models.Plan.set_version_id == models.GeoSetVersion.set_version_id,
+            )
+            .filter(
+                models.Plan.namespace_id == namespace.namespace_id,
+                models.GeoSetVersion.layer_id == geo_set_version.layer.layer_id,
+                models.GeoSetVersion.loc_id == geo_set_version.loc_id,
+            )
+            .count()
+        )
+
+        log.debug(
+            "Found %d plans in namespace %s for loc %s in layer %s",
+            current_plan_count,
+            namespace,
+            geo_set_version.loc,
+            geo_set_version.layer,
+        )
+
+        if current_plan_count >= plan_limit.max_plans:
+            raise CreateValueError(
+                "Failed to create a plan object. The maximum number of plans "
+                f"({plan_limit.max_plans}) has already been reached for "
+                f"locality {geo_set_version.loc.canonical_ref.path} in layer "
+                f"{geo_set_version.layer.full_path}."
+            )
+
         set_geo_ids = set(
             db.scalars(
                 select(models.GeoSetMember.geo_id).filter(

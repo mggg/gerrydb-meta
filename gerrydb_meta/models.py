@@ -218,6 +218,9 @@ class Namespace(Base):
 
     meta: Mapped[ObjectMeta] = relationship("ObjectMeta", lazy="joined")
 
+    def __repr__(self):  # pragma: no cover
+        return f"Namespace(path={self.path}, description={self.description})"
+
 
 class Locality(Base):
     __tablename__ = "locality"
@@ -301,6 +304,9 @@ class GeoLayer(Base):
     def full_path(self):  # pragma: no cover
         """Path with namespace prefix."""
         return f"/{self.namespace.path}/{self.path}"
+
+    def __repr__(self):  # pragma: no cover
+        return f"GeoLayer(path={self.path}, namespace={self.namespace.path})"
 
 
 class GeoSetVersion(Base):
@@ -1017,3 +1023,40 @@ class ETag(Base):
         postgresql.UUID(as_uuid=True),
         nullable=False,
     )
+
+
+class PlanLimit(Base):
+    __tablename__ = "plan_limit"
+
+    namespace_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("namespace.namespace_id"), primary_key=True
+    )
+    loc_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locality.loc_id"), primary_key=True
+    )
+    layer_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("geo_layer.layer_id"), primary_key=True
+    )
+    max_plans: Mapped[int | None] = mapped_column(Integer, nullable=False, default=100)
+
+    namespace: Mapped[Namespace] = relationship("Namespace", lazy="joined")
+    loc: Mapped[Locality] = relationship("Locality", lazy="joined")
+    layer: Mapped[GeoLayer] = relationship("GeoLayer", lazy="joined")
+
+
+class NamespaceLimit(Base):
+    __tablename__ = "namespace_limit"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.user_id"), primary_key=True
+    )
+    max_ns_creation: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    curr_creation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    user: Mapped[User] = relationship("User", lazy="joined")
+
+    def __repr__(self):  # pragma: no cover
+        return f"NamespaceLimit(user_id={self.user_id}, max_ns_creation={self.max_ns_creation}, curr_creation_count={self.curr_creation_count})"
