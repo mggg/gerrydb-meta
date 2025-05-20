@@ -66,7 +66,6 @@ def _generate_api_key() -> tuple[str, bytes]:
             (2) A binary digest of the SHA512 hash of the key.
     """
     key = "".join(secrets.choice(API_KEY_CHARS) for _ in range(64))
-    # key = "epw4lml75b3smavgi5fkny5wr0rikwumzkl4isl2w1ng12r0q3pwrr8prcv1xz6h"
 
     # Just a sanity check to make sure that the test key (which is NOT secure)
     # is not accidentally used in production. This is totally overkill, but it
