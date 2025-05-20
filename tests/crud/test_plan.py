@@ -372,27 +372,26 @@ def test_plan_create_error_geos(db_with_meta):
         db=db, layer=geo_layer, locality=loc[0]
     )
 
-    with pytest.raises(
-        CreateValueError,
-        match="Some of the geographies in the layer do not appear to have been assigned",
-    ):
-        _ = crud.plan.create(
-            db=db,
-            obj_in=schemas.PlanCreate(
-                path="atlantis_plan",
-                description="A plan for the city of Atlantis",
-                source_url="https://en.wikipedia.org/wiki/Atlantis",
-                districtr_id="districtr_atlantis_plan",
-                daves_id="daves_atlantis_plan",
-                locality="atlantis_loc",
-                layer="atlantis_layer",
-                assignments={"central_atlantis": "1", "western_atlantis": "2"},
-            ),
-            geo_set_version=geo_set_version,
-            obj_meta=meta,
-            namespace=ns,
-            assignments={geo[1][0]: "2"},
-        )
+    # Missing geos makes incomplete plan
+    plan, _ = crud.plan.create(
+        db=db,
+        obj_in=schemas.PlanCreate(
+            path="atlantis_plan",
+            description="A plan for the city of Atlantis",
+            source_url="https://en.wikipedia.org/wiki/Atlantis",
+            districtr_id="districtr_atlantis_plan",
+            daves_id="daves_atlantis_plan",
+            locality="atlantis_loc",
+            layer="atlantis_layer",
+            assignments={"central_atlantis": "1", "western_atlantis": "2"},
+        ),
+        geo_set_version=geo_set_version,
+        obj_meta=meta,
+        namespace=ns,
+        assignments={geo[1][0]: "2"},
+    )
+
+    assert plan.complete == False
 
     geo_import2, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
 
@@ -410,7 +409,7 @@ def test_plan_create_error_geos(db_with_meta):
 
     with pytest.raises(
         CreateValueError,
-        match="Some geographies in the assigment are not in set defined by locality ",
+        match="Some geographies in the assigment are not in the set defined by locality ",
     ):
         _ = crud.plan.create(
             db=db,
