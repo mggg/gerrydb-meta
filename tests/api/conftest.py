@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Generator
+import random
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.admin import GerryAdmin
 from gerrydb_meta.api.deps import get_db
-from gerrydb_meta.enums import NamespaceGroup, ScopeType
+from gerrydb_meta.enums import NamespaceGroup, ScopeType, GroupPermissions
 from gerrydb_meta.main import app
 
 from .scopes import grant_namespaced_scope, grant_scope
@@ -24,7 +25,9 @@ class TestContext:
     db: Session
     client: TestClient
     meta: models.ObjectMeta | None = None
+    admin_meta: models.ObjectMeta | None = None
     user: models.User | None = None
+    admin_user: models.User | None = None
     namespace: models.Namespace | None = None
 
 
@@ -46,27 +49,46 @@ def ctx_no_scopes_factory(db):
     def get_test_db() -> Generator:
         yield db
 
-    user_idx = 0
-
     def ctx_factory() -> TestContext:
         # TODO: replace with `crud` calls.
-        nonlocal user_idx
         admin = GerryAdmin(db)
-        user = admin.user_create(name="Test User", email=f"test{user_idx}@example.com")
+        try:
+            creator = admin.initial_user_create("admin@example.com", "admin")
+        except Exception:
+            creator = admin.user_find_by_email("admin@example.com")
+
+        user_idx = random.randint(0, 1_000_000_000)
+        user = admin.user_create(
+            name="Test User",
+            email=f"test{user_idx}@example.com",
+            group_perm=GroupPermissions.PUBLIC,
+            creator=creator,
+        )
         user_idx += 1
         api_key = admin.key_create(user)
         db.flush()
 
         meta = models.ObjectMeta(notes="metameta", created_by=user.user_id)
+        admin_meta = models.ObjectMeta(notes="adminmeta", created_by=creator.user_id)
         db.add(meta)
+        db.add(admin_meta)
         db.flush()
         db.refresh(user)
         db.refresh(meta)
+        db.refresh(admin_meta)
+        db.refresh(creator)
 
         app.dependency_overrides[get_db] = get_test_db
-        client = TestClient(app)
-        client.headers = {"X-API-Key": api_key, "X-GerryDB-Meta-Id": str(meta.uuid)}
-        return TestContext(db=db, client=client, user=user, meta=meta)
+        headers = {"X-API-Key": api_key, "X-GerryDB-Meta-Id": str(meta.uuid)}
+        client = TestClient(app, headers=headers)
+        return TestContext(
+            db=db,
+            client=client,
+            user=user,
+            admin_user=creator,
+            meta=meta,
+            admin_meta=admin_meta,
+        )
 
     return ctx_factory
 
@@ -81,7 +103,7 @@ def ctx_no_scopes(ctx_no_scopes_factory):
 def ctx_superuser(ctx_no_scopes_factory):
     """FastAPI test client with API key authentication and maximum privileges."""
     ctx = ctx_no_scopes_factory()
-    grant_scope(ctx.db, ctx.user, ScopeType.ALL, NamespaceGroup.ALL)
+    grant_scope(ctx.db, ctx.user, ScopeType.ALL, namespace_group=NamespaceGroup.ALL)
     yield ctx
 
 
@@ -106,18 +128,14 @@ def ctx_public_namespace_read_only(request, ctx_no_scopes_factory):
         ),
         obj_meta=base_ctx.meta,
     )
-    grant_scope(
-        base_ctx.db,
-        base_ctx.meta,
-        ScopeType.NAMESPACE_READ,
-        namespace_group=NamespaceGroup.PUBLIC,
-    )
-    grant_scope(base_ctx.db, base_ctx.meta, ScopeType.LOCALITY_READ)
+
     yield TestContext(
         db=base_ctx.db,
         client=base_ctx.client,
         meta=base_ctx.meta,
+        admin_meta=base_ctx.admin_meta,
         user=base_ctx.user,
+        admin_user=base_ctx.admin_user,
         namespace=namespace,
     )
 
@@ -146,21 +164,13 @@ def ctx_private_namespace_read_only(request, ctx_no_scopes_factory):
         ),
         obj_meta=base_ctx.meta,
     )
-    grant_scope(
-        base_ctx.db,
-        base_ctx.meta,
-        ScopeType.NAMESPACE_READ,
-        namespace_group=NamespaceGroup.PUBLIC,
-    )
-    grant_scope(base_ctx.db, base_ctx.meta, ScopeType.LOCALITY_READ)
-    grant_namespaced_scope(
-        base_ctx.db, base_ctx.meta, namespace, ScopeType.NAMESPACE_READ
-    )
     yield TestContext(
         db=base_ctx.db,
         client=base_ctx.client,
         meta=base_ctx.meta,
+        admin_meta=base_ctx.admin_meta,
         user=base_ctx.user,
+        admin_user=base_ctx.admin_user,
         namespace=namespace,
     )
 
@@ -170,7 +180,6 @@ def ctx_private_namespace_read_write(ctx_private_namespace_read_only):
     """Context with an API client with NAMESPACE_READ scope in a private namespace."""
     ctx = ctx_private_namespace_read_only
     grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_WRITE)
-    grant_namespaced_scope(ctx.db, ctx.meta, ctx.namespace, ScopeType.NAMESPACE_WRITE)
     yield ctx
 
 

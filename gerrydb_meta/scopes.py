@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from gerrydb_meta.enums import NamespaceGroup, ScopeType
 from gerrydb_meta.models import Namespace, User
+from uvicorn.config import logger as log
 
 
 @dataclass
@@ -92,10 +93,12 @@ class ScopeManager:
 
     def has_global_scope(self, scope: ScopeType) -> bool:
         """Does the user have the global scope `scope`?"""
+        log.debug("Checking %s for %s", scope, self.user.name)
         return ScopeType.ALL in self._global_scopes or scope in self._global_scopes
 
     def has_namespace_scope(self, scope: ScopeType, namespace: Namespace) -> bool:
         """Does the user have `scope` in `namespace`?"""
+        log.debug("Checking %s for %s", scope, namespace)
         candidates = {
             (scope, namespace.namespace_id),
             (ScopeType.ALL, namespace.namespace_id),

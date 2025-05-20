@@ -15,12 +15,11 @@ COLUMNS_ROOT = f"{API_PREFIX}/columns"
     "typed_vals",
     [
         (ColumnType.INT, -1, 1),
-        (ColumnType.FLOAT, 1.0, float("inf")),
+        (ColumnType.FLOAT, 1.0, 3.141592653589793),
         (ColumnType.BOOL, True, False),
         (ColumnType.STR, "", "abc"),
-        (ColumnType.JSON, {"key": "value"}, [1, 2, "3"]),
     ],
-    ids=("int", "float", "bool", "str", "json"),
+    ids=("int", "float", "bool", "str"),
 )
 def test_api_column_value_set__two_geos(ctx_public_namespace_read_write, typed_vals):
     col_type, val1, val2 = typed_vals

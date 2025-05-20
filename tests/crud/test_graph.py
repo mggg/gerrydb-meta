@@ -1,7 +1,7 @@
 import networkx as nx
-from gerrydb_meta import crud, schemas, models
+from gerrydb_meta import crud, schemas
+from gerrydb_meta.exceptions import CreateValueError
 from shapely import Point, Polygon
-from shapely import wkb
 import pytest
 
 square_corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
@@ -115,15 +115,14 @@ def test_crud_graph_create(db_with_meta):
     }
 
 
-def test_crud_graph_create_missing_edge(db_with_meta):
+def test_crud_graph_create_bad_geos_error(db_with_meta):
     db, meta = db_with_meta
 
     ns = make_atlantis_ns(db, meta)
 
     grid_graph = nx.Graph()
-    grid_graph.add_nodes_from(["central", "western", "northern"])
+    grid_graph.add_nodes_from(["central", "western"])
     grid_graph.add_edge("central", "western", weight=1.0)
-    grid_graph.add_edge("central", "northern", weight=1.0)
 
     geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
 
@@ -137,11 +136,6 @@ def test_crud_graph_create_missing_edge(db_with_meta):
             ),
             schemas.GeographyCreate(
                 path="western_atlantis",
-                geography=None,
-                internal_point=None,
-            ),
-            schemas.GeographyCreate(
-                path="northern_atlantis",
                 geography=None,
                 internal_point=None,
             ),
@@ -183,7 +177,112 @@ def test_crud_graph_create_missing_edge(db_with_meta):
         obj_meta=meta,
     )
 
-    with pytest.raises(Exception) as exec_info:
+    import2, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+    geo2, _ = crud.geography.create(
+        db=db,
+        obj_in=schemas.GeographyCreate(
+            path="northern_atlantis",
+            geography=None,
+            internal_point=None,
+        ),
+        namespace=ns,
+        obj_meta=meta,
+        geo_import=import2,
+    )
+
+    with pytest.raises(
+        CreateValueError, match="Geographies not associated with locality and layer"
+    ):
+        crud.graph.create(
+            db=db,
+            obj_in=schemas.GraphCreate(
+                path="atlantis_dual",
+                description="The legendary city of Atlantis",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                edges=[
+                    (a, b, {k: v for k, v in attr.items() if k != "id"})
+                    for (a, b), attr in grid_graph.edges.items()
+                ],
+            ),
+            geo_set_version=crud.geo_layer.get_set_by_locality(
+                db=db, layer=geo_layer, locality=loc[0]
+            ),
+            edge_geos={"central": geo[0][0], "western": geo[1][0], "northern": geo2[0]},
+            obj_meta=meta,
+            namespace=ns,
+        )
+
+
+def test_crud_graph_create_missing_geos(db_with_meta):
+    db, meta = db_with_meta
+
+    ns = make_atlantis_ns(db, meta)
+
+    grid_graph = nx.Graph()
+    grid_graph.add_nodes_from(["central", "western"])
+    grid_graph.add_edge("central", "western", weight=1.0)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
+    geo, _ = crud.geography.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.GeographyCreate(
+                path="central_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+            schemas.GeographyCreate(
+                path="western_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+        ],
+        obj_meta=meta,
+        geo_import=geo_import,
+        namespace=ns,
+    )
+
+    geo_layer, _ = crud.geo_layer.create(
+        db=db,
+        obj_in=schemas.GeoLayerCreate(
+            path="atlantis_blocks",
+            description="The legendary city of Atlantis",
+            source_url="https://en.wikipedia.org/wiki/Atlantis",
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    loc, _ = crud.locality.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.LocalityCreate(
+                canonical_path="atlantis",
+                parent_path=None,
+                name="Atlantis",
+                aliases=None,
+            ),
+        ],
+        obj_meta=meta,
+    )
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=geo_layer,
+        locality=loc[0],
+        geographies=[geo[0] for geo in geo],
+        obj_meta=meta,
+    )
+
+    with pytest.raises(
+        CreateValueError,
+        match=(
+            "Passed edge geographies do not match the geographies associated with the "
+            r"underlying graph. Missing edge geographies: \[western\]"
+        ),
+    ):
         _ = crud.graph.create(
             db=db,
             obj_in=schemas.GraphCreate(
@@ -199,15 +298,37 @@ def test_crud_graph_create_missing_edge(db_with_meta):
             geo_set_version=crud.geo_layer.get_set_by_locality(
                 db=db, layer=geo_layer, locality=loc[0]
             ),
-            edge_geos={"central": geo[0][0], "western": geo[1][0]},
+            edge_geos={"central": geo[0][0]},
             obj_meta=meta,
             namespace=ns,
         )
 
-    assert (
-        "Passed edge geographies do not match the geographies associated with the underlying graph. Missing edge geographies: northern"
-        == str(exec_info.value)
-    )
+    with pytest.raises(
+        CreateValueError,
+        match=(
+            "Passed edge geographies do not match the geographies associated with the "
+            r"underlying graph. Missing edge geographies: \[western\]"
+        ),
+    ):
+        _ = crud.graph.create(
+            db=db,
+            obj_in=schemas.GraphCreate(
+                path="atlantis_dual",
+                description="The legendary city of Atlantis",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                edges=[
+                    (b, a, {k: v for k, v in attr.items() if k != "id"})  # changed here
+                    for (a, b), attr in grid_graph.edges.items()
+                ],
+            ),
+            geo_set_version=crud.geo_layer.get_set_by_locality(
+                db=db, layer=geo_layer, locality=loc[0]
+            ),
+            edge_geos={"central": geo[0][0]},
+            obj_meta=meta,
+            namespace=ns,
+        )
 
 
 def test_crud_graph_get(db_with_meta):

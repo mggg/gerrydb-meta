@@ -1,9 +1,6 @@
-import networkx as nx
-from gerrydb_meta import crud, schemas, models
+from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import ColumnKind, ColumnType
-from gerrydb_meta import models
-from shapely import Point, Polygon
-from shapely import wkb
+from gerrydb_meta.exceptions import CreateValueError
 import pytest
 
 
@@ -74,7 +71,7 @@ def test_view_template_create(db_with_meta):
 
     city_col = crud.column.get_ref(db=db, path="city", namespace=ns)
 
-    view, _uuid = crud.view_template.create(
+    view, _ = crud.view_template.create(
         db=db,
         obj_in=schemas.ViewTemplateCreate(
             path="mayor_power_template",
@@ -169,3 +166,115 @@ def test_view_template_get(db_with_meta):
     assert retrieved_view.meta_id == view.meta_id
     assert retrieved_view.columns == view.columns
     assert retrieved_view.column_sets == view.column_sets
+
+
+def test_view_template_error_bad_resolved_members(db_with_meta):
+    db, meta = db_with_meta
+
+    ns = make_atlantis_ns(db, meta)
+
+    with pytest.raises(
+        CreateValueError,
+        match="View templates may only contain columns and column sets.",
+    ):
+        _ = crud.view_template.create(
+            db=db,
+            obj_in=schemas.ViewTemplateCreate(
+                path="mayor_power_template",
+                description="template for viewing mayor power",
+                members=["mayor_power"],
+            ),
+            resolved_members=["bad"],
+            obj_meta=meta,
+            namespace=ns,
+        )
+
+
+import logging
+
+
+def test_view_template_error_duplicate_columns(db_with_meta, caplog):
+    db, meta = db_with_meta
+
+    caplog.set_level(logging.INFO, logger="uvicorn")
+
+    ns = make_atlantis_ns(db, meta)
+
+    with pytest.raises(
+        CreateValueError,
+        match="View templates may only contain columns and column sets.",
+    ):
+        _ = crud.view_template.create(
+            db=db,
+            obj_in=schemas.ViewTemplateCreate(
+                path="mayor_power_template",
+                description="template for viewing mayor power",
+                members=["mayor_power"],
+            ),
+            resolved_members=["bad"],
+            obj_meta=meta,
+            namespace=ns,
+        )
+
+    crud.column.create(
+        db=db,
+        obj_in=schemas.ColumnCreate(
+            canonical_path="city",
+            description="the city",
+            kind=ColumnKind.IDENTIFIER,
+            type=ColumnType.STR,
+            aliases=["ct"],
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    city_col = crud.column.get_ref(db=db, path="city", namespace=ns)
+
+    with pytest.raises(
+        CreateValueError,
+        match="the following column was referenced elsewhere",
+    ):
+        _ = crud.view_template.create(
+            db=db,
+            obj_in=schemas.ViewTemplateCreate(
+                path="mayor_power_template",
+                description="template for viewing mayor power",
+                members=["mayor_power"],
+            ),
+            resolved_members=[city_col, city_col],
+            obj_meta=meta,
+            namespace=ns,
+        )
+
+    col_set, _ = crud.column_set.create(
+        db=db,
+        obj_in=schemas.ColumnSetCreate(
+            path="city_set",
+            description="A really silly column set",
+            columns=[
+                "city",
+            ],
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    with pytest.raises(
+        CreateValueError,
+        match=(
+            "in column set 'city_set' "
+            "that was previously added or appears in another column set."
+        ),
+    ):
+        _ = crud.view_template.create(
+            db=db,
+            obj_in=schemas.ViewTemplateCreate(
+                path="weeee",
+                description="a silly template",
+                members=["/columns/city", "/column_sets/city_set"],
+            ),
+            resolved_members=[city_col, col_set],
+            obj_meta=meta,
+            namespace=ns,
+        )

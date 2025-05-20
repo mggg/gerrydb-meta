@@ -5,15 +5,19 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Collection, Tuple
 
-from sqlalchemy import exc, insert, update
+from sqlalchemy import exc, insert, update, tuple_
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.enums import ColumnType
 from gerrydb_meta.exceptions import ColumnValueTypeError, CreateValueError
-
-log = logging.getLogger()
+from gerrydb_meta.utils import create_column_value_partition_text
+from uvicorn.config import logger as log
 
 # Maps the `ColumnType` enum to columns in `ColumnValue`.
 COLUMN_TYPE_TO_VALUE_COLUMN = {
@@ -21,7 +25,6 @@ COLUMN_TYPE_TO_VALUE_COLUMN = {
     ColumnType.INT: "val_int",
     ColumnType.STR: "val_str",
     ColumnType.BOOL: "val_bool",
-    ColumnType.JSON: "val_json",
 }
 
 
@@ -73,12 +76,15 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             db.add(col)
             try:
                 db.flush()
-            except exc.SQLAlchemyError:
+            except exc.SQLAlchemyError:  # pragma: no cover
                 log.exception("Failed to create new column.")
                 raise CreateValueError("Failed to create new column.")
 
             canonical_ref.col_id = col.col_id
             db.flush()
+
+            # create partition
+            db.execute(create_column_value_partition_text(column_id=col.col_id))
 
             # Create additional aliases (non-canonical references) to the column.
             if obj_in.aliases:
@@ -152,7 +158,7 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 else self.get_ref(db, path=column_path, namespace=alt_namespace)
             )
 
-        return self.get_ref(db, path=path, namespace=namespace)
+        return self.get_ref(db, path=column_path, namespace=namespace)
 
     def set_values(
         self,
@@ -172,14 +178,19 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         now = datetime.now(timezone.utc)
 
         # Validate column data.
-        rows = []
+        rows_dict = {}
+        new_row_pairs = set()
         validation_errors = []
         for geo, value in values:
-            suffix = f"column value for geography {geo.full_path}"
+            suffix = f"column value for geography {geo.full_path} found {type(value)}"
+            if geo.geo_id in rows_dict:
+                raise ValueError(f"Duplicate geography path '{geo.path}' found.")
+
             if col.type == ColumnType.FLOAT and isinstance(value, int):
                 # Silently promote int -> float.
                 value = float(value)
-            elif col.type == ColumnType.FLOAT and not isinstance(value, float):
+
+            if col.type == ColumnType.FLOAT and not isinstance(value, float):
                 validation_errors.append(f"Expected integer or floating-point {suffix}")
             elif col.type == ColumnType.INT and not isinstance(value, int):
                 validation_errors.append(f"Expected integer {suffix}")
@@ -187,26 +198,72 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 validation_errors.append(f"Expected string {suffix}")
             elif col.type == ColumnType.BOOL and not isinstance(value, bool):
                 validation_errors.append(f"Expected boolean {suffix}")
-            rows.append(
-                {
+            else:
+                rows_dict[geo.geo_id] = {
                     "col_id": col.col_id,
                     "geo_id": geo.geo_id,
                     "meta_id": obj_meta.meta_id,
                     "valid_from": now,
                     val_column: value,
                 }
-            )
+                new_row_pairs.add((geo.geo_id, value))
 
         if validation_errors:
+            log.error(validation_errors)
             raise ColumnValueTypeError(errors=validation_errors)
 
         # Add the new column values and invalidate the old ones where present.
         geo_ids = [geo.geo_id for geo, _ in values]
-        with_values = (
-            db.query(models.ColumnValue.val_id)
+
+        # make sure partition exists for column
+        db.execute(create_column_value_partition_text(column_id=col.col_id))
+
+        old_row_pairs = set()
+        for item in (
+            db.query(models.ColumnValue)
             .filter(
                 models.ColumnValue.col_id == col.col_id,
                 models.ColumnValue.geo_id.in_(geo_ids),
+                models.ColumnValue.valid_to.is_(None),
+            )
+            .all()
+        ):
+            if item.val_float is not None:
+                old_row_pairs.add((item.geo_id, item.val_float))
+            elif item.val_int is not None:
+                old_row_pairs.add((item.geo_id, item.val_int))
+            elif item.val_str is not None:
+                old_row_pairs.add((item.geo_id, item.val_str))
+            elif item.val_bool is not None:
+                old_row_pairs.add((item.geo_id, item.val_bool))
+            else:  # pragma: no cover
+                # TODO: If this ever happens, add something that pings an admin.
+                assert (
+                    False
+                ), "Critical Error: No column value found."  # This should never happen
+
+        geo_ids_to_insert = set(rows_dict.keys())
+        if old_row_pairs != set():
+            assert len(old_row_pairs) == len(new_row_pairs)
+            geo_ids_to_insert = set()
+            for geo_id, value in new_row_pairs - old_row_pairs:
+                geo_ids_to_insert.add(geo_id)
+
+        # No values have changed, so we can skip the insert.
+        if geo_ids_to_insert == set():  # pragma: no cover
+            return
+
+        rows = [rows_dict[geo_id] for geo_id in geo_ids_to_insert]
+
+        with_tuples = (
+            db.query(
+                models.ColumnValue.col_id,
+                models.ColumnValue.geo_id,
+                models.ColumnValue.valid_from,
+            )
+            .filter(
+                models.ColumnValue.col_id == col.col_id,
+                models.ColumnValue.geo_id.in_(geo_ids_to_insert),
                 models.ColumnValue.valid_to.is_(None),
             )
             .all()
@@ -216,13 +273,15 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             db.execute(insert(models.ColumnValue), rows)
             # Optimization: most column values are only set once, so we don't
             # need to invalidate old versions unless we previously detected them.
-            if with_values:
+            if with_tuples:
                 db.execute(
                     update(models.ColumnValue)
                     .where(
-                        models.ColumnValue.val_id.in_(
-                            val.val_id for val in with_values
-                        ),
+                        tuple_(
+                            models.ColumnValue.col_id,
+                            models.ColumnValue.geo_id,
+                            models.ColumnValue.valid_from,
+                        ).in_(with_tuples)
                     )
                     .values(valid_to=now)
                 )
@@ -256,10 +315,24 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
         col: models.DataColumn,
         obj_meta: models.ObjectMeta,
     ) -> None:
-        """Adds aliases to a column."""
+        """Adds aliases to a column, skipping existing ones."""
+
+        # Fetch existing alias paths as a set of strings (not ORM objects)
+        existing_aliases = set(
+            db.execute(
+                select(models.ColumnRef.path)
+                .where(models.ColumnRef.namespace_id == col.namespace_id)
+                .where(models.ColumnRef.path.in_(alias_paths))
+            ).scalars()
+        )
+
+        alias_paths = set(alias_paths) - existing_aliases
+
         for alias_path in alias_paths:
+            normalized_path = normalize_path(alias_path)
+
             alias_ref = models.ColumnRef(
-                path=normalize_path(alias_path),
+                path=normalized_path,
                 col_id=col.col_id,
                 namespace_id=col.namespace_id,
                 meta_id=obj_meta.meta_id,
@@ -267,17 +340,11 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
             db.add(alias_ref)
 
             try:
-                db.flush()
-            except exc.SQLAlchemyError:
-                # TODO: Make this more specific--the primary goal is to capture the case
-                # where the reference already exists.
-                log.exception(
-                    "Failed to create aliases for new column.",
-                    col.canonical_path,
-                )
-                raise CreateValueError(
-                    "Failed to create aliases for new column. "
-                    "(One or more aliases may already exist.)"
+                db.flush()  # Try to commit this alias
+            except IntegrityError:  # pragma: no cover
+                db.rollback()  # Rollback only this failed insert
+                log.error(
+                    f"Failed to add alias {alias_path} for column {col.col_id}. Skipping."
                 )
 
 

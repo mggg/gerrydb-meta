@@ -1,19 +1,16 @@
 """CRUD operations and transformations for view templates."""
 
-import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Tuple, Union
 
 from sqlalchemy import exc, select
 from sqlalchemy.orm import Session
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
-from gerrydb_meta.crud.column import column as crud_column
 from gerrydb_meta.exceptions import CreateValueError
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 
 class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateCreate]):
@@ -22,12 +19,19 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
         db: Session,
         *,
         obj_in: schemas.ViewTemplateCreate,
-        resolved_members: list[models.DeclarativeBase],
+        resolved_members: list[Union[models.ColumnRef, models.ColumnSet]],
         obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
     ) -> Tuple[models.ViewTemplateVersion, uuid.UUID]:
         """Creates a new view template."""
-        # Note: the resolved members are intended to be either ColumnRef or ColumnSet
+        if not all(
+            isinstance(member, models.ColumnRef) or isinstance(member, models.ColumnSet)
+            for member in resolved_members
+        ):
+            raise CreateValueError(
+                "View templates may only contain columns and column sets."
+            )
+
         with db.begin(nested=True):
             canonical_path = normalize_path(obj_in.path)
             view_template = models.ViewTemplate(
@@ -59,7 +63,10 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
             db.add(template_version)
             db.flush()
 
+            # Check for conflicting canonical refs.
+            found_columns_paths = set()
             for idx, member in enumerate(resolved_members):
+
                 if (
                     member.namespace_id != namespace.namespace_id
                     and not member.namespace.public
@@ -70,6 +77,20 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
                     )
 
                 if isinstance(member, models.ColumnRef):
+                    # Now get the canonical path of the column.
+                    canon_paths = set(
+                        item[0]
+                        for item in db.query(models.ColumnRef.path)
+                        .filter(models.ColumnRef.col_id == member.col_id)
+                        .all()
+                    )
+                    if any(canon_paths.intersection(found_columns_paths)):
+                        raise CreateValueError(
+                            "Error creating view template the following column "
+                            "was referenced elsewhere either in "
+                            f"the column list or in the column set: {member.path}"
+                        )
+                    found_columns_paths.update(canon_paths)
                     db.add(
                         models.ViewTemplateColumnMember(
                             template_version_id=template_version.template_version_id,
@@ -78,6 +99,39 @@ class CRViewTemplate(NamespacedCRBase[models.ViewTemplate, schemas.ViewTemplateC
                         )
                     )
                 else:
+                    col_ids = list(
+                        item[0]
+                        for item in db.query(models.DataColumn.col_id)
+                        .join(
+                            models.ColumnRef,
+                            models.ColumnRef.col_id == models.DataColumn.col_id,
+                        )
+                        .join(
+                            models.ColumnSetMember,
+                            models.ColumnSetMember.ref_id == models.ColumnRef.ref_id,
+                        )
+                        .filter(
+                            models.ColumnSetMember.set_id == member.set_id,
+                        )
+                        .all()
+                    )
+
+                    canon_paths = set(
+                        item[0]
+                        for item in db.query(models.ColumnRef.path)
+                        .filter(models.ColumnRef.col_id.in_(col_ids))
+                        .all()
+                    )
+
+                    if any(canon_paths.intersection(found_columns_paths)):
+                        raise CreateValueError(
+                            f"Cannot create view template. Found column "
+                            f"'{tuple(canon_paths.intersection(found_columns_paths))}' in "
+                            f"column set '{member.path}' that was previously added or appears in "
+                            "another column set."
+                        )
+
+                    found_columns_paths.update(canon_paths)
                     db.add(
                         models.ViewTemplateColumnSetMember(
                             template_version_id=template_version.template_version_id,

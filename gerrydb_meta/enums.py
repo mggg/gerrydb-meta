@@ -41,6 +41,19 @@ class ScopeType(str, Enum):
         return self.value
 
 
+class GroupPermissions(str, Enum):
+    """A user group.
+
+    User groups are used to determine which users can access which namespaces.
+    This is not intended to be exhaustive, but rather to provide for some
+    common use cases.
+    """
+
+    ADMIN = "admin"
+    CONTRIBUTOR = "contributor"
+    PUBLIC = "public"
+
+
 class NamespaceGroup(str, Enum):
     """A namespace group.
 
@@ -57,6 +70,15 @@ class NamespaceGroup(str, Enum):
 
 class ViewRenderStatus(str, Enum):
     """Job queue status of a rendered view."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"
+
+
+class GraphRenderStatus(str, Enum):
+    """Job queue status of a rendered graph."""
 
     PENDING = "pending"
     RUNNING = "running"

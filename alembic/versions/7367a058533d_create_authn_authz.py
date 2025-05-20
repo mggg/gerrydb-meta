@@ -1,7 +1,7 @@
 """Create authentication/authorization models
 
 Revision ID: 7367a058533d
-Revises: 
+Revises:
 Create Date: 2023-03-21 17:25:22.277920
 
 """

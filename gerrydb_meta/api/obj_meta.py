@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.deps import can_write_meta, get_db, get_scopes, get_user
@@ -56,4 +57,5 @@ def create_obj_meta(
     user: models.User = Depends(get_user),
     meta_in: schemas.ObjectMetaCreate,
 ) -> models.ObjectMeta:
+    log.debug("Creating object metadata: %s", meta_in)
     return crud.obj_meta.create(db=db, obj_in=meta_in, user=user)

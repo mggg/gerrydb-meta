@@ -19,8 +19,7 @@ from gerrydb_meta.api.deps import get_db, get_obj_meta, get_scopes, no_perms
 from gerrydb_meta.crud.base import normalize_path
 from gerrydb_meta.exceptions import GerryValueError
 from gerrydb_meta.scopes import ScopeManager
-
-log = logging.getLogger()
+from uvicorn.config import logger as log
 
 
 # For path resolution across objects.
@@ -326,6 +325,7 @@ def geo_set_from_paths(
             does not have permissions to access the GeoSet or its associated
             geographic layer or locality.
     """
+    log.debug("TOP OF GEO SET FROM PATHS")
     if not scopes.can_read_localities():
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
@@ -338,7 +338,12 @@ def geo_set_from_paths(
             status_code=HTTPStatus.NOT_FOUND, detail="Locality not found."
         )
 
+    log.debug("PAST BASIC CHECKS")
+
     layer_namespace, layer_path = parse_path(layer)
+    if layer_namespace is None:
+        layer_namespace = namespace
+
     layer_namespace_obj = namespace_with_read(
         db=db,
         scopes=scopes,
@@ -547,6 +552,7 @@ class NamespacedObjectApi:
             scopes: ScopeManager = Depends(get_scopes),
             if_none_match: str | None = Header(default=None),
         ):
+            log.debug("IN GET FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_read(
                 db=db, scopes=scopes, path=namespace
             )
@@ -572,6 +578,7 @@ class NamespacedObjectApi:
             scopes: ScopeManager = Depends(get_scopes),
             if_none_match: str | None = Header(default=None),
         ):
+            log.debug("IN GET ALL FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_read(
                 db=db, scopes=scopes, path=namespace
             )
@@ -600,6 +607,7 @@ class NamespacedObjectApi:
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
+            log.debug("IN POST FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
@@ -628,6 +636,7 @@ class NamespacedObjectApi:
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
+            log.debug("IN PATCH FOR NAMESPACED OBJECT API")
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )

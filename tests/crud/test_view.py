@@ -1,12 +1,12 @@
 import networkx as nx
-from gerrydb_meta import crud, schemas, models
+from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import ColumnKind, ColumnType
-from gerrydb_meta import models
 from shapely import Point, Polygon
-from shapely import wkb
 import pytest
-from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
+from gerrydb_meta import models
+from gerrydb_meta.exceptions import CreateValueError
 import uuid
+from datetime import datetime, timezone, timedelta
 
 square_corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
 
@@ -770,7 +770,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         assignments={geo[0][0]: "1", geo[1][0]: "2"},
     )
 
-    view_render_context = crud.view.render(db=db, view=view)
+    _ = crud.view.render(db=db, view=view)
 
     render_uuid = uuid.uuid4()
 
@@ -781,3 +781,583 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
     retrieved_cashed_render = crud.view.get_cached_render(db=db, view=view)
 
     assert retrieved_cashed_render == cashed_render
+
+
+from unittest.mock import patch
+import logging
+
+
+def test_view_errors(db_with_meta, caplog):
+    db, meta = db_with_meta
+
+    caplog.set_level(logging.DEBUG, logger="uvicorn.error")
+
+    ns = make_atlantis_ns(db, meta)
+
+    grid_graph = nx.Graph()
+    grid_graph.add_nodes_from(["central", "western"])
+    grid_graph.add_edge("central", "western", weight=1.0)
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
+    geo, _ = crud.geography.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.GeographyCreate(
+                path="central_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+            schemas.GeographyCreate(
+                path="western_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+        ],
+        obj_meta=meta,
+        geo_import=geo_import,
+        namespace=ns,
+    )
+
+    geo_layer, _ = crud.geo_layer.create(
+        db=db,
+        obj_in=schemas.GeoLayerCreate(
+            path="atlantis_blocks",
+            description="The legendary city of Atlantis",
+            source_url="https://en.wikipedia.org/wiki/Atlantis",
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    loc, _ = crud.locality.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.LocalityCreate(
+                canonical_path="atlantis",
+                parent_path=None,
+                name="Atlantis",
+                aliases=None,
+            ),
+        ],
+        obj_meta=meta,
+    )
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=geo_layer,
+        locality=loc[0],
+        geographies=[geo[0] for geo in geo],
+        obj_meta=meta,
+    )
+
+    mayor_col, _ = crud.column.create(
+        db=db,
+        obj_in=schemas.ColumnCreate(
+            canonical_path="mayor",
+            description="the mayor of the city",
+            kind=ColumnKind.IDENTIFIER,
+            type=ColumnType.STR,
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    crud.column.set_values(
+        db=db,
+        col=mayor_col,
+        values=[
+            (geo[0][0], "Poseidon"),
+            (geo[1][0], "Poseidon"),
+        ],
+        obj_meta=meta,
+    )
+
+    pop_col, _ = crud.column.create(
+        db=db,
+        obj_in=schemas.ColumnCreate(
+            canonical_path="population",
+            description="the population of the city",
+            kind=ColumnKind.COUNT,
+            type=ColumnType.INT,
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    crud.column.set_values(
+        db=db,
+        col=pop_col,
+        values=[
+            (geo[0][0], 1000),
+        ],
+        obj_meta=meta,
+    )
+
+    col_set, _ = crud.column_set.create(
+        db=db,
+        obj_in=schemas.ColumnSetCreate(
+            path="mayor_power",
+            description="how many people the mayor controls",
+            columns=["mayor", "population"],
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    view_template, _ = crud.view_template.create(
+        db=db,
+        obj_in=schemas.ViewTemplateCreate(
+            path="mayor_power_template",
+            description="template for viewing mayor power",
+            members=["mayor_power"],
+        ),
+        resolved_members=[col_set],
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    ns2, _ = crud.namespace.create(
+        db=db,
+        obj_in=schemas.NamespaceCreate(
+            path="atlantis2",
+            description="A legendary city",
+            public=True,
+        ),
+        obj_meta=meta,
+    )
+
+    with pytest.raises(
+        CreateValueError,
+        match=(
+            "No set of geographies exists in the current namespace satisfying locality "
+            "and layer constraints."
+        ),
+    ):
+        view, _ = crud.view.create(
+            db=db,
+            obj_in=schemas.ViewCreate(
+                path="mayor_power",
+                description="how many people the mayor controls",
+                template="mayor_power_template",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                graph="atlantis_dual",
+            ),
+            obj_meta=meta,
+            namespace=ns2,
+            template=view_template,
+            locality=loc[0],
+            layer=geo_layer,
+        )
+
+    with pytest.raises(
+        CreateValueError,
+        match=(
+            "Cannot instantiate view: no set of geographies exists satisfying locality, "
+            "layer, and time constraints for the columns in the view template."
+        ),
+    ):
+        with patch.object(crud.view, "_CRView__get_all_set_col_ids", return_value=[]):
+            _ = crud.view.create(
+                db=db,
+                obj_in=schemas.ViewCreate(
+                    path="mayor_power",
+                    description="how many people the mayor controls",
+                    template="mayor_power_template",
+                    locality="atlantis/Atlantis",
+                    layer="atlantis_blocks",
+                    graph="atlantis_dual",
+                ),
+                obj_meta=meta,
+                namespace=ns,
+                template=view_template,
+                locality=loc[0],
+                layer=geo_layer,
+            )
+
+    with pytest.raises(CreateValueError, match="Cannot instantiate view in the future"):
+        _ = crud.view.create(
+            db=db,
+            obj_in=schemas.ViewCreate(
+                path="mayor_power",
+                description="how many people the mayor controls",
+                template="mayor_power_template",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                graph="atlantis_dual",
+                valid_at=datetime(3000, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+            ),
+            obj_meta=meta,
+            namespace=ns,
+            template=view_template,
+            locality=loc[0],
+            layer=geo_layer,
+        )
+
+    with pytest.raises(
+        CreateValueError, match="No template version found satisfying time constraints"
+    ):
+        new_template = models.ViewTemplate(
+            template_id=9000,
+            namespace_id=ns.namespace_id,
+            path="mayor_power_template",
+            description="template for viewing mayor power",
+            meta_id=meta.meta_id,
+            meta=view_template.meta,
+            namespace=ns,
+        )
+        _ = crud.view.create(
+            db=db,
+            obj_in=schemas.ViewCreate(
+                path="mayor_power",
+                description="how many people the mayor controls",
+                template="mayor_power_template",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                graph="atlantis_dual",
+            ),
+            obj_meta=meta,
+            namespace=ns,
+            template=new_template,
+            locality=loc[0],
+            layer=geo_layer,
+        )
+
+    geo_import2, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns2)
+
+    geo2, _ = crud.geography.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.GeographyCreate(
+                path="central_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+            schemas.GeographyCreate(
+                path="western_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+        ],
+        obj_meta=meta,
+        geo_import=geo_import2,
+        namespace=ns2,
+    )
+
+    geo_layer2, _ = crud.geo_layer.create(
+        db=db,
+        obj_in=schemas.GeoLayerCreate(
+            path="atlantis_blocks",
+            description="The legendary city of Atlantis",
+            source_url="https://en.wikipedia.org/wiki/Atlantis",
+        ),
+        obj_meta=meta,
+        namespace=ns2,
+    )
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=geo_layer2,
+        locality=loc[0],
+        geographies=[geo[0] for geo in geo2],
+        obj_meta=meta,
+    )
+
+    created_graph, _ = crud.graph.create(
+        db=db,
+        obj_in=schemas.GraphCreate(
+            path="atlantis_dual",
+            description="The legendary city of Atlantis",
+            locality="atlantis/atlantis_locality",
+            layer="atlantis_blocks",
+            edges=[
+                (a, b, {k: v for k, v in attr.items() if k != "id"})
+                for (a, b), attr in grid_graph.edges.items()
+            ],
+        ),
+        geo_set_version=crud.geo_layer.get_set_by_locality(
+            db=db, layer=geo_layer2, locality=loc[0]
+        ),
+        edge_geos={"central": geo2[0][0], "western": geo2[1][0]},
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    with pytest.raises(
+        CreateValueError,
+        match='Cannot instantiate view: graph "/atlantis/atlantis_dual" does not match locality',
+    ):
+        _ = crud.view.create(
+            db=db,
+            obj_in=schemas.ViewCreate(
+                path="mayor_power",
+                description="how many people the mayor controls",
+                template="mayor_power_template",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                graph="atlantis_dual",
+            ),
+            obj_meta=meta,
+            namespace=ns,
+            template=view_template,
+            locality=loc[0],
+            layer=geo_layer,
+            graph=created_graph,
+        )
+
+    recreated_graph, _ = crud.graph.create(
+        db=db,
+        obj_in=schemas.GraphCreate(
+            path="atlantis_dual2",
+            description="The legendary city of Atlantis",
+            locality="atlantis/atlantis_locality",
+            layer="atlantis_blocks",
+            edges=[
+                (a, b, {k: v for k, v in attr.items() if k != "id"})
+                for (a, b), attr in grid_graph.edges.items()
+            ],
+        ),
+        geo_set_version=crud.geo_layer.get_set_by_locality(
+            db=db, layer=geo_layer, locality=loc[0]
+        ),
+        edge_geos={"central": geo[0][0], "western": geo[1][0]},
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    with pytest.raises(
+        CreateValueError,
+        match='Cannot instantiate view: graph "/atlantis/atlantis_dual2" exists in the future',
+    ):
+        recreated_graph.created_at = datetime(3000, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        _ = crud.view.create(
+            db=db,
+            obj_in=schemas.ViewCreate(
+                path="mayor_power",
+                description="how many people the mayor controls",
+                template="mayor_power_template",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                graph="atlantis_dual2",
+            ),
+            obj_meta=meta,
+            namespace=ns,
+            template=view_template,
+            locality=loc[0],
+            layer=geo_layer,
+            graph=recreated_graph,
+        )
+
+    with pytest.raises(
+        CreateValueError,
+        match=(
+            "Cannot instantiate view: column values satisfying all constraints constraints "
+            "not available for all geographies."
+        ),
+    ):
+        _ = crud.view.create(
+            db=db,
+            obj_in=schemas.ViewCreate(
+                path="mayor_power",
+                description="how many people the mayor controls",
+                template="mayor_power_template",
+                locality="atlantis/Atlantis",
+                layer="atlantis_blocks",
+                graph="atlantis_dual2",
+            ),
+            obj_meta=meta,
+            namespace=ns,
+            template=view_template,
+            locality=loc[0],
+            layer=geo_layer,
+        )
+
+
+def test_view_create_cols_multiple_namespaces(db_with_meta, caplog):
+    db, meta = db_with_meta
+
+    caplog.set_level(logging.DEBUG, logger="uvicorn.error")
+
+    ns = make_atlantis_ns(db, meta)
+    ns2, _ = crud.namespace.create(
+        db=db,
+        obj_in=schemas.NamespaceCreate(
+            path="atlantis2",
+            description="A legendary city",
+            public=True,
+        ),
+        obj_meta=meta,
+    )
+
+    loc, _ = crud.locality.create(
+        db=db,
+        obj_in=schemas.LocalityCreate(
+            canonical_path="atlantis",
+            parent_path=None,
+            name="Atlantis",
+            aliases=None,
+        ),
+        obj_meta=meta,
+    )
+
+    geo_import, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns)
+
+    geo, _ = crud.geography.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.GeographyCreate(
+                path="central_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+            schemas.GeographyCreate(
+                path="western_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+        ],
+        obj_meta=meta,
+        geo_import=geo_import,
+        namespace=ns,
+    )
+
+    geo_layer, _ = crud.geo_layer.create(
+        db=db,
+        obj_in=schemas.GeoLayerCreate(
+            path="atlantis_blocks",
+            description="The legendary city of Atlantis",
+            source_url="https://en.wikipedia.org/wiki/Atlantis",
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=geo_layer,
+        locality=loc,
+        geographies=[geo[0] for geo in geo],
+        obj_meta=meta,
+    )
+
+    geo_import2, _ = crud.geo_import.create(db=db, obj_meta=meta, namespace=ns2)
+
+    geo2, _ = crud.geography.create_bulk(
+        db=db,
+        objs_in=[
+            schemas.GeographyCreate(
+                path="central_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+            schemas.GeographyCreate(
+                path="western_atlantis",
+                geography=None,
+                internal_point=None,
+            ),
+        ],
+        obj_meta=meta,
+        geo_import=geo_import2,
+        namespace=ns2,
+    )
+
+    geo_layer2, _ = crud.geo_layer.create(
+        db=db,
+        obj_in=schemas.GeoLayerCreate(
+            path="atlantis_blocks",
+            description="The legendary city of Atlantis",
+            source_url="https://en.wikipedia.org/wiki/Atlantis",
+        ),
+        obj_meta=meta,
+        namespace=ns2,
+    )
+
+    crud.geo_layer.map_locality(
+        db=db,
+        layer=geo_layer2,
+        locality=loc,
+        geographies=[geo[0] for geo in geo2],
+        obj_meta=meta,
+    )
+
+    mayor_col, _ = crud.column.create(
+        db=db,
+        obj_in=schemas.ColumnCreate(
+            canonical_path="mayor",
+            description="the mayor of the city",
+            kind=ColumnKind.IDENTIFIER,
+            type=ColumnType.STR,
+        ),
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    crud.column.set_values(
+        db=db,
+        col=mayor_col,
+        values=[
+            (geo[0][0], "Poseidon"),
+            (geo[1][0], "Poseidon"),
+        ],
+        obj_meta=meta,
+    )
+
+    pop_col, _ = crud.column.create(
+        db=db,
+        obj_in=schemas.ColumnCreate(
+            canonical_path="population",
+            description="the population of the city",
+            kind=ColumnKind.COUNT,
+            type=ColumnType.INT,
+        ),
+        obj_meta=meta,
+        namespace=ns2,
+    )
+
+    crud.column.set_values(
+        db=db,
+        col=pop_col,
+        values=[
+            (geo2[0][0], 1000),
+            (geo2[1][0], 2000),
+        ],
+        obj_meta=meta,
+    )
+
+    view_template, _ = crud.view_template.create(
+        db=db,
+        obj_in=schemas.ViewTemplateCreate(
+            path="mayor_power_template",
+            description="template for viewing mayor power",
+            members=["mayor", "population"],
+        ),
+        resolved_members=[pop_col.canonical_ref, mayor_col.canonical_ref],
+        obj_meta=meta,
+        namespace=ns,
+    )
+
+    view, _ = crud.view.create(
+        db=db,
+        obj_in=schemas.ViewCreate(
+            path="mayor_power",
+            description="how many people the mayor controls",
+            template="mayor_power_template",
+            locality="atlantis/Atlantis",
+            layer="atlantis_blocks",
+            graph="atlantis_dual",
+        ),
+        obj_meta=meta,
+        namespace=ns,
+        template=view_template,
+        locality=loc,
+        layer=geo_layer,
+    )
+
+    assert view.template_id == view_template.template_id
+    assert view.loc_id == loc.loc_id
+    assert view.layer_id == geo_layer.layer_id
+    assert view.num_geos == 2
+    assert view.loc == loc
+    assert view.layer == geo_layer
+    assert view.template_version == view_template

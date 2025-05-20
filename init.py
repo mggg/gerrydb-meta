@@ -10,6 +10,9 @@ from gerrydb_meta.admin import GerryAdmin
 from gerrydb_meta.models import Base
 
 from pathlib import Path
+import os
+
+GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
 
 
 @click.command()
@@ -19,7 +22,25 @@ from pathlib import Path
     "--reset", is_flag=True, help="Clear old data and re-initialize schema (dangerous)."
 )
 @click.option("--init-schema", is_flag=True, help="Initialize schema from models.")
-def main(name: str, email: str, reset: bool, init_schema: bool):
+@click.option(
+    "--use-test-key",
+    is_flag=True,
+    help="Sets the API key for the new user to a known value. "
+    "FOR TESTING USE ONLY!!!",
+)
+@click.option(
+    "--overwrite-config",
+    is_flag=True,
+    help="Overwrites the existing config file if it exists.",
+)
+def main(
+    name: str,
+    email: str,
+    reset: bool,
+    init_schema: bool,
+    use_test_key: bool,
+    overwrite_config: bool,
+):
     """Initializes a GerryDB instance with a superuser. Creates a .gerrydb/config file
     if none exists using localhost:8000 and the generated API key. Would connect
     to local database, not production.
@@ -27,7 +48,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
     Expects the `GERRYDB_DATABASE_URI` environment variable to be set to
     a PostgreSQL connection string.
     """
-    engine = create_engine(os.getenv("GERRYDB_DATABASE_URI"))
+    engine = create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
     db = sessionmaker(engine)()
 
     if reset:
@@ -42,8 +63,13 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
         Base.metadata.create_all(engine)
 
     admin = GerryAdmin(session=db)
-    user = admin.user_create(name=name, email=email, super_user=True)
-    api_key = admin.key_create(user=user)
+    user = admin.initial_user_create(name=name, email=email)
+
+    if use_test_key:
+        api_key = admin.create_test_key(user=user)
+    else:
+        api_key = admin.key_create(user=user)
+
     db.commit()
     db.close()
 
@@ -61,7 +87,7 @@ def main(name: str, email: str, reset: bool, init_schema: bool):
             print(f'key = "{api_key}"', file=config_fp)
 
     else:
-        overwrite = ""
+        overwrite = "y" if overwrite_config else ""
         while overwrite not in ["y", "n"]:
             overwrite = input(
                 "A .gerrydb/config file already exists, would you like to overwrite it? Y/N: "

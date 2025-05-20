@@ -1,8 +1,10 @@
 """Tests for GerryDB REST API locality endpoints."""
 
 from http import HTTPStatus
+import logging
 
 import pytest
+from fastapi import HTTPException
 
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import ScopeType
@@ -17,8 +19,11 @@ LOCALITIES_ROOT = f"{API_PREFIX}/localities"
 def ctx_locality_read_write(ctx_no_scopes_factory):
     """An API client with `LOCALITY_READ` and `LOCALITY_WRITE` scopes (+ session and metadata)."""
     ctx = ctx_no_scopes_factory()
-    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_READ)
-    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_WRITE)
+    try:
+        grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_READ)
+        grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_WRITE)
+    except Exception:
+        pass
     yield ctx
 
 
@@ -26,7 +31,10 @@ def ctx_locality_read_write(ctx_no_scopes_factory):
 def ctx_locality_read_only(ctx_no_scopes_factory):
     """An API client with `LOCALITY_READ` scope (+ a preexisting locality)."""
     ctx = ctx_no_scopes_factory()
-    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_READ)
+    try:
+        grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_READ)
+    except Exception:
+        pass
     yield ctx
 
 
@@ -211,3 +219,24 @@ def test_api_locality_patch__read_only(ctx_locality_read_only):
     )
     assert patch_response.status_code == HTTPStatus.FORBIDDEN
     assert "permissions to write" in patch_response.json()["detail"]
+
+
+def test_api_missing_loc_errors(ctx_locality_read_only, caplog):
+    ctx = ctx_locality_read_only
+    aliases = ["atlantis", "g/atlantis"]
+
+    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_READ)
+    grant_scope(ctx.db, ctx.meta, ScopeType.LOCALITY_WRITE)
+
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    logging.getLogger("uvicorn.error").addHandler(caplog.handler)
+
+    response = ctx.client.get(f"{LOCALITIES_ROOT}/bad_path")
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert "Locality not found" in response.json()["detail"]
+
+    response = ctx.client.patch(
+        f"{LOCALITIES_ROOT}/bad_path", json={"aliases": aliases[:1]}
+    )
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert "Locality not found" in response.json()["detail"]

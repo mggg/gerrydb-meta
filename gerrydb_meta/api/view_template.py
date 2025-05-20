@@ -10,14 +10,10 @@ from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import NamespacedObjectApi, add_etag, from_resource_paths
 from gerrydb_meta.api.deps import get_db, get_obj_meta, get_scopes
 from gerrydb_meta.scopes import ScopeManager
-
-import logging
-
-
-log = logging.getLogger("uvicorn")
+from uvicorn.config import logger as log
 
 
-MAX_VIEW_TEMPLATE_COLUMNS = 200
+MAX_VIEW_TEMPLATE_COLUMNS = 100
 
 
 class ViewTemplateApi(NamespacedObjectApi):
@@ -68,13 +64,14 @@ class ViewTemplateApi(NamespacedObjectApi):
             obj_meta: models.ObjectMeta = Depends(get_obj_meta),
             scopes: ScopeManager = Depends(get_scopes),
         ):
-
+            log.debug("TOP OF CREATE VIEW TEMPLATE")
             namespace_obj = self._namespace_with_write(
                 db=db, scopes=scopes, path=namespace
             )
             resolved_objs = from_resource_paths(
                 paths=obj_in.members, db=db, scopes=scopes, follow_refs=False
             )
+
             total_objs = 0
             for item in resolved_objs:
                 if isinstance(item, models.ColumnSet):

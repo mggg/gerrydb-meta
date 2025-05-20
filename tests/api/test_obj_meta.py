@@ -81,3 +81,21 @@ def test_api_object_meta_read__other_user_read_scope(ctx_no_scopes):
     # Read metadata created by the other user.
     read_response = ctx.client.get(f"{META_ROOT}/{other_user_meta.uuid}")
     assert read_response.status_code == HTTPStatus.OK
+
+
+def test_errors_in_get(ctx_no_scopes):
+    ctx = ctx_no_scopes
+    grant_scope(ctx.db, ctx.user, ScopeType.META_READ)
+    other_user_meta = create_new_user_meta(ctx.db)
+
+    # Read metadata created by the other user.
+    read_response = ctx.client.get(f"{META_ROOT}/bad_uuid")
+    assert read_response.status_code == HTTPStatus.BAD_REQUEST
+    assert (
+        "Object metadata ID is not a valid UUID hex string"
+        in read_response.json()["detail"]
+    )
+
+    read_response = ctx.client.get(f"{META_ROOT}/00000009-0008-0007-0006-000000000005")
+    assert read_response.status_code == HTTPStatus.NOT_FOUND
+    assert "Object metadata not found" in read_response.json()["detail"]

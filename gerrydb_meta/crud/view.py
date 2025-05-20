@@ -1,51 +1,45 @@
 """CRUD operations and transformations for views."""
 
-import logging
 import re
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional
 
-from geoalchemy2 import Geometry
 from geoalchemy2 import func as geo_func
-from sqlalchemy import Sequence, cast, exc, func, label, or_, select, union
+from geoalchemy2 import Geometry
+from sqlalchemy import (
+    Sequence,
+    cast,
+    exc,
+    func,
+    label,
+    or_,
+    select,
+    union,
+    bindparam,
+    literal_column,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
+from sqlalchemy import insert
+from sqlalchemy.sql import text, column
+from sqlalchemy.exc import SQLAlchemyError, NoResultFound
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.crud.column import COLUMN_TYPE_TO_VALUE_COLUMN
 from gerrydb_meta.enums import ViewRenderStatus
-from gerrydb_meta.exceptions import CreateValueError
+from gerrydb_meta.exceptions import CreateValueError, ViewConflictError
+from uvicorn.config import logger as log
 
 _ST_ASBINARY_REGEX = re.compile(r"ST\_AsBinary\(([a-zA-Z0-9_.]+)\)")
 
-log = logging.getLogger()
 
 PLAN_BATCH_SIZE = 10000
 GRAPH_BATCH_SIZE = 100000
-
-
-def _geo_set_version_id(
-    db: Session, locality: models.Locality, layer: models.GeoLayer, at: datetime
-) -> int | None:
-    """Gets the primary key of a GeoSetVersion by (locality, layer, at)."""
-    return (
-        db.query(models.GeoSetVersion.set_version_id)
-        .filter(
-            models.GeoSetVersion.loc_id == locality.loc_id,
-            models.GeoSetVersion.layer_id == layer.layer_id,
-            models.GeoSetVersion.valid_from <= at,
-            or_(
-                models.GeoSetVersion.valid_to.is_(None),
-                models.GeoSetVersion.valid_to >= at,
-            ),
-        )
-        .scalar()
-    )
 
 
 def _view_columns(
@@ -106,7 +100,6 @@ class ViewRenderContext:
     plans: list[models.Plan]
     plan_labels: list[str]
     plan_assignments: Sequence | None
-    graph_areas: Sequence | None
     graph_edges: Sequence | None
     geo_meta: dict[int, models.ObjectMeta]
     geo_meta_ids: dict[str, int]  # by path
@@ -116,8 +109,289 @@ class ViewRenderContext:
     geo_query: str
     internal_point_query: str
 
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"ViewRenderContext(view={self.view.path}, columns={list(self.columns.keys())})"
+
 
 class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
+    def __get_all_path_hashes_in_set_version(
+        self, db: Session, valid_at: datetime, set_version_id: int
+    ):
+        return [
+            (item[0], item[1])
+            for item in (
+                db.query(models.Geography.path, models.GeoBin.geometry_hash)
+                .select_from(models.GeoSetVersion)
+                .filter(
+                    models.GeoSetVersion.set_version_id == set_version_id,
+                )
+                .join(
+                    models.GeoSetMember,
+                    models.GeoSetVersion.set_version_id
+                    == models.GeoSetMember.set_version_id,
+                )
+                .join(
+                    models.GeoVersion,
+                    models.GeoSetMember.geo_id == models.GeoVersion.geo_id,
+                )
+                .filter(
+                    models.GeoVersion.valid_from <= valid_at,
+                    or_(
+                        models.GeoVersion.valid_to.is_(None),
+                        models.GeoVersion.valid_to >= valid_at,
+                    ),
+                )
+                .join(
+                    models.Geography,
+                    models.GeoVersion.geo_id == models.Geography.geo_id,
+                )
+                .join(
+                    models.GeoBin,
+                    models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id,
+                )
+            )
+        ]
+
+    def __get_all_set_col_ids(
+        self,
+        db: Session,
+        available_layer_ids: list[int],
+        loc_id: int,
+        valid_at: datetime,
+        template_version_id: int,
+    ):
+        col_query = (
+            db.query(models.GeoSetVersion.set_version_id, models.ColumnRef.path)
+            .select_from(models.GeoSetVersion)
+            .filter(
+                models.GeoSetVersion.valid_from <= valid_at,
+                or_(
+                    models.GeoSetVersion.valid_to.is_(None),
+                    models.GeoSetVersion.valid_to >= valid_at,
+                ),
+                models.GeoSetVersion.layer_id.in_(available_layer_ids),
+                models.GeoSetVersion.loc_id == loc_id,
+            )
+            .join(
+                models.GeoSetMember,
+                models.GeoSetMember.set_version_id
+                == models.GeoSetVersion.set_version_id,
+            )
+            .join(
+                models.Geography,
+                models.Geography.geo_id == models.GeoSetMember.geo_id,
+            )
+            .join(
+                models.ColumnValue,
+                models.Geography.geo_id == models.ColumnValue.geo_id,
+            )
+            .filter(
+                models.ColumnValue.valid_from <= valid_at,
+                or_(
+                    models.ColumnValue.valid_to.is_(None),
+                    models.ColumnValue.valid_to >= valid_at,
+                ),
+            )
+            .join(
+                models.ColumnRef,
+                models.ColumnRef.col_id == models.ColumnValue.col_id,
+            )
+            .join(
+                models.ViewTemplateColumnMember,
+                models.ViewTemplateColumnMember.ref_id == models.ColumnRef.ref_id,
+            )
+            .filter(
+                or_(
+                    models.ViewTemplateColumnMember.template_version_id
+                    == template_version_id,
+                )
+            )
+        )
+
+        col_set_query = (
+            db.query(models.GeoSetVersion.set_version_id, models.ColumnRef.path)
+            .select_from(models.GeoSetVersion)
+            .filter(
+                models.GeoSetVersion.valid_from <= valid_at,
+                or_(
+                    models.GeoSetVersion.valid_to.is_(None),
+                    models.GeoSetVersion.valid_to >= valid_at,
+                ),
+                models.GeoSetVersion.layer_id.in_(available_layer_ids),
+                models.GeoSetVersion.loc_id == loc_id,
+            )
+            .join(
+                models.GeoSetMember,
+                models.GeoSetMember.set_version_id
+                == models.GeoSetVersion.set_version_id,
+            )
+            .join(
+                models.Geography,
+                models.Geography.geo_id == models.GeoSetMember.geo_id,
+            )
+            .join(
+                models.ColumnValue,
+                models.Geography.geo_id == models.ColumnValue.geo_id,
+            )
+            .filter(
+                models.ColumnValue.valid_from <= valid_at,
+                or_(
+                    models.ColumnValue.valid_to.is_(None),
+                    models.ColumnValue.valid_to >= valid_at,
+                ),
+            )
+            .join(
+                models.ColumnRef,
+                models.ColumnRef.col_id == models.ColumnValue.col_id,
+            )
+            .join(
+                models.ColumnSetMember,
+                models.ColumnSetMember.ref_id == models.ColumnRef.ref_id,
+            )
+            .join(
+                models.ViewTemplateColumnSetMember,
+                models.ViewTemplateColumnSetMember.set_id
+                == models.ColumnSetMember.set_id,
+            )
+            .filter(
+                or_(
+                    models.ViewTemplateColumnSetMember.template_version_id
+                    == template_version_id,
+                )
+            )
+        )
+
+        col_results = [(item[0], item[1]) for item in col_query.distinct()]
+        col_set_resuls = [(item[0], item[1]) for item in col_set_query.distinct()]
+
+        log.debug("COL RESULTS: %s", col_results)
+        log.debug("COL SET RESULTS: %s", col_set_resuls)
+
+        ret = col_results + col_set_resuls
+
+        return ret
+
+    def __validate_geo_set_compatabilty(
+        self,
+        db: Session,
+        namespace: models.Namespace,
+        locality: models.Locality,
+        layer: models.GeoLayer,
+        valid_at: datetime,
+        template_version_id: int,
+    ) -> tuple[list[int], int]:
+
+        log.debug("TOP OF VALIDATE GEO SET COMPATABILITY")
+        available_layer_ids = list(
+            item[0]
+            for item in db.query(models.GeoLayer.layer_id)
+            .filter(models.GeoLayer.path == layer.path)
+            .all()
+        )
+
+        log.debug("AVAILABLE LAYER IDS: %s", available_layer_ids)
+        curr_ns_query = (
+            db.query(models.GeoSetVersion.set_version_id)
+            .select_from(models.GeoSetVersion)
+            .filter(
+                models.GeoSetVersion.valid_from <= valid_at,
+                or_(
+                    models.GeoSetVersion.valid_to.is_(None),
+                    models.GeoSetVersion.valid_to >= valid_at,
+                ),
+                models.GeoSetVersion.loc_id == locality.loc_id,
+                models.GeoSetVersion.layer_id.in_(available_layer_ids),
+            )
+            .join(
+                models.GeoSetMember,
+                models.GeoSetMember.set_version_id
+                == models.GeoSetVersion.set_version_id,
+            )
+            .join(
+                models.Geography,
+                models.Geography.geo_id == models.GeoSetMember.geo_id,
+            )
+            .join(
+                models.Namespace,
+                models.Geography.namespace_id == models.Namespace.namespace_id,
+            )
+            .filter(
+                models.Namespace.path == namespace.path,
+            )
+            .first()
+        )
+
+        if curr_ns_query is None:
+            raise CreateValueError(
+                "No set of geographies exists in the current namespace "
+                "satisfying locality and layer constraints."
+            )
+
+        curr_ns_set_version_id = list(curr_ns_query)
+
+        assert len(curr_ns_set_version_id) == 1
+        curr_ns_set_version_id = curr_ns_set_version_id[0]
+
+        set_version_to_cols_dict = {}
+        for set_version_id, col_id in self.__get_all_set_col_ids(
+            db=db,
+            available_layer_ids=available_layer_ids,
+            loc_id=locality.loc_id,
+            valid_at=valid_at,
+            template_version_id=template_version_id,
+        ):
+            set_version_to_cols_dict.setdefault(set_version_id, set()).add(col_id)
+
+        all_set_version_ids = set(set_version_to_cols_dict.keys())
+        log.debug("ALL SET VERSION IDS: %s", all_set_version_ids)
+
+        if len(all_set_version_ids) == 0:
+            raise CreateValueError(
+                "Cannot instantiate view: no set of geographies exists "
+                "satisfying locality, layer, and time constraints "
+                "for the columns in the view template."
+            )
+
+        all_set_version_ids.discard(curr_ns_set_version_id)
+
+        if len(all_set_version_ids) == 0:
+            return [curr_ns_set_version_id], curr_ns_set_version_id
+
+        # Check that all of the sets have the same geo_hashes as the current namespace
+        orig_set_dict = {
+            item[0]: item[1]
+            for item in self.__get_all_path_hashes_in_set_version(
+                db=db,
+                valid_at=valid_at,
+                set_version_id=curr_ns_set_version_id,
+            )
+        }
+
+        log.debug("ALL SET VERSION IDS: %s", all_set_version_ids)
+        log.debug("CURR NS SET VERSION ID: %s", curr_ns_set_version_id)
+        for set_version_id in all_set_version_ids:
+            new_set_dict = {
+                item[0]: item[1]
+                for item in self.__get_all_path_hashes_in_set_version(
+                    db=db, valid_at=valid_at, set_version_id=set_version_id
+                )
+            }
+            if new_set_dict != orig_set_dict:
+                raise ViewConflictError(
+                    "Cannot create view. Some of the geographies are defined "
+                    "on a geo_layer that does not have the same geometries as "
+                    "the geo_layer in the namespace. Please ensure that all of the "
+                    "columns that you are trying to make a view for have the same "
+                    "geographies. The following columns sets have different "
+                    "geographies: \n"
+                    f"\t{set_version_to_cols_dict[list(all_set_version_ids)[0]]}"
+                )
+        all_set_version_ids.add(curr_ns_set_version_id)
+        return (
+            list(all_set_version_ids),
+            curr_ns_set_version_id,
+        )
+
     def create(
         self,
         db: Session,
@@ -128,38 +402,17 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         template: models.ViewTemplate | models.ViewTemplateVersion,
         locality: models.Locality,
         layer: models.GeoLayer,
-        graph: models.Graph | None = None,
+        graph: Optional[models.Graph] = None,
     ) -> Tuple[models.View, uuid.UUID]:
         """Creates a new view."""
+        log.debug("TOP OF CR CREATE")
         valid_at = (
             datetime.now(timezone.utc) if obj_in.valid_at is None else obj_in.valid_at
         )
         if valid_at > datetime.now(timezone.utc):
             raise CreateValueError("Cannot instantiate view in the future.")
 
-        # Verify that the view can be instantiated:
-        #   * locality + layer + valid_at identify a GeoSet.
-        #   * For all geographies in the GeoSet, and for all columns in `template`,
-        #     column values exist at `valid_at`.
-        set_version_id = _geo_set_version_id(db, locality, layer, valid_at)
-        if set_version_id is None:
-            raise CreateValueError(
-                "Cannot instantiate view: no set of geographies exists "
-                "satisfying locality, layer, and time constraints."
-            )
-
-        if graph is not None and graph.set_version_id != set_version_id:
-            raise CreateValueError(
-                f'Cannot instantiate view: graph "{graph.full_path}" does not match '
-                f'locality "{locality.canonical_ref.path}" and geographic layer '
-                f'"{layer.full_path}".'
-            )
-        if graph is not None and graph.created_at > valid_at:
-            raise CreateValueError(
-                f'Cannot instantiate view: graph "{graph.full_path}" exists '
-                f"in the future relative to view timestamp ({valid_at})."
-            )
-
+        # Now go get view_template from the view_template_version
         template_version_id = (
             db.query(models.ViewTemplateVersion.template_version_id)
             .filter(
@@ -177,39 +430,74 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 "No template version found satisfying time constraints."
             )
 
+        (
+            all_set_version_ids,
+            curr_ns_set_version_id,
+        ) = self.__validate_geo_set_compatabilty(
+            db=db,
+            namespace=namespace,
+            locality=locality,
+            layer=layer,
+            valid_at=valid_at,
+            template_version_id=template_version_id,
+        )
+
+        # Run the set version check on the db side of things
+        if graph is not None and graph.set_version_id != curr_ns_set_version_id:
+            raise CreateValueError(
+                f'Cannot instantiate view: graph "{graph.full_path}" does not match '
+                f'locality "{locality.canonical_ref.path}" and geographic layer '
+                f'"{layer.full_path}".'
+            )
+        if graph is not None and graph.created_at > valid_at:
+            raise CreateValueError(
+                f'Cannot instantiate view: graph "{graph.full_path}" exists '
+                f"in the future relative to view timestamp ({valid_at})."
+            )
+
         columns = _view_columns(db, template_version_id)
+
         geo_set_members = (
             db.query(models.GeoSetMember.geo_id)
-            .filter(models.GeoSetMember.set_version_id == set_version_id)
-            .all()
+            .filter(models.GeoSetMember.set_version_id.in_(all_set_version_ids))
+            .subquery()
         )
-        num_geos = len(geo_set_members)
+
         value_counts = (
             db.query(
                 models.ColumnValue.col_id,
                 label("num_geos", func.count(models.ColumnValue.geo_id)),
             )
+            .join(
+                geo_set_members, geo_set_members.c.geo_id == models.ColumnValue.geo_id
+            )
             .filter(
-                models.ColumnValue.geo_id.in_(
-                    member.geo_id for member in geo_set_members
-                ),
-                models.ColumnValue.col_id.in_(col.col_id for col in columns.values()),
+                models.ColumnValue.col_id.in_(bindparam("col_ids", expanding=True)),
                 models.ColumnValue.valid_from <= valid_at,
                 (
                     (models.ColumnValue.valid_to.is_(None))
                     | (models.ColumnValue.valid_to >= valid_at)
                 ),
             )
+            .params(col_ids=[col.col_id for col in columns.values()])
             .group_by(models.ColumnValue.col_id)
             .all()
         )
-
         value_counts_by_col = {group.col_id: group.num_geos for group in value_counts}
+
+        log.debug("VALUE COUNTS: %s", value_counts_by_col)
+
         bad_cols = []
+
+        num_geos = len(
+            db.query(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id == curr_ns_set_version_id)
+            .all()
+        )
 
         for column in columns.values():
             value_count = value_counts_by_col.get(column.col_id, 0)
-            if value_count < num_geos:
+            if value_count != num_geos:
                 bad_cols.append((column.canonical_ref.full_path, value_count))
 
         if bad_cols:
@@ -218,13 +506,14 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 for col_path, count in bad_cols
             )
             raise CreateValueError(
-                "Cannot instantiate view: column values satisfying time "
+                "Cannot instantiate view: column values satisfying all constraints "
                 "constraints not available for all geographies. Bad columns: "
                 + bad_cols_formatted
             )
 
         canonical_path = normalize_path(obj_in.path)
         with db.begin(nested=True):
+
             view = models.View(
                 path=canonical_path,
                 namespace_id=namespace.namespace_id,
@@ -233,15 +522,16 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
                 template_version_id=template_version_id,
                 loc_id=locality.loc_id,
                 layer_id=layer.layer_id,
-                set_version_id=set_version_id,
                 graph_id=None if graph is None else graph.graph_id,
                 at=valid_at,
                 proj=obj_in.proj,
                 num_geos=num_geos,
             )
+
             db.add(view)
 
             try:
+                # Need this to get the view_id
                 db.flush()
             except exc.SQLAlchemyError:
                 log.exception(
@@ -255,7 +545,28 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
             etag = self._update_etag(db, namespace)
 
-        db.refresh(view)
+            db.refresh(view)
+
+            try:
+                with db.begin_nested():
+                    geo_set_version_data = [
+                        {"view_id": view.view_id, "set_version_id": set_ver_id}
+                        for set_ver_id in set(all_set_version_ids)
+                    ]
+                    db.execute(
+                        insert(models.ViewGeoSetVersions).values(geo_set_version_data)
+                    )
+            except SQLAlchemyError as e:  # pragma: no cover
+                log.exception(
+                    "Failed to insert view_set_versions for view '%s'.", view.view_id
+                )
+                # Raise a new error (or your custom error) if the insert fails.
+                raise CreateValueError(
+                    f"Failed to create view set versions for view '{view.view_id}'."
+                ) from e
+
+        log.debug("VIEW!!!!: %s", view.view_id)
+
         return view, etag
 
     def get(
@@ -334,7 +645,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         created_by: models.User,
         render_id: uuid.UUID,
         path: Path | str,
-    ) -> models.ViewRender:
+    ) -> models.ViewRender:  # pragma: no cover
         """Adds a render to the job queue."""
         return self._create_render(
             db=db,
@@ -364,39 +675,62 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         Used for bulk exports via `ogr2ogr`.
         """
+        log.debug("TOP OF CR RENDER")
         columns = _view_columns(db, view.template_version_id)
+
+        view_set_version_ids = [
+            item[0]
+            for item in (
+                db.query(models.ViewGeoSetVersions.set_version_id)
+                .filter(models.ViewGeoSetVersions.view_id == view.view_id)
+                .distinct()
+                .all()
+            )
+        ]
+
         members_sub = (
             select(
-                models.GeoSetMember.set_version_id,
                 models.GeoSetMember.geo_id,
             )
-            .filter(models.GeoSetMember.set_version_id == view.set_version_id)
-            .subquery()
+            .where(models.GeoSetMember.set_version_id.in_(view_set_version_ids))
+            .distinct()
+            .subquery("members_sub")
         )
-        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
+        geo_sub = (
+            select(models.Geography.geo_id, models.Geography.path)
+            .distinct()
+            .subquery("geo_sub")
+        )
 
-        # Generate subqueries for joining tabular data.
-        column_subs = []
+        agg_selects = []
         column_labels = []
-        for alias, col in columns.items():
-            value_col = COLUMN_TYPE_TO_VALUE_COLUMN[col.type]
-            column_sub = (
-                select(
-                    models.ColumnValue.geo_id,
-                    getattr(models.ColumnValue, value_col).label(alias),
-                )
-                .filter(
-                    models.ColumnValue.col_id == col.col_id,
-                    models.ColumnValue.valid_from <= view.at,
-                    or_(
-                        models.ColumnValue.valid_to.is_(None),
-                        models.ColumnValue.valid_to >= view.at,
-                    ),
-                )
-                .subquery()
+        col_ids = []
+        for _, col in columns.items():
+            agg_selects.append(
+                func.max(column(COLUMN_TYPE_TO_VALUE_COLUMN[col.type]))
+                .filter(models.ColumnValue.col_id == col.col_id)
+                .label(col.canonical_ref.path)
             )
-            column_subs.append(column_sub)
-            column_labels.append(column_sub.c[col.canonical_ref.path])
+            column_labels.append(column(col.canonical_ref.path))
+            col_ids.append(col.col_id)
+
+        column_sub = (
+            select(models.Geography.path, *agg_selects)
+            .select_from(models.ColumnValue)
+            .join(
+                models.Geography, models.ColumnValue.geo_id == models.Geography.geo_id
+            )
+            .where(
+                models.ColumnValue.col_id.in_(col_ids),
+                models.ColumnValue.valid_from <= view.at,
+                or_(
+                    models.ColumnValue.valid_to.is_(None),
+                    models.ColumnValue.valid_to >= view.at,
+                ),
+            )
+            .group_by(models.Geography.path)
+            .subquery("column_value")
+        )
 
         timestamp_clauses = [
             models.GeoVersion.valid_from <= view.at,
@@ -409,33 +743,38 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         geo_query = (
             select(
                 geo_sub.c.path,
-                models.GeoVersion.geography,
+                models.GeoBin.geography,
                 *column_labels,
             )
+            .select_from(models.GeoVersion)
             .join(
                 members_sub,
                 members_sub.c.geo_id == models.GeoVersion.geo_id,
             )
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .join(
+                models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
+            )
         )
 
-        # Join tabular data.
-        for column_sub in column_subs:
-            geo_query = geo_query.join(
-                column_sub, column_sub.c.geo_id == models.GeoVersion.geo_id
-            )
-        geo_query = geo_query.where(*timestamp_clauses)
+        geo_query = geo_query.join(column_sub, column_sub.c.path == geo_sub.c.path)
+        geo_query = geo_query.distinct().where(*timestamp_clauses)
 
         internal_point_query = (
             select(
                 geo_sub.c.path,
-                models.GeoVersion.internal_point,
+                models.GeoBin.internal_point,
             )
+            .select_from(models.GeoVersion)
             .join(
                 members_sub,
                 members_sub.c.geo_id == models.GeoVersion.geo_id,
             )
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .join(
+                models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
+            )
+            .distinct()
             .where(*timestamp_clauses)
         )
 
@@ -443,40 +782,47 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         geo_meta_ids, geo_meta = self._geo_meta(db, view)
         geo_valid_from_dates = self._geo_valid_dates(db, view)
 
-        return ViewRenderContext(
+        # Query generation: substitute in literals and remove the
+        # ST_AsBinary() calls added by GeoAlchemy2.
+        full_geo_query = re.sub(
+            _ST_ASBINARY_REGEX,
+            r"\1",
+            str(
+                geo_query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            ),
+        )
+
+        log.debug("The new geo query is %s", full_geo_query)
+
+        full_internal_point_query = re.sub(
+            _ST_ASBINARY_REGEX,
+            r"\1",
+            str(
+                internal_point_query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            ),
+        )
+
+        log.debug("The new internal point query is %s", full_internal_point_query)
+        ret = ViewRenderContext(
             view=view,
             columns=columns,
             plans=plans,
             plan_labels=plan_labels,
             plan_assignments=plan_assignments,
-            graph_areas=None,  # self._graph_areas(db, view),
             graph_edges=self._graph_edges(db, view),
             geo_meta=geo_meta,
             geo_meta_ids=geo_meta_ids,
             geo_valid_from_dates=geo_valid_from_dates,
-            # Query generation: substitute in literals and remove the
-            # ST_AsBinary() calls added by GeoAlchemy2.
-            geo_query=re.sub(
-                _ST_ASBINARY_REGEX,
-                r"\1",
-                str(
-                    geo_query.compile(
-                        dialect=postgresql.dialect(),
-                        compile_kwargs={"literal_binds": True},
-                    )
-                ),
-            ),
-            internal_point_query=re.sub(
-                _ST_ASBINARY_REGEX,
-                r"\1",
-                str(
-                    internal_point_query.compile(
-                        dialect=postgresql.dialect(),
-                        compile_kwargs={"literal_binds": True},
-                    )
-                ),
-            ),
+            geo_query=full_geo_query,
+            internal_point_query=full_internal_point_query,
         )
+        return ret
 
     def _geo_meta(
         self, db: Session, view: models.View
@@ -487,9 +833,19 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             (1) Mapping from geography paths to metadata IDs.
             (2) Mapping from metadata IDs to metadata objects.
         """
+        view_set_version_ids = [
+            item[0]
+            for item in (
+                db.query(models.ViewGeoSetVersions.set_version_id)
+                .filter(models.ViewGeoSetVersions.view_id == view.view_id)
+                .distinct()
+                .all()
+            )
+        ]
+
         members_sub = (
             select(models.GeoSetMember.geo_id)
-            .filter(models.GeoSetMember.set_version_id == view.set_version_id)
+            .filter(models.GeoSetMember.set_version_id.in_(view_set_version_ids))
             .subquery()
         )
         raw_geo_meta_ids = db.execute(
@@ -515,6 +871,15 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         Returns:
             A dictionary mapping geometry IDs to valid dates.
         """
+        view_set_version_ids = [
+            item[0]
+            for item in (
+                db.query(models.ViewGeoSetVersions.set_version_id)
+                .filter(models.ViewGeoSetVersions.view_id == view.view_id)
+                .distinct()
+                .all()
+            )
+        ]
 
         query = (
             select(models.Geography.path, models.GeoVersion.valid_from)
@@ -525,7 +890,7 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             .join(
                 models.GeoVersion, models.Geography.geo_id == models.GeoVersion.geo_id
             )
-            .where(models.GeoSetMember.set_version_id == view.set_version_id)
+            .where(models.GeoSetMember.set_version_id.in_(view_set_version_ids))
         )
 
         result = db.execute(query)
@@ -544,11 +909,21 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
             (3) A database iterator for the plan assignments, if any assignments
                 are available.
         """
+        view_set_version_ids = [
+            item[0]
+            for item in (
+                db.query(models.ViewGeoSetVersions.set_version_id)
+                .filter(models.ViewGeoSetVersions.view_id == view.view_id)
+                .distinct()
+                .all()
+            )
+        ]
+
         # Get plans that existed when the view was created.
         plans = (
             db.query(models.Plan)
             .filter(
-                models.Plan.set_version_id == view.set_version_id,
+                models.Plan.set_version_id.in_(view_set_version_ids),
                 models.Plan.created_at <= view.at,
             )
             .all()
@@ -565,60 +940,58 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
 
         # Get plan assignments as a table.
         plan_labels = []
-        if visible_plans:
-            # Determine the shortest unambiguous alias for each plan.
-            namespaces_by_path = defaultdict(set)
-            for plan in visible_plans:
-                namespaces_by_path[plan.path].add(plan.namespace.path)
+        if len(visible_plans) == 0:  # pragma: no cover
+            return [], [], None
 
-            # Generate query clauses for each plan.
-            plan_subs = []
-            for plan in visible_plans:
-                label = (
-                    f"{plan.namespace.path}__{plan.path}"
-                    if len(namespaces_by_path[plan.path]) > 1
-                    else plan.path
-                )
-                plan_labels.append(label)
-                plan_subs.append(
-                    select(
-                        models.PlanAssignment.geo_id, models.PlanAssignment.assignment
-                    )
-                    .where(
-                        models.PlanAssignment.plan_id == plan.plan_id,
-                    )
-                    .subquery()
-                )
+        # Determine the shortest unambiguous alias for each plan.
+        namespaces_by_path = defaultdict(set)
+        for plan in visible_plans:
+            namespaces_by_path[plan.path].add(plan.namespace.path)
 
-            geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
-            members_sub = (
-                select(models.GeoSetMember.geo_id)
-                .filter(models.GeoSetMember.set_version_id == view.set_version_id)
+        # Generate query clauses for each plan.
+        plan_subs = []
+        for plan in visible_plans:
+            label = (
+                f"{plan.namespace.path}__{plan.path}"
+                if len(namespaces_by_path[plan.path]) > 1
+                else plan.path
+            )
+            plan_labels.append(label)
+            plan_subs.append(
+                select(models.PlanAssignment.geo_id, models.PlanAssignment.assignment)
+                .where(
+                    models.PlanAssignment.plan_id == plan.plan_id,
+                )
                 .subquery()
             )
-            plan_cols = [
-                plan_sub.c.assignment.label(plan_label)
-                for plan_sub, plan_label in zip(plan_subs, plan_labels)
-            ]
-            plan_assignment_query = (
-                select(models.GeoVersion.geo_id, geo_sub.c.path, *plan_cols)
-                .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
-                .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
+
+        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
+        members_sub = (
+            select(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id.in_(view_set_version_ids))
+            .subquery()
+        )
+        plan_cols = [
+            plan_sub.c.assignment.label(plan_label)
+            for plan_sub, plan_label in zip(plan_subs, plan_labels)
+        ]
+        plan_assignment_query = (
+            select(models.GeoVersion.geo_id, geo_sub.c.path, *plan_cols)
+            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
+            .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
+        )
+        for plan_sub in plan_subs:
+            plan_assignment_query = plan_assignment_query.outerjoin(
+                plan_sub,
+                plan_sub.c.geo_id == models.GeoVersion.geo_id,
             )
-            for plan_sub in plan_subs:
-                plan_assignment_query = plan_assignment_query.outerjoin(
-                    plan_sub,
-                    plan_sub.c.geo_id == models.GeoVersion.geo_id,
-                )
-            plan_assignments = db.execute(plan_assignment_query).fetchall()
-        else:
-            plan_assignments = None
+        plan_assignments = db.execute(plan_assignment_query).fetchall()
 
         return visible_plans, plan_labels, plan_assignments
 
     def _graph_edges(self, db: Session, view: models.View) -> Sequence | None:
         """Gets graph edges by path, if applicable."""
-        if view.graph_id is None:
+        if view.graph_id is None:  # pragma: no cover
             return None
 
         path_sub_1 = select(models.Geography.geo_id, models.Geography.path).subquery()
@@ -643,44 +1016,6 @@ class CRView(NamespacedCRBase[models.View, schemas.ViewCreate]):
         )
 
         return db.execute(graph_edges_query).fetchall()
-
-    def _graph_areas(self, db: Session, view: models.View) -> Sequence | None:
-        """Gets projected graph node areas by path, if applicable."""
-        if view.graph_id is None:
-            return None
-
-        # Prefer the most specific projection for area calculations.
-        proj_crs_candidates = (view.graph.proj, view.proj, view.loc.default_proj)
-        try:
-            target_crs = next(proj for proj in proj_crs_candidates if proj is not None)
-            geo_col = geo_func.ST_Transform(
-                cast(models.GeoVersion.geography, Geometry), target_crs
-            )
-        except StopIteration:
-            geo_col = models.GeoVersion.geography
-
-        members_sub = (
-            select(
-                models.GeoSetMember.set_version_id,
-                models.GeoSetMember.geo_id,
-            )
-            .filter(models.GeoSetMember.set_version_id == view.set_version_id)
-            .subquery()
-        )
-        geo_sub = select(models.Geography.geo_id, models.Geography.path).subquery()
-
-        area_query = (
-            select(
-                geo_sub.c.path,
-                geo_func.ST_Area(geo_col).label("area"),
-            )
-            .join(
-                members_sub,
-                members_sub.c.geo_id == models.GeoVersion.geo_id,
-            )
-            .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
-        )
-        return db.execute(area_query).fetchall()
 
 
 view = CRView(models.View)

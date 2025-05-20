@@ -17,8 +17,9 @@ class CRGeoImport(NamespacedCRBase[models.GeoImport, None]):
         self,
         db: Session,
         *,
-        obj_meta: models.ObjectMeta,
         namespace: models.Namespace,
+        obj_meta: models.ObjectMeta,
+        **kwargs,  # Unused kwargs to match iterface
     ) -> Tuple[models.GeoImport, uuid.UUID]:
         """Creates a new geographic import."""
         with db.begin(nested=True):

@@ -6,7 +6,7 @@ import msgpack
 import pytest
 import shapely.wkb
 from shapely import box
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
 
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.main import API_PREFIX
@@ -66,8 +66,9 @@ def test_api_geography_create_read(
     )
 
     create_body = schemas.Geography(**msgpack.loads(create_response.content)[0])
+
     assert create_body.path == "box"
-    assert create_body.internal_point is None
+    assert create_body.internal_point == Point().wkb
     assert shapely.wkb.loads(create_body.geography) == unit_box
 
     read_response = ctx.client.get(f"{GEOS_ROOT}/{namespace}/box")
@@ -150,8 +151,8 @@ def test_api_geography_create__missing_geos(ctx_public_namespace_read_write):
     )
 
     create_body = schemas.Geography(**msgpack.loads(create_response.content)[0])
-    assert create_body.internal_point is None
-    assert create_body.geography is None
+    assert create_body.internal_point == Point().wkb
+    assert create_body.geography == Polygon().wkb
 
 
 def test_api_geography_create__malformed_wkb(ctx_public_namespace_read_write):
