@@ -28,19 +28,11 @@ from gerrydb_meta.models import (
     UserGroupScope,
 )
 from gerrydb_meta.schemas import ObjectMetaCreate
+from gerrydb_meta.db import Session
 from uvicorn.config import logger as log
 import os
 
 GERRYDB_SQL_ECHO = bool(os.environ.get("GERRYDB_SQL_ECHO", False))
-
-if os.getenv("GERRYDB_RUN_TESTS"):  # pragma: no cover
-    Session = sessionmaker(
-        create_engine(os.getenv("GERRYDB_TEST_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
-    )
-else:  # pragma: no cover
-    Session = sessionmaker(
-        create_engine(os.getenv("GERRYDB_DATABASE_URI"), echo=GERRYDB_SQL_ECHO)
-    )
 
 API_KEY_CHARS = string.ascii_lowercase + string.digits
 
