@@ -248,6 +248,12 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
             ),
         ]
 
+        members_sub = (
+            select(models.GeoSetMember.geo_id)
+            .filter(models.GeoSetMember.set_version_id == graph.set_version_id)
+            .subquery("members_sub")
+        )
+
         geo_sub = (
             select(
                 models.Geography.geo_id,
@@ -265,6 +271,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
                 models.GeoBin.geography,
             )
             .select_from(models.GeoVersion)
+            .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
             .join(
                 models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id
@@ -279,6 +286,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
                 models.GeoBin.internal_point,
             )
             .select_from(models.GeoVersion)
+            .join(members_sub, members_sub.c.geo_id == models.GeoVersion.geo_id)
             .join(geo_sub, geo_sub.c.geo_id == models.GeoVersion.geo_id)
             .join(
                 models.GeoBin, models.GeoVersion.geo_bin_id == models.GeoBin.geo_bin_id

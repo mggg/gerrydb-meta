@@ -8,6 +8,7 @@ import networkx as nx
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+import geopandas as gpd
 
 from gerrydb_meta import models
 
@@ -139,3 +140,10 @@ def me_2010_plan_dict():
         "23017": 1,
         "23005": 1,
     }
+
+
+@pytest.fixture
+def ia_dataframe():
+    """`GeoDataFrame` of Iowa counties."""
+    shp_path = Path(__file__).resolve().parent / "fixtures" / "tl_2020_19_county20.zip"
+    return gpd.read_file(shp_path).set_index("GEOID20")
