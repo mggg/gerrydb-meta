@@ -308,9 +308,9 @@ def render_graph(
             blob_path = f"{render_uuid.hex}.gpkg.gz"
             blob = bucket.blob(blob_path)
             blob.content_encoding = "gzip"
-            blob.metadata = {"gerrydb-view-render-id": render_uuid.hex}
+            blob.metadata = {"gerrydb-graph-render-id": render_uuid.hex}
             blob.upload_from_filename(gzipped_path, content_type=GPKG_MEDIA_TYPE)
-            crud.view.cache_render(
+            crud.graph.cache_render(
                 db=db,
                 graph=graph_obj,
                 created_by=user,
@@ -332,7 +332,7 @@ def render_graph(
             )
         except Exception as ex:
             log.exception(
-                "Failed to serve rendered view via Google Cloud Storage. "
+                "Failed to serve rendered graph via Google Cloud Storage. "
                 "Falling back to direct streaming."
             )
             raise ex
