@@ -11,8 +11,10 @@ dbname=${DB_NAME}
 password=${DB_PASS}
 " >> /app/.pg_service.conf
 
-PGSERVICEFILE=/app/.pg_service.conf gunicorn -w 4 \
+PGSERVICEFILE=/app/.pg_service.conf \
+exec gunicorn -w 4 \
     --access-logfile - \
+    --log-level debug \
     -k uvicorn.workers.UvicornWorker \
     gerrydb_meta.main:app \
     --timeout 300
