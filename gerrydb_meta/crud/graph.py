@@ -350,7 +350,7 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         render = models.GraphRender(
             graph_id=graph.graph_id,
             render_id=render_id,
-            created_by=created_by,
+            created_by=created_by.user_id,
             path=path,
             status=status,
         )
