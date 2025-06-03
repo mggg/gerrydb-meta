@@ -346,7 +346,18 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         path: Path | str,
         status: models.GraphRenderStatus,
     ) -> models.GraphRender:  # pragma: no cover
-        raise NotImplementedError
+        """Creates graph render metadata."""
+        render = models.GraphRender(
+            graph_id=graph.graph_id,
+            render_id=render_id,
+            created_by=created_by,
+            path=path,
+            status=status,
+        )
+        db.add(render)
+        db.flush()
+        db.refresh(render)
+        return render
 
     def cache_render(
         self,
@@ -357,7 +368,15 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         render_id: uuid.UUID,
         path: Path | str,
     ) -> models.GraphRender:  # pragma: no cover
-        raise NotImplementedError
+        """Saves metadata for a successful render"""
+        self._create_render(
+            db=db,
+            graph=graph,
+            created_by=created_by,
+            render_id=render_id,
+            path=path,
+            status=models.GraphRenderStatus.SUCCEEDED,
+        )
 
     def queue_render(
         self,
@@ -368,12 +387,28 @@ class CRGraph(NamespacedCRBase[models.Graph, schemas.GraphCreate]):
         render_id: uuid.UUID,
         path: Path | str,
     ) -> models.GraphRender:  # pragma: no cover
-        raise NotImplementedError
+        """Adds a render to the job queue."""
+        return self._create_render(
+            db=db,
+            graph=graph,
+            created_by=created_by,
+            render_id=render_id,
+            path=path,
+            status=models.GraphRenderStatus.PENDING,
+        )
 
     def get_cached_render(
         self, db: Session, *, graph: models.Graph
     ) -> models.GraphRender | None:  # pragma: no cover
-        raise NotImplementedError
+        return (
+            db.query(models.GraphRender)
+            .filter(
+                models.GraphRender.graph_id == graph.graph_id,
+                models.GraphRender.status == models.GraphRenderStatus.SUCCEEDED,
+            )
+            .order_by(models.GraphRender.created_at.desc())
+            .first()
+        )
 
 
 graph = CRGraph(models.Graph)
