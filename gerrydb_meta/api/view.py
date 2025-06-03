@@ -253,6 +253,7 @@ def render_view(
 
     cached_render_meta = crud.view.get_cached_render(db=db, view=view_obj)
     if cached_render_meta is not None and has_gcs_context:  # pragma: no cover
+        log.debug("Found cached render")
         render_path = urlparse(cached_render_meta.path)
         try:
             bucket = storage_client.bucket(render_path.netloc)
@@ -284,7 +285,9 @@ def render_view(
     render_uuid, gpkg_path = view_to_gpkg(context=render_ctx, db_config=db_config)
     log.debug("Time to write GPKG: %s", time.perf_counter() - start)
     log.debug("AFTER GPKG")
+
     if has_gcs_context:  # pragma: no cover
+        log.debug("Attempting to upload rendered view to Google Cloud Storage")
         try:
             bucket = storage_client.bucket(bucket_name)
             gzipped_path = gpkg_path.with_suffix(".gpkg.gz")

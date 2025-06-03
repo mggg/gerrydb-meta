@@ -1,6 +1,7 @@
 """Endpoints for districting graphs."""
 
 import os
+import subprocess
 from datetime import timedelta
 from http import HTTPStatus
 from urllib.parse import urlparse
@@ -249,22 +250,6 @@ def render_graph(
                 "Falling back to direct streaming."
             )
 
-    log.debug("BEFORE GRAPH RENDER")
-    start = time.perf_counter()
-    etag = crud.graph.etag(db, namespace_obj)
-    render_ctx = crud.graph.render(db=db, graph=graph_obj)
-    log.debug("RENDER CTX %s", render_ctx)
-    log.debug("Time to render graph: %s", time.perf_counter() - start)
-    start = time.perf_counter()
-    render_uuid, gpkg_path = graph_to_gpkg(context=render_ctx, db_config=db_config)
-    log.debug("Time to write GPKG: %s", time.perf_counter() - start)
-    log.debug("Created GPKG %s", gpkg_path)
-
-    # ==========================================================
-    # ==========================================================
-    #     Google Cloud Storage Redirect Still Needs Modified
-    # ==========================================================
-    # ==========================================================
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
     storage_credentials = storage_client = None
@@ -279,6 +264,7 @@ def render_graph(
 
     cached_render_meta = crud.graph.get_cached_render(db=db, graph=graph_obj)
     if cached_render_meta is not None and has_gcs_context:
+        log.debug("Found cached render")
         render_path = urlparse(cached_render_meta.path)
         try:
             bucket = storage_client.bucket(render_path.netloc)
@@ -300,6 +286,56 @@ def render_graph(
                 "Failed to serve rendered graph via Google Cloud Storage. "
                 "Falling back to direct streaming."
             )
+
+    log.debug("BEFORE GRAPH RENDER")
+    start = time.perf_counter()
+    etag = crud.graph.etag(db, namespace_obj)
+    render_ctx = crud.graph.render(db=db, graph=graph_obj)
+    log.debug("RENDER CTX %s", render_ctx)
+    log.debug("Time to render graph: %s", time.perf_counter() - start)
+    start = time.perf_counter()
+    render_uuid, gpkg_path = graph_to_gpkg(context=render_ctx, db_config=db_config)
+    log.debug("Time to write GPKG: %s", time.perf_counter() - start)
+    log.debug("Created GPKG %s", gpkg_path)
+
+    if has_gcs_context:  # pragma: no cover
+        log.debug("Attempting to upload rendered graph to Google Cloud Storage")
+        try:
+            bucket = storage_client.bucket(bucket_name)
+            gzipped_path = gpkg_path.with_suffix(".gpkg.gz")
+            subprocess.run(["gzip", "-k", "-1", str(gpkg_path)], check=True)
+
+            blob_path = f"{render_uuid.hex}.gpkg.gz"
+            blob = bucket.blob(blob_path)
+            blob.content_encoding = "gzip"
+            blob.metadata = {"gerrydb-view-render-id": render_uuid.hex}
+            blob.upload_from_filename(gzipped_path, content_type=GPKG_MEDIA_TYPE)
+            crud.view.cache_render(
+                db=db,
+                graph=graph_obj,
+                created_by=user,
+                render_id=render_uuid,
+                path=f"gs://{bucket_name}/{blob_path}",
+            )
+
+            redirect_url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(minutes=15),
+                method="GET",
+                # see https://stackoverflow.com/a/64245028
+                service_account_email=storage_credentials.service_account_email,
+                access_token=storage_credentials.token,
+            )
+            return RedirectResponse(
+                url=redirect_url,
+                status_code=HTTPStatus.PERMANENT_REDIRECT,
+            )
+        except Exception as ex:
+            log.exception(
+                "Failed to serve rendered view via Google Cloud Storage. "
+                "Falling back to direct streaming."
+            )
+            raise ex
 
     return FileResponse(
         gpkg_path,
