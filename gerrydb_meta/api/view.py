@@ -244,6 +244,7 @@ def render_view(
 
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
+    log.debug("Bucket name: %s, Key path: %s", bucket_name, key_path)
     storage_credentials = storage_client = None
     if bucket_name is not None and key_path is not None:  # pragma: no cover
         try:
@@ -253,6 +254,7 @@ def render_view(
             log.exception("Failed to initialize Google Cloud Storage context.")
             storage_credentials = storage_client = None
     has_gcs_context = storage_client is not None
+    log.debug("Has GCS context: %s", has_gcs_context)
 
     cached_render_meta = crud.view.get_cached_render(db=db, view=view_obj)
     if cached_render_meta is not None and has_gcs_context:  # pragma: no cover
