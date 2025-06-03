@@ -1,6 +1,5 @@
 """CRUD operations and transformations for column sets."""
 
-import logging
 import uuid
 from typing import Tuple
 

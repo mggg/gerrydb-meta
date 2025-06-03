@@ -1,7 +1,6 @@
 """Generic CR(UD) views and utilities."""
 
 import inspect
-import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from http import HTTPStatus

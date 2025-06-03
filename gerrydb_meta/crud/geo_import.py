@@ -6,7 +6,7 @@ from typing import Tuple
 
 from sqlalchemy.orm import Session
 
-from gerrydb_meta import models, schemas
+from gerrydb_meta import models
 from gerrydb_meta.crud.base import NamespacedCRBase
 
 log = logging.getLogger()

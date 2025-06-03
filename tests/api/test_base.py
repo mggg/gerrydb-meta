@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from gerrydb_meta.api.base import *
 import gerrydb_meta.api.base as base
 from gerrydb_meta.api.deps import get_scopes
-import gerrydb_meta.models as models
 from gerrydb_meta import crud
 
 # Dummy classes for testing
@@ -186,11 +185,11 @@ def test_from_resource_paths_success_bulk(monkeypatch):
 def test_from_resource_paths_success_bad_paths(monkeypatch):
     setup_dummy_namespace(monkeypatch)
     paths = ["columns/ns1/a/too_long"]
-    objs = [DummyObj("ns1", "a")]
+    [DummyObj("ns1", "a")]
     with pytest.raises(
         ValueError, match="Paths must verify the form '/<resource>/<namespace>/<path>'"
     ):
-        result = from_resource_paths(paths, db_dummy, DummyScopes())
+        from_resource_paths(paths, db_dummy, DummyScopes())
 
 
 def test_from_resource_paths_missing_bulk(monkeypatch):

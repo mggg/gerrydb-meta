@@ -1,6 +1,3 @@
-import pytest
-from sqlalchemy.orm import Session
-from unittest.mock import MagicMock
 from gerrydb_meta.crud.api_key import ReadOnlyApiKey
 from gerrydb_meta import models
 

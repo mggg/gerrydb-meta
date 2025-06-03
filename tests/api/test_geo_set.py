@@ -1,11 +1,8 @@
-import pytest
 import logging
 import gerrydb_meta.models as models
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.api.base import geo_set_from_paths
 from gerrydb_meta.api.deps import get_scopes
-import pytest
-from pydantic import AnyUrl
 import logging
 from gerrydb_meta.main import API_PREFIX
 

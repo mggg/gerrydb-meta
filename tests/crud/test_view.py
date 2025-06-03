@@ -6,7 +6,7 @@ import pytest
 from gerrydb_meta import models
 from gerrydb_meta.exceptions import CreateValueError
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 square_corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
 

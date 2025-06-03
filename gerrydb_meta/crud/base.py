@@ -8,7 +8,6 @@ from abc import abstractmethod
 import uuid
 from typing import Any, Generic, List, Optional, Tuple, Type, TypeVar
 
-from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session

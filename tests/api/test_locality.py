@@ -4,7 +4,6 @@ from http import HTTPStatus
 import logging
 
 import pytest
-from fastapi import HTTPException
 
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import ScopeType

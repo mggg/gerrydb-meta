@@ -1,6 +1,5 @@
 """CRUD operations and transformations for column metadata."""
 
-import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Collection, Tuple

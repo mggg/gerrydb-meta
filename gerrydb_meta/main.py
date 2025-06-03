@@ -2,7 +2,7 @@
 
 from http import HTTPStatus
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from starlette.responses import StreamingResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -115,7 +115,7 @@ async def log_400_errors(request: Request, call_next):  # pragma: no cover
                 logger.error(
                     f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {json_body.get('detail', 'No detail available')}"
                 )
-            except Exception as e:
+            except Exception:
                 # Log the error with the reconstructed body content
                 logger.error(
                     f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {body_content.decode('utf-8', errors='replace')}"
@@ -142,7 +142,7 @@ async def log_400_errors(request: Request, call_next):  # pragma: no cover
                 logger.error(
                     f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {json_body.get('detail', 'No detail available')}"
                 )
-            except Exception as e:
+            except Exception:
                 logger.error(
                     f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {body_content.decode('utf-8', errors='replace')}"
                 )

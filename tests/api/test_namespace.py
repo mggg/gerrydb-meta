@@ -3,9 +3,8 @@
 from http import HTTPStatus
 
 import pytest
-from sqlalchemy.orm import Session
 
-from gerrydb_meta import crud, models, schemas
+from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import NamespaceGroup, ScopeType
 from gerrydb_meta.main import API_PREFIX
 import random

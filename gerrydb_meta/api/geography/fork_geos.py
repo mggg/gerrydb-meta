@@ -19,7 +19,6 @@ from gerrydb_meta.api.deps import (
 from gerrydb_meta.scopes import ScopeManager
 import gerrydb_meta.schemas as schemas
 from .list_geos import _get_path_hash_pairs
-from sqlalchemy import text
 from uvicorn.config import logger as log
 
 fork_router = APIRouter()

@@ -1,11 +1,9 @@
 import logging
-import gerrydb_meta.models as models
-from gerrydb_meta import crud, render, schemas
+from gerrydb_meta import crud, schemas
 from gerrydb_meta.api.graph import *
 import logging
 from starlette.responses import Response
 import pytest
-from fastapi.responses import FileResponse
 import geopandas as gpd
 
 

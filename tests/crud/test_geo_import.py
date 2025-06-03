@@ -1,5 +1,4 @@
 from gerrydb_meta import crud, schemas
-from gerrydb_meta.enums import ColumnKind, ColumnType
 from gerrydb_meta import models
 
 

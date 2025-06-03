@@ -1,10 +1,8 @@
 from shapely import Point, Polygon
-from starlette.responses import Response
 import logging
 
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.main import API_PREFIX
-from gerrydb_meta.api.plan import PlanApi
 from gerrydb_meta.api.deps import get_scopes
 
 PLAN_ROOT = f"{API_PREFIX}/plans"
@@ -33,7 +31,7 @@ def test_plan_create(ctx_superuser, caplog):
     db = ctx_superuser.db
     user = ctx_superuser.user
     meta = ctx_superuser.meta
-    scopes = get_scopes(user)
+    get_scopes(user)
 
     caplog.set_level(logging.INFO, logger="uvicorn.error")
     logging.getLogger("uvicorn.error").addHandler(caplog.handler)

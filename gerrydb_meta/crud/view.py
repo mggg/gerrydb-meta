@@ -8,11 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple, Optional
 
-from geoalchemy2 import func as geo_func
-from geoalchemy2 import Geometry
 from sqlalchemy import (
     Sequence,
-    cast,
     exc,
     func,
     label,
@@ -20,13 +17,12 @@ from sqlalchemy import (
     select,
     union,
     bindparam,
-    literal_column,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy import insert
-from sqlalchemy.sql import text, column
-from sqlalchemy.exc import SQLAlchemyError, NoResultFound
+from sqlalchemy.sql import column
+from sqlalchemy.exc import SQLAlchemyError
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path

@@ -5,13 +5,13 @@ import pytest
 from fastapi import HTTPException
 
 from gerrydb_meta import crud, schemas
-from gerrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
+from gerrydb_meta.enums import ColumnKind, ColumnType, ScopeType
 from gerrydb_meta.main import API_PREFIX
 from gerrydb_meta.api.view_template import ViewTemplateApi
 from gerrydb_meta.api.deps import get_scopes
 import gerrydb_meta.models as models
 from tests.api import create_column
-from tests.api.scopes import grant_namespaced_scope, grant_scope
+from tests.api.scopes import grant_namespaced_scope
 
 VIEW_TEMPLATES_ROOT = f"{API_PREFIX}/view-templates"
 

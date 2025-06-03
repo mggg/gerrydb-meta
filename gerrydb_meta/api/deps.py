@@ -2,7 +2,6 @@
 
 import os
 import re
-import threading
 from hashlib import sha512
 from http import HTTPStatus
 from typing import Generator

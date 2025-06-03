@@ -86,7 +86,7 @@ def test_api_object_meta_read__other_user_read_scope(ctx_no_scopes):
 def test_errors_in_get(ctx_no_scopes):
     ctx = ctx_no_scopes
     grant_scope(ctx.db, ctx.user, ScopeType.META_READ)
-    other_user_meta = create_new_user_meta(ctx.db)
+    create_new_user_meta(ctx.db)
 
     # Read metadata created by the other user.
     read_response = ctx.client.get(f"{META_ROOT}/bad_uuid")

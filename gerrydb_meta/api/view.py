@@ -246,7 +246,7 @@ def render_view(
         try:
             storage_credentials = Credentials.from_service_account_file(key_path)
             storage_client = storage.Client(credentials=storage_credentials)
-        except Exception as ex:
+        except Exception:
             log.exception("Failed to initialize Google Cloud Storage context.")
             storage_credentials = storage_client = None
     has_gcs_context = storage_client is not None
@@ -270,7 +270,7 @@ def render_view(
                 url=redirect_url,
                 status_code=HTTPStatus.PERMANENT_REDIRECT,
             )
-        except Exception as ex:
+        except Exception:
             log.exception(
                 "Failed to serve rendered view via Google Cloud Storage. "
                 "Falling back to direct streaming."

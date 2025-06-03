@@ -1,4 +1,3 @@
-from gerrydb_meta import schemas, crud
 from gerrydb_meta.crud.base import *
 from gerrydb_meta.exceptions import GerryPathError
 import pytest

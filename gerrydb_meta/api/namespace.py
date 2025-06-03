@@ -4,7 +4,6 @@ from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
-from uvicorn.config import logger as log
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.api.base import add_etag, check_etag
@@ -15,8 +14,6 @@ from gerrydb_meta.api.deps import (
     get_scopes,
 )
 from gerrydb_meta.scopes import ScopeManager
-from gerrydb_meta.enums import ScopeType
-from gerrydb_meta.admin import GerryAdmin, grant_scope
 
 router = APIRouter()
 

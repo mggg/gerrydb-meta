@@ -3,19 +3,14 @@
 from http import HTTPStatus
 import networkx as nx
 import logging
-import pytest
 from shapely import box
 from shapely.geometry import Point, Polygon
 import logging
 
 from gerrydb_meta import crud, schemas
-from gerrydb_meta.enums import ColumnKind, ColumnType, NamespaceGroup, ScopeType
+from gerrydb_meta.enums import ColumnKind, ColumnType
 from gerrydb_meta.main import API_PREFIX
-from gerrydb_meta.api.deps import get_scopes
 import gerrydb_meta.models as models
-import gerrydb_meta.api.view as view_api
-from tests.api import create_column
-from tests.api.scopes import grant_namespaced_scope, grant_scope
 
 VIEW_TEMPLATES_ROOT = f"{API_PREFIX}/views"
 
@@ -212,7 +207,7 @@ def test_view_make_and_get_cached_render(ctx_superuser):
 def test_api_view_create_get_errors(ctx_superuser, caplog):
     db = ctx_superuser.db
     ctx = ctx_superuser
-    user = ctx.user
+    ctx.user
     meta = ctx.meta
 
     caplog.set_level(logging.ERROR, logger="uvicorn")
@@ -634,7 +629,7 @@ def test_api_view_create_get_errors(ctx_superuser, caplog):
 def test_api_view_create_multiple_get_all(ctx_superuser):
     db = ctx_superuser.db
     ctx = ctx_superuser
-    user = ctx.user
+    ctx.user
     meta = ctx.meta
 
     ns, _ = crud.namespace.create(

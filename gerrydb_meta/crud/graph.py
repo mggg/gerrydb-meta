@@ -13,12 +13,12 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy import insert
+from sqlalchemy.orm import Session
 from sqlalchemy.dialects import postgresql
 
 from gerrydb_meta import models, schemas
 from gerrydb_meta.crud.base import NamespacedCRBase, normalize_path
 from gerrydb_meta.exceptions import CreateValueError
-from gerrydb_meta.models import *
 from typing import Tuple
 from datetime import datetime
 from uvicorn.config import logger as log

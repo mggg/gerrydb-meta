@@ -11,8 +11,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    text,
-    event,
     Index,
 )
 from sqlalchemy import Enum as SqlEnum
@@ -29,7 +27,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import BYTEA
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.ext.associationproxy import association_proxy
 
@@ -41,7 +39,6 @@ from gerrydb_meta.enums import (
     ViewRenderStatus,
     GraphRenderStatus,
 )
-from gerrydb_meta.utils import create_column_value_partition_text
 
 SCHEMA = "gerrydb"
 metadata_obj = MetaData(schema=SCHEMA)

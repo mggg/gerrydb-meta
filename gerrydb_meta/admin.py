@@ -11,9 +11,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import click
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as SessionType
-from sqlalchemy.orm import sessionmaker
 
 from gerrydb_meta.enums import NamespaceGroup, ScopeType, GroupPermissions
 from gerrydb_meta.crud.obj_meta import obj_meta
@@ -493,7 +491,6 @@ class GerryAdmin:
 @click.group()
 def cli():
     """Administration tools for GerryDB."""
-    pass
 
 
 @contextmanager
