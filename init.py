@@ -1,5 +1,6 @@
 """Initializes a GerryDB instance with a superuser."""
 
+# pragma: no cover
 import os
 
 import click

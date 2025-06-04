@@ -253,7 +253,8 @@ def render_graph(
     bucket_name = os.getenv("GCS_BUCKET")
     key_path = os.getenv("GCS_KEY_PATH")
     storage_credentials = storage_client = None
-    if bucket_name is not None and key_path is not None:
+
+    if bucket_name is not None and key_path is not None:  # pragma: no cover
         try:
             storage_credentials = Credentials.from_service_account_file(key_path)
             storage_client = storage.Client(credentials=storage_credentials)
@@ -263,7 +264,7 @@ def render_graph(
     has_gcs_context = storage_client is not None
 
     cached_render_meta = crud.graph.get_cached_render(db=db, graph=graph_obj)
-    if cached_render_meta is not None and has_gcs_context:
+    if cached_render_meta is not None and has_gcs_context:  # pragma: no cover
         log.debug("Found cached render")
         render_path = urlparse(cached_render_meta.path)
         try:

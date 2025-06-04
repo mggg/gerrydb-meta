@@ -51,7 +51,7 @@ def test_api_locality_create_read__no_parent_no_aliases(ctx_locality_read_write)
     assert create_body.name == name
     assert create_body.canonical_path == path
     assert create_body.parent_path is None
-    assert create_body.meta.uuid == str(ctx.meta.uuid)
+    assert create_body.meta.uuid == ctx.meta.uuid
 
     # Read it back.
     read_response = ctx.client.get(f"{API_PREFIX}/localities/{path}")
@@ -91,7 +91,7 @@ def test_api_locality_create_read__parent_and_aliases(ctx_locality_read_write):
     assert create_child_body.canonical_path == path
     assert create_child_body.aliases == aliases
     assert create_child_body.parent_path == parent_path
-    assert create_child_body.meta.uuid == str(ctx.meta.uuid)
+    assert create_child_body.meta.uuid == ctx.meta.uuid
 
     # Read back the parent and the child.
     read_response = ctx.client.get(f"{LOCALITIES_ROOT}/")

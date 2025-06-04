@@ -3,6 +3,7 @@
 from http import HTTPStatus
 
 import pytest
+from pydantic import ValidationError
 
 from gerrydb_meta import crud, schemas
 from gerrydb_meta.enums import NamespaceGroup, ScopeType
@@ -47,6 +48,13 @@ def ctx_with_namespace_rc_public(ctx_no_scopes_factory):
     )
     grant_scope(ctx.db, ctx.meta, ScopeType.NAMESPACE_CREATE)
     yield ctx
+
+
+def test_path_too_long():
+    with pytest.raises(ValidationError):
+        schemas.NamespaceCreate(path="a" * 255)
+    with pytest.raises(ValidationError):
+        schemas.NamespaceCreate(path="a", description="b" * 10000, public=True)
 
 
 def test_api_namespace_create_read__public(ctx_with_namespace_rc_all):

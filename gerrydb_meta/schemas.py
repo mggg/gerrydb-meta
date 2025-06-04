@@ -2,21 +2,27 @@
 
 from datetime import datetime
 from typing import Any
-from typing import Annotated
+from typing import Annotated, Optional
+from uuid import UUID
 from pydantic import AnyUrl, BaseModel, constr, validator
 
 from gerrydb_meta import enums, models
 
 UserEmail = Annotated[str, constr(max_length=254)]
 
-GerryPath = Annotated[str, constr(regex=r"[a-z0-9][a-z0-9-_/]*")]
-NamespacedGerryPath = Annotated[str, constr(regex=r"[a-z0-9/][a-z0-9-_/]*")]
+GerryPath = Annotated[str, constr(regex=r"[a-z0-9][a-z0-9-_/]*", max_length=254)]
+NamespacedGerryPath = Annotated[
+    str, constr(regex=r"[a-z0-9/][a-z0-9-_/]*", max_length=254)
+]
+NameStr = Annotated[str, constr(regex=r"[a-zA-Z0-9-]+", max_length=254)]
+Description = Optional[constr(max_length=2000)]
+ShortStr = Optional[constr(max_length=100)]
 
 
 class ObjectMetaBase(BaseModel):
     """Base model for object metadata."""
 
-    notes: str | None
+    notes: Description
 
 
 class ObjectMetaCreate(ObjectMetaBase):
@@ -26,7 +32,7 @@ class ObjectMetaCreate(ObjectMetaBase):
 class ObjectMeta(ObjectMetaBase):
     """Object metadata returned by the database."""
 
-    uuid: str
+    uuid: UUID
     created_at: datetime
     created_by: UserEmail
 
@@ -48,14 +54,14 @@ class LocalityBase(BaseModel):
 
     canonical_path: GerryPath
     parent_path: GerryPath | None
-    default_proj: str | None
-    name: str
+    default_proj: ShortStr
+    name: NameStr
 
 
 class LocalityCreate(LocalityBase):
     """Locality metadata received on creation."""
 
-    aliases: list[GerryPath] | None
+    aliases: Optional[list[GerryPath]]
 
 
 class LocalityPatch(BaseModel):
@@ -89,8 +95,8 @@ class Locality(LocalityBase):
 class NamespaceBase(BaseModel):
     """Base model for namespace metadata."""
 
-    path: constr(regex=r"[a-zA-Z0-9-]+")
-    description: str
+    path: NamespacedGerryPath
+    description: Description
     public: bool
 
 
@@ -111,7 +117,7 @@ class ColumnBase(BaseModel):
     """Base model for locality metadata."""
 
     canonical_path: GerryPath
-    description: str | None
+    description: Description
     source_url: AnyUrl | None
     kind: enums.ColumnKind
     type: enums.ColumnType
@@ -132,7 +138,7 @@ class ColumnPatch(BaseModel):
 class Column(ColumnBase):
     """A locality returned by the database."""
 
-    namespace: str
+    namespace: NamespacedGerryPath
     aliases: list[GerryPath]
     meta: ObjectMeta
 
@@ -158,7 +164,7 @@ class Column(ColumnBase):
 class ColumnValue(BaseModel):
     """Value of a column for a geography."""
 
-    path: str  # of geography
+    path: GerryPath  # of geography
     value: Any
 
 
@@ -166,7 +172,7 @@ class GeoLayerBase(BaseModel):
     """Base model for geographic layer metadata."""
 
     path: GerryPath
-    description: str | None
+    description: Description
     source_url: AnyUrl | None
 
 
@@ -178,7 +184,7 @@ class GeoLayer(GeoLayerBase):
     """Geographic layer metadata returned by the database."""
 
     meta: ObjectMeta
-    namespace: str
+    namespace: NameStr
 
     class Config:
         orm_mode = True
@@ -197,10 +203,10 @@ class GeoLayer(GeoLayerBase):
 class GeoImport(BaseModel):
     """Geographic unit import metadata returned by the database."""
 
-    uuid: str
-    namespace: str
+    uuid: UUID
+    namespace: NameStr
     created_at: datetime
-    created_by: str
+    created_by: UserEmail
     meta: ObjectMeta
 
     class Config:
@@ -249,7 +255,7 @@ class Geography(GeographyBase):
     """Geographic unit data returned by the database."""
 
     meta: ObjectMeta
-    namespace: str
+    namespace: NameStr
     valid_from: datetime
 
     class Config:
@@ -272,8 +278,8 @@ class Geography(GeographyBase):
 class GeographyMeta(BaseModel):
     """Geographic unit metadata returned by the database."""
 
-    namespace: str
-    path: str
+    namespace: NameStr
+    path: GerryPath
     meta: ObjectMeta
 
     class Config:
@@ -287,14 +293,14 @@ class GeographyMeta(BaseModel):
 class GeoSetCreate(BaseModel):
     """Paths to geographies in a `GeoSet`."""
 
-    paths: list[str]
+    paths: list[NamespacedGerryPath]
 
 
 class ColumnSetBase(BaseModel):
     """Base model for a logical column grouping."""
 
     path: GerryPath
-    description: str
+    description: Description
 
 
 class ColumnSetCreate(ColumnSetBase):
@@ -310,9 +316,9 @@ class ColumnSet(ColumnSetBase):
     """Logical column grouping returned by the database."""
 
     meta: ObjectMeta
-    namespace: str
+    namespace: NameStr
     columns: list[Column]
-    refs: list[str]
+    refs: list[NameStr]
 
     class Config:
         orm_mode = True
@@ -334,25 +340,25 @@ class ViewTemplateBase(BaseModel):
     """Base model for a view template."""
 
     path: GerryPath
-    description: str
+    description: Description
 
 
 class ViewTemplateCreate(ViewTemplateBase):
     """View template data received on creation."""
 
-    members: list[str]
+    members: list[NamespacedGerryPath]
 
 
 class ViewTemplatePatch(ViewTemplateBase):
     """View template data received on update."""
 
-    members: list[str]
+    members: list[NamespacedGerryPath]
 
 
 class ViewTemplate(ViewTemplateBase):
     """View template returned by the database."""
 
-    namespace: str
+    namespace: NameStr
     members: list
     valid_from: datetime
     meta: ObjectMeta
@@ -383,8 +389,8 @@ class GraphBase(BaseModel):
     """Base model for a dual graph."""
 
     path: GerryPath
-    description: str
-    proj: str | None = None
+    description: Description
+    proj: ShortStr = None
 
 
 WeightedEdge = tuple[NamespacedGerryPath, NamespacedGerryPath, dict | None]
@@ -399,9 +405,9 @@ class GraphCreate(GraphBase):
 
 
 class GraphMeta(GraphBase):
-    """Dual graph metadata."""
+    """Dual graph metadata returned by the database."""
 
-    namespace: str
+    namespace: NamespacedGerryPath
     locality: Locality
     layer: GeoLayer
     meta: ObjectMeta
@@ -446,10 +452,10 @@ class PlanBase(BaseModel):
     """Base model for a districting plan."""
 
     path: GerryPath
-    description: str
+    description: Description
     source_url: AnyUrl | None = None
-    districtr_id: str | None = None
-    daves_id: str | None = None
+    districtr_id: ShortStr = None
+    daves_id: ShortStr = None
 
 
 class PlanCreate(PlanBase):
@@ -535,11 +541,11 @@ class ViewCreate(ViewBase):
     graph: NamespacedGerryPath | None = None
 
     valid_at: datetime | None = None
-    proj: str | None = None
+    proj: ShortStr = None
 
 
 class ViewMeta(ViewBase):
-    """View metadata."""
+    """View metadata returned by the database."""
 
     namespace: str
     template: ViewTemplate

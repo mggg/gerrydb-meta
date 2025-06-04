@@ -12,6 +12,7 @@ class CRObjectMeta(CRBase[models.ObjectMeta, schemas.ObjectMetaCreate]):
     def create(
         self, db: Session, *, obj_in: schemas.ObjectMetaCreate, user: models.User
     ) -> models.ObjectMeta:
+        """Creates a new object metadata entry."""
         obj_meta = models.ObjectMeta(
             notes=obj_in.notes,
             created_by=user.user_id,

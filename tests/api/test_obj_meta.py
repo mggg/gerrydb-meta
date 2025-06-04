@@ -3,6 +3,8 @@
 from http import HTTPStatus
 
 from sqlalchemy.orm import Session
+import pytest
+from pydantic import ValidationError
 
 from gerrydb_meta import crud, models, schemas
 from gerrydb_meta.enums import ScopeType
@@ -26,6 +28,12 @@ def create_new_user_meta(db: Session) -> models.ObjectMeta:
     return crud.obj_meta.create(
         db=db, obj_in=schemas.ObjectMetaCreate(notes="secret!"), user=user
     )
+
+
+def test_notes_too_long() -> models.ObjectMeta:
+    """Creates metadata associated with a new user."""
+    with pytest.raises(ValidationError):
+        schemas.ObjectMetaCreate(notes="a" * 10000)
 
 
 def test_api_object_meta_create_read(ctx_no_scopes):
