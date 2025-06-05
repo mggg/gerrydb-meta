@@ -95,7 +95,7 @@ def test_view_create(db_with_meta):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -183,7 +183,7 @@ def test_view_create(db_with_meta):
             path="mayor_power",
             description="how many people the mayor controls",
             template="mayor_power_template",
-            locality="atlantis/Atlantis",
+            locality="atlantis_loc",
             layer="atlantis_blocks",
             graph="atlantis_dual",
         ),
@@ -273,7 +273,7 @@ def test_view_get(db_with_meta):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -361,7 +361,7 @@ def test_view_get(db_with_meta):
             path="mayor_power",
             description="how many people the mayor controls",
             template="mayor_power_template",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             graph="atlantis_dual",
         ),
@@ -445,7 +445,7 @@ def test_view_render(db_with_meta):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -533,7 +533,7 @@ def test_view_render(db_with_meta):
             path="mayor_power",
             description="how many people the mayor controls",
             template="mayor_power_template",
-            locality="atlantis/Atlantis",
+            locality="atlantis_loc",
             layer="atlantis_blocks",
             graph="atlantis_dual",
         ),
@@ -648,7 +648,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -736,7 +736,7 @@ def test_view_make_and_get_cached_render(db_with_meta_and_user):
             path="mayor_power",
             description="how many people the mayor controls",
             template="mayor_power_template",
-            locality="atlantis/Atlantis",
+            locality="atlantis_loc",
             layer="atlantis_blocks",
             graph="atlantis_dual",
         ),
@@ -940,7 +940,7 @@ def test_view_errors(db_with_meta, caplog):
                 path="mayor_power",
                 description="how many people the mayor controls",
                 template="mayor_power_template",
-                locality="atlantis/Atlantis",
+                locality="atlantis_loc",
                 layer="atlantis_blocks",
                 graph="atlantis_dual",
             ),
@@ -965,7 +965,7 @@ def test_view_errors(db_with_meta, caplog):
                     path="mayor_power",
                     description="how many people the mayor controls",
                     template="mayor_power_template",
-                    locality="atlantis/Atlantis",
+                    locality="atlantis_loc",
                     layer="atlantis_blocks",
                     graph="atlantis_dual",
                 ),
@@ -983,7 +983,7 @@ def test_view_errors(db_with_meta, caplog):
                 path="mayor_power",
                 description="how many people the mayor controls",
                 template="mayor_power_template",
-                locality="atlantis/Atlantis",
+                locality="atlantis_loc",
                 layer="atlantis_blocks",
                 graph="atlantis_dual",
                 valid_at=datetime(3000, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
@@ -1013,7 +1013,7 @@ def test_view_errors(db_with_meta, caplog):
                 path="mayor_power",
                 description="how many people the mayor controls",
                 template="mayor_power_template",
-                locality="atlantis/Atlantis",
+                locality="atlantis_loc",
                 layer="atlantis_blocks",
                 graph="atlantis_dual",
             ),
@@ -1069,7 +1069,7 @@ def test_view_errors(db_with_meta, caplog):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -1094,7 +1094,7 @@ def test_view_errors(db_with_meta, caplog):
                 path="mayor_power",
                 description="how many people the mayor controls",
                 template="mayor_power_template",
-                locality="atlantis/Atlantis",
+                locality="atlantis_loc",
                 layer="atlantis_blocks",
                 graph="atlantis_dual",
             ),
@@ -1111,7 +1111,7 @@ def test_view_errors(db_with_meta, caplog):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual2",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -1137,7 +1137,7 @@ def test_view_errors(db_with_meta, caplog):
                 path="mayor_power",
                 description="how many people the mayor controls",
                 template="mayor_power_template",
-                locality="atlantis/Atlantis",
+                locality="atlantis_loc",
                 layer="atlantis_blocks",
                 graph="atlantis_dual2",
             ),
@@ -1162,7 +1162,7 @@ def test_view_errors(db_with_meta, caplog):
                 path="mayor_power",
                 description="how many people the mayor controls",
                 template="mayor_power_template",
-                locality="atlantis/Atlantis",
+                locality="atlantis_loc",
                 layer="atlantis_blocks",
                 graph="atlantis_dual2",
             ),
@@ -1343,7 +1343,7 @@ def test_view_create_cols_multiple_namespaces(db_with_meta, caplog):
             path="mayor_power",
             description="how many people the mayor controls",
             template="mayor_power_template",
-            locality="atlantis/Atlantis",
+            locality="atlantis_loc",
             layer="atlantis_blocks",
             graph="atlantis_dual",
         ),

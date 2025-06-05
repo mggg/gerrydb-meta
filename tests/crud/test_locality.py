@@ -59,14 +59,14 @@ def test_crud_locality_get_by_ref(db_with_meta):
                 canonical_path="atlantis",
                 parent_path=None,
                 name=name,
-                aliases=["greece/atlantis"],
+                aliases=["greece-atlantis"],
             ),
         ],
         obj_meta=meta,
     )
     assert crud.locality.get_by_ref(db=db, path="atlantis").loc_id == loc[0].loc_id
     assert (
-        crud.locality.get_by_ref(db=db, path="greece/atlantis").loc_id == loc[0].loc_id
+        crud.locality.get_by_ref(db=db, path="greece-atlantis").loc_id == loc[0].loc_id
     )
 
 
@@ -89,22 +89,22 @@ def test_crud_locality_patch(db_with_meta):
         db=db,
         obj=loc[0],
         obj_meta=meta,
-        patch=schemas.LocalityPatch(aliases=["greece/atlantis"]),
+        patch=schemas.LocalityPatch(aliases=["greece-atlantis"]),
     )
     assert set(ref.path for ref in loc_with_aliases.refs) == {
         "atlantis",
-        "greece/atlantis",
+        "greece-atlantis",
     }
 
     _ = crud.locality.patch(
         db=db,
         obj=loc[0],
         obj_meta=meta,
-        patch=schemas.LocalityPatch(aliases=["greece/atlantis"]),
+        patch=schemas.LocalityPatch(aliases=["greece-atlantis"]),
     )
     assert set(ref.path for ref in loc_with_aliases.refs) == {
         "atlantis",
-        "greece/atlantis",
+        "greece-atlantis",
     }
 
     with pytest.raises(
@@ -116,7 +116,7 @@ def test_crud_locality_patch(db_with_meta):
     ):
         crud.locality._add_aliases(
             db=db,
-            alias_paths=["greece/atlantis"],
+            alias_paths=["greece-atlantis"],
             loc=loc[0],
             obj_meta=meta,
         )

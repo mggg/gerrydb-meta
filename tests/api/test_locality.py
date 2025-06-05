@@ -46,7 +46,7 @@ def test_api_locality_create_read__no_parent_no_aliases(ctx_locality_read_write)
     create_response = ctx.client.post(
         f"{LOCALITIES_ROOT}/", json=[{"name": name, "canonical_path": path}]
     )
-    assert create_response.status_code == HTTPStatus.CREATED
+    assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
     create_body = schemas.Locality(**create_response.json()[0])
     assert create_body.name == name
     assert create_body.canonical_path == path
@@ -65,7 +65,7 @@ def test_api_locality_create_read__parent_and_aliases(ctx_locality_read_write):
     name = "Lost City of Atlantis"
     path = "greece/atlantis"
     parent_path = "greece"
-    aliases = ["atlantis", "g/atlantis"]
+    aliases = ["atlantis", "g-atlantis"]
 
     # Create parent locality.
     create_parent_response = ctx.client.post(
@@ -85,7 +85,9 @@ def test_api_locality_create_read__parent_and_aliases(ctx_locality_read_write):
             }
         ],
     )
-    assert create_child_response.status_code == HTTPStatus.CREATED
+    assert (
+        create_child_response.status_code == HTTPStatus.CREATED
+    ), create_child_response.json()
     create_child_body = schemas.Locality(**create_child_response.json()[0])
     assert create_child_body.name == name
     assert create_child_body.canonical_path == path
@@ -180,7 +182,7 @@ def test_api_locality_create__twice(ctx_locality_read_write):
 def test_api_locality_patch__add_aliases(ctx_locality_read_write):
     ctx = ctx_locality_read_write
     path = "greece/atlantis"
-    aliases = ["atlantis", "g/atlantis"]
+    aliases = ["atlantis", "g-atlantis"]
 
     create_response = ctx.client.post(
         f"{LOCALITIES_ROOT}/",

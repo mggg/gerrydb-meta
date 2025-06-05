@@ -591,14 +591,14 @@ def test_crud_column_patch(db_with_meta):
         db=db,
         obj=col,
         obj_meta=meta,
-        patch=schemas.ColumnPatch(aliases=["foo/bar"]),
+        patch=schemas.ColumnPatch(aliases=["foo-bar"]),
     )
 
     refs_lst = []
     for col_ref in data_col.refs:
         refs_lst.append(col_ref.path)
 
-    assert "foo/bar" in refs_lst
+    assert "foo-bar" in refs_lst
     assert "geo_identifier" in refs_lst
 
 

@@ -24,13 +24,9 @@ PatchSchemaType = TypeVar("PatchSchemaType", bound=BaseModel)
 # These characters are most likely to appear in the resource_id part of
 # a path (typically the last segment). Exclusion of these characters
 # prevents ogr2ogr fails and helps protect against malicious code injection.
-INVALID_PATH_SUBSTRINGS = set(
-    {
-        "..",
-        " ",
-        ";",
-    }
-)
+# Most of these are caught by Pydantic validation, but these have slipped
+# through the cracks in the past, so we keep this check here just in case.
+INVALID_PATH_SUBSTRINGS = set({"..", " ", ";", "\\", "./"})
 
 
 def normalize_path(

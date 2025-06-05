@@ -79,20 +79,20 @@ def test_api_column_set_create__column_aliases(ctx_public_namespace_read_write):
     ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
-    create_column(ctx, "test1", aliases=["t1", "x"])
-    create_column(ctx, "test2", aliases=["t2", "y"])
+    create_column(ctx, "test1", aliases=["t1", "xx"])
+    create_column(ctx, "test2", aliases=["t2", "yy"])
 
     create_response = ctx.client.post(
         f"{COLUMN_SETS_ROOT}/{namespace}",
         json={
             "path": "cols",
             "description": "A basic column set.",
-            "columns": ["y", "x"],
+            "columns": ["yy", "xx"],
         },
     )
     assert create_response.status_code == HTTPStatus.CREATED, create_response.json()
     create_body = schemas.ColumnSet(**create_response.json())
-    assert create_body.refs == ["y", "x"]
+    assert create_body.refs == ["yy", "xx"]
 
 
 def test_api_column_set_create__duplicate_column(ctx_public_namespace_read_write):
@@ -120,14 +120,14 @@ def test_api_column_set_create__aliased_duplicate_column(
     ctx = ctx_public_namespace_read_write
     namespace = ctx.namespace.path
 
-    create_column(ctx, "test", aliases=["t"])
+    create_column(ctx, "test", aliases=["tt"])
 
     create_response = ctx.client.post(
         f"{COLUMN_SETS_ROOT}/{namespace}",
         json={
             "path": "cols",
             "description": "A column set with a duplicate column.",
-            "columns": ["t", "test"],
+            "columns": ["tt", "test"],
         },
     )
     assert (

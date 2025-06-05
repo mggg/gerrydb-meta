@@ -170,11 +170,52 @@ def test_api_view_template_create__malformed_resource_path(
         json={
             "path": "bad_cols",
             "description": "A view template with a malformed resource path.",
-            "members": ["columns/"],
+            "members": ["columns/aa"],
         },
     )
     assert create_response.status_code == HTTPStatus.BAD_REQUEST, create_response.json()
     assert "Bad resource path" in create_response.json()["detail"]
+
+
+def test_api_view_template_create__invalid_resource_path(
+    ctx_public_namespace_read_write,
+):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+
+    create_response = ctx.client.post(
+        f"{VIEW_TEMPLATES_ROOT}/{namespace}",
+        json={
+            "path": "bad_cols",
+            "description": "A view template with a malformed resource path.",
+            "members": ["columns/&&"],
+        },
+    )
+    assert create_response.status_code == HTTPStatus.BAD_REQUEST, create_response.json()
+    assert (
+        "Found unexpected expression in field 'members' at position '0' of the request."
+    ) in create_response.json()["detail"]
+
+
+def test_api_view_template_create__invalid_path(
+    ctx_public_namespace_read_write,
+):
+    ctx = ctx_public_namespace_read_write
+    namespace = ctx.namespace.path
+
+    create_response = ctx.client.post(
+        f"{VIEW_TEMPLATES_ROOT}/{namespace}",
+        json={
+            "path": "bad_cols;and&&shiz",
+            "description": "A view template with a malformed resource path.",
+            "members": ["columns"],
+        },
+    )
+    assert create_response.status_code == HTTPStatus.BAD_REQUEST, create_response.json()
+    assert (
+        "Found unexpected expression in field 'path'"
+        in create_response.json()["detail"]
+    )
 
 
 def test_api_view_template_create__duplicate_column(ctx_public_namespace_read_write):

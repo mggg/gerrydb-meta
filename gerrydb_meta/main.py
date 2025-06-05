@@ -15,7 +15,7 @@ from gerrydb_meta.exceptions import (
     CreateValueError,
 )
 
-from uvicorn.config import logger
+from uvicorn.config import logger as log
 
 from io import BytesIO
 import json
@@ -81,71 +81,96 @@ def bulk_create_error(request: Request, exc: BulkCreateError):
 # compression ratios on anything since the WKBs used to represent the geometries in the GeoPackage
 # look relatively random. The remaining columns in the SQLite database are not very large, and
 # compress pretty well with a small compression level. Setting the compression level above 1
-# gets incredibly marginal improvements, but massively increases the compute time for the
-# compression. Anything else come in the form of a Schema, and those are generally too small
-# for a high compression level to do much.
+# nets marginal improvements, but massively increases the compute time for the compression.
 app.add_middleware(GZipMiddleware, compresslevel=1)
 app.include_router(api_router, prefix=API_PREFIX)
 
 
 @app.middleware("http")
-async def log_400_errors(request: Request, call_next):  # pragma: no cover
+async def log_400_errors(request: Request, call_next):
     response = await call_next(request)
 
-    # Check for the specific status code
-    if response.status_code in [400, 403, 409, 422]:
+    body_bytes = b""
 
-        # If the response is a StreamingResponse, you need to iterate over the body
-        # and consume it to log the content
-        if isinstance(response, StreamingResponse):
-            body_content = b""
-            # Reconstruct the response body from the stream
-            async for chunk in response.body_iterator:
-                body_content += chunk
+    # Have to check the attribute because there is also a _StreamingResponse
+    # class in starlette.middleware.base that is the thing that we actually see sometimes
+    # and it is not the same as the starlette.responses.StreamingResponse class
+    if hasattr(response, "body_iterator"):
+        # If it’s a StreamingResponse, we need to consume .body_iterator
+        # to capture all the bytes, then recreate a new StreamingResponse so downstream still
+        # sees the original body.
+        async for chunk in response.body_iterator:
+            body_bytes += chunk
 
-            # Need this in case the original body is encoded
-            original_body = body_content
+        # Keep a copy of the original compressed bytes
+        original_body = body_bytes
 
-            # Handle potential gzip encoding
-            if response.headers.get("Content-Encoding") == "gzip":
-                body_content = gzip.decompress(body_content)
-
+        # If Content-Encoding: gzip, decompress before inspecting
+        if response.headers.get("Content-Encoding") == "gzip":  # pragma: no cover
             try:
-                json_body = json.loads(body_content.decode())
-                logger.error(
-                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {json_body.get('detail', 'No detail available')}"
-                )
+                body_bytes = gzip.decompress(body_bytes)
             except Exception:
-                # Log the error with the reconstructed body content
-                logger.error(
-                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {body_content.decode('utf-8', errors='replace')}"
-                )
+                pass
 
-            # Create a new StreamingResponse with the consumed content
-            response = StreamingResponse(
-                BytesIO(original_body),
-                status_code=response.status_code,
-                headers=dict(response.headers),
-            )
+        # Rebuild the StreamingResponse so the client still gets the same body:
+        response = StreamingResponse(
+            BytesIO(original_body),
+            status_code=response.status_code,
+            headers=dict(response.headers),
+        )
+    else:  # pragma: no cover
+        if hasattr(response, "body"):
+            body_bytes = response.body
+            if response.headers.get("Content-Encoding") == "gzip":
+                try:
+                    body_bytes = gzip.decompress(body_bytes)
+                except Exception:
+                    pass
         else:
-            # For non-streaming responses, you can directly access the body
-            body_content = b""
-            if hasattr(response, "body"):
-                body_content = response.body
+            body_bytes = b""
 
-            # Handle potential gzip encoding
-            if response.headers.get("Content-Encoding") == "gzip":
-                body_content = gzip.decompress(body_content)
+    text = body_bytes.decode("utf-8", errors="replace")
+    json_body = None
+    if response.status_code in (400, 403, 409, 422):
+        try:
+            json_body = json.loads(text)
+            detail_msg = json_body.get("detail", "No detail available")
+        except Exception:  # pragma: no cover
+            detail_msg = text
 
-            try:
-                json_body = json.loads(body_content.decode())
-                logger.error(
-                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {json_body.get('detail', 'No detail available')}"
-                )
-            except Exception:
-                logger.error(
-                    f"{response.status_code} for Request: {request.method}. At: {request.url}, Detail: {body_content.decode('utf-8', errors='replace')}"
-                )
+        log.error(
+            f"{response.status_code} for Request: {request.method} {request.url}. "
+            f"Detail: {detail_msg}"
+        )
+
+    # If it was a 422 (Unprocessable Entity) and the decoded body contains "regex",
+    # print out a more user-friendly error message to tell the user what went wrong.
+    if response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY and "regex" in text:
+        # This is the detail dictionary format that is normally returned by a regex
+        text_dict = {
+            "loc": ["unknown", "unknown"],
+            "msg": "Unknown error",
+            "type": "unknown",
+        }
+        if json_body is not None:
+            text_dict = json_body.get("detail", [text_dict])[0]
+
+        position_str = ""
+        if len(text_dict["loc"]) > 2:
+            position_str = f"at position '{text_dict['loc'][2]}' "
+        location_str = f"Found unexpected expression in field '{text_dict['loc'][1]}' {position_str}of the request. "
+        if "regex" in text:
+            response = JSONResponse(
+                status_code=HTTPStatus.BAD_REQUEST,
+                content={
+                    "detail": (
+                        location_str
+                        + "Please refer to the documentation for more information on the expected "
+                        "string formats for each field you are trying to set."
+                    ),
+                },
+                headers=response.headers,
+            )
 
     return response
 

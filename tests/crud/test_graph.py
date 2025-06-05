@@ -91,7 +91,7 @@ def test_crud_graph_create(db_with_meta):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/Atlantis",
+            locality="atlantis",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -198,7 +198,7 @@ def test_crud_graph_create_bad_geos_error(db_with_meta):
             obj_in=schemas.GraphCreate(
                 path="atlantis_dual",
                 description="The legendary city of Atlantis",
-                locality="atlantis/Atlantis",
+                locality="atlantis",
                 layer="atlantis_blocks",
                 edges=[
                     (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -288,7 +288,7 @@ def test_crud_graph_create_missing_geos(db_with_meta):
             obj_in=schemas.GraphCreate(
                 path="atlantis_dual",
                 description="The legendary city of Atlantis",
-                locality="atlantis/Atlantis",
+                locality="atlantis",
                 layer="atlantis_blocks",
                 edges=[
                     (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -315,7 +315,7 @@ def test_crud_graph_create_missing_geos(db_with_meta):
             obj_in=schemas.GraphCreate(
                 path="atlantis_dual",
                 description="The legendary city of Atlantis",
-                locality="atlantis/Atlantis",
+                locality="atlantis",
                 layer="atlantis_blocks",
                 edges=[
                     (b, a, {k: v for k, v in attr.items() if k != "id"})  # changed here
@@ -398,7 +398,7 @@ def test_crud_graph_get(db_with_meta):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/Atlantis",
+            locality="atlantis",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})

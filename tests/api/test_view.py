@@ -105,7 +105,7 @@ def test_view_make_and_get_cached_render(ctx_superuser):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -329,7 +329,7 @@ def test_api_view_create_get_errors(ctx_superuser, caplog):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
@@ -704,7 +704,7 @@ def test_api_view_create_multiple_get_all(ctx_superuser):
         obj_in=schemas.GraphCreate(
             path="atlantis_dual",
             description="The legendary city of Atlantis",
-            locality="atlantis/atlantis_locality",
+            locality="atlantis_locality",
             layer="atlantis_blocks",
             edges=[
                 (a, b, {k: v for k, v in attr.items() if k != "id"})
