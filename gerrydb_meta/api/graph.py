@@ -105,7 +105,7 @@ def create_graph(
     )
     log.debug("Time to create graph: %s", time.perf_counter() - start)
     add_etag(response, etag)
-    return schemas.Graph.from_orm(graph)
+    return schemas.Graph.from_attributes(graph)
 
 
 @router.get(
@@ -134,7 +134,7 @@ def all_graphs(
     graph_objs = crud.graph.all(db=db, namespace=graph_namespace_obj)
     etag = crud.graph.etag(db, graph_namespace_obj)
     add_etag(response, etag)
-    return [schemas.GraphMeta.from_orm(graph_obj) for graph_obj in graph_objs]
+    return [schemas.GraphMeta.from_attributes(graph_obj) for graph_obj in graph_objs]
 
 
 @router.get(
@@ -178,7 +178,7 @@ def get_graph(
 
     etag = crud.graph.etag(db, namespace_obj)
     add_etag(response, etag)
-    return schemas.GraphMeta.from_orm(graph_obj)
+    return schemas.GraphMeta.from_attributes(graph_obj)
 
 
 @router.post(

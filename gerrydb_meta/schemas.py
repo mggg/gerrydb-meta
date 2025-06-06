@@ -2,43 +2,88 @@
 
 from datetime import datetime
 from typing import Any
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Mapping
 from uuid import UUID
-from pydantic import AnyUrl, BaseModel, constr, validator, Field
+from pydantic import (
+    AnyUrl,
+    BaseModel,
+    field_validator,
+    Field,
+    ConfigDict,
+    AliasPath,
+)
 
 from gerrydb_meta import enums, models
 
-UserEmail = constr(max_length=254)
+UserEmail = Annotated[
+    str,
+    Field(
+        max_length=255, min_length=3, pattern=r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+    ),
+]
 # / allowed at start. 1-2 segments. Used for objects that are not namespaced like
 # localities.
-GerryPath = constr(
-    regex=r"^/?[a-z0-9][a-z0-9-_.]+(?:/[a-z0-9][a-z0-9-_.]+){0,1}$",
-    max_length=255,
-)
+GerryPath = Annotated[
+    str,
+    Field(
+        pattern=r"^/?[a-z0-9][a-z0-9-_.]+(?:/[a-z0-9][a-z0-9-_.]+){0,1}$",
+        max_length=255,
+        min_length=2,
+    ),
+]
 # / allowed at start. 1-3 segments. Leading character from each segment must be a-z0-9. No
 # uppercase characters allowed. Used for namespaced objects like columns, column sets, etc.
-NamespacedGerryPath = constr(
-    regex=r"^/?[a-z0-9][a-z0-9-_.]+(?:/[a-z0-9][a-z0-9-_.]+){0,2}$",
-    max_length=255,
-)
+NamespacedGerryPath = Annotated[
+    str,
+    Field(
+        pattern=r"^/?[a-z0-9][a-z0-9-_.]+(?:/[a-z0-9][a-z0-9-_.]+){0,2}$",
+        max_length=255,
+        min_length=2,
+    ),
+]
 # / allowed at start. 1-3 segments. Leading character from each segment must be a-z0-9 and A-Z
 # allowed in last segment for weird GEOIDs.
-NamespacedGerryGeoPath = constr(
-    regex=r"^/?[a-z0-9][a-z0-9-_.]+(?:/[a-z0-9][a-z0-9-_.]+){0,1}(?:/[a-zA-Z0-9][a-zA-Z0-9-_.]+){0,1}$",
-    max_length=255,
-)
+NamespacedGerryGeoPath = Annotated[
+    str,
+    Field(
+        pattern=r"^/?[a-z0-9][a-z0-9-_.]+(?:/[a-z0-9][a-z0-9-_.]+){0,1}"
+        r"(?:/[a-zA-Z0-9][a-zA-Z0-9-_.]+){0,1}$",
+        max_length=255,
+        min_length=2,
+    ),
+]
 # No capital letters allowed
-NameStr = constr(regex=r"^[a-z0-9][a-z0-9-_.]+$", max_length=100)
+NameStr = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z0-9][a-z0-9-_.]+$",
+        max_length=100,
+        min_length=2,
+    ),
+]
 # Capital letters allowed because some vtds suck
-GeoNameStr = constr(regex=r"^[a-z0-9][a-zA-Z0-9-_.]+$", max_length=100)
-Description = Optional[constr(max_length=5000)]
-ShortStr = Optional[constr(max_length=100)]
+GeoNameStr = Annotated[
+    str,
+    Field(pattern=r"^[a-z0-9][a-zA-Z0-9-_.]+$", max_length=100, min_length=2),
+]
+Description = Optional[
+    Annotated[
+        str,
+        Field(max_length=5000, min_length=1),
+    ]
+]
+ShortStr = Optional[
+    Annotated[
+        str,
+        Field(max_length=100, min_length=1),
+    ]
+]
 
 
 class ObjectMetaBase(BaseModel):
     """Base model for object metadata."""
 
-    notes: Description
+    notes: Description = None
 
 
 class ObjectMetaCreate(ObjectMetaBase):
@@ -52,11 +97,10 @@ class ObjectMeta(ObjectMetaBase):
     created_at: datetime
     created_by: UserEmail
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.ObjectMeta):
+    def from_attributes(cls, obj: models.ObjectMeta):
         return cls(
             uuid=str(obj.uuid),
             notes=obj.notes,
@@ -69,21 +113,21 @@ class LocalityBase(BaseModel):
     """Base model for locality metadata."""
 
     canonical_path: GerryPath
-    parent_path: Optional[GerryPath]
-    default_proj: ShortStr
-    name: ShortStr
+    parent_path: Optional[GerryPath] = None
+    default_proj: ShortStr = None
+    name: ShortStr = None
 
 
 class LocalityCreate(LocalityBase):
     """Locality metadata received on creation."""
 
-    aliases: Optional[list[NameStr]]
+    aliases: Optional[list[NameStr]] = None
 
 
 class LocalityPatch(BaseModel):
     """Locality metadata received on PATCH."""
 
-    aliases: list[NameStr]
+    aliases: list[NameStr] = None
 
 
 class Locality(LocalityBase):
@@ -92,17 +136,16 @@ class Locality(LocalityBase):
     aliases: list[NameStr]
     meta: ObjectMeta
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.Locality):
+    def from_attributes(cls, obj: models.Locality):
         canonical_path = obj.canonical_ref.path
         return cls(
             canonical_path=canonical_path,
             parent_path=obj.parent.canonical_ref.path if obj.parent else None,
             name=obj.name,
-            meta=obj.meta,
+            meta=ObjectMeta.from_attributes(obj.meta),
             aliases=[ref.path for ref in obj.refs if ref.path != canonical_path],
             default_proj=obj.default_proj,
         )
@@ -112,7 +155,7 @@ class NamespaceBase(BaseModel):
     """Base model for namespace metadata."""
 
     path: NameStr
-    description: Description
+    description: Description = None
     public: bool
 
 
@@ -125,16 +168,24 @@ class Namespace(NamespaceBase):
 
     meta: ObjectMeta
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_attributes(cls, obj: models.Namespace):
+        return cls(
+            path=obj.path,
+            description=obj.description,
+            public=obj.public,
+            meta=ObjectMeta.from_attributes(obj.meta),
+        )
 
 
 class ColumnBase(BaseModel):
     """Base model for locality metadata."""
 
     canonical_path: NamespacedGerryPath
-    description: Description
-    source_url: Optional[AnyUrl]
+    description: Description = None
+    source_url: Optional[AnyUrl] = None
     kind: enums.ColumnKind
     type: enums.ColumnType
 
@@ -142,7 +193,7 @@ class ColumnBase(BaseModel):
 class ColumnCreate(ColumnBase):
     """Column metadata received on creation."""
 
-    aliases: Optional[list[NameStr]]
+    aliases: Optional[list[NameStr]] = None
 
 
 class ColumnPatch(BaseModel):
@@ -154,26 +205,30 @@ class ColumnPatch(BaseModel):
 class Column(ColumnBase):
     """A locality returned by the database."""
 
-    namespace: NameStr
-    aliases: list[NameStr]
+    canonical_path: NamespacedGerryPath = Field(
+        alias=AliasPath("canonical_ref", "path")
+    )
+    namespace: NameStr = Field(alias=AliasPath("namespace", "path"))
+    aliases: list[NameStr] = Field(alias=AliasPath("canonical_ref", "aliases"))
     meta: ObjectMeta
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     @classmethod
-    def from_orm(cls, obj: models.DataColumn | models.ColumnRef):
+    def from_attributes(cls, obj: models.DataColumn | models.ColumnRef):
         root_obj = obj.column if isinstance(obj, models.ColumnRef) else obj
         canonical_path = root_obj.canonical_ref.path
         return cls(
             canonical_path=canonical_path,
             namespace=root_obj.namespace.path,
             description=root_obj.description,
-            meta=root_obj.meta,
+            meta=ObjectMeta.from_attributes(root_obj.meta),
             aliases=[ref.path for ref in root_obj.refs if ref.path != canonical_path],
             kind=root_obj.kind,
             type=root_obj.type,
-            source_url=root_obj.source_url,
+            source_url=(
+                str(root_obj.source_url) if root_obj.source_url is not None else None
+            ),
         )
 
 
@@ -188,8 +243,8 @@ class GeoLayerBase(BaseModel):
     """Base model for geographic layer metadata."""
 
     path: NamespacedGerryPath
-    description: Description
-    source_url: Optional[AnyUrl]
+    description: Description = None
+    source_url: Optional[AnyUrl] = None
 
 
 class GeoLayerCreate(GeoLayerBase):
@@ -202,17 +257,16 @@ class GeoLayer(GeoLayerBase):
     meta: ObjectMeta
     namespace: NameStr
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.GeoLayer):
+    def from_attributes(cls, obj: models.GeoLayer):
         return cls(
             path=obj.path,
             namespace=obj.namespace.path,
             description=obj.description,
-            source_url=obj.source_url,
-            meta=obj.meta,
+            source_url=str(obj.source_url) if obj.source_url is not None else None,
+            meta=ObjectMeta.from_attributes(obj.meta),
         )
 
 
@@ -225,17 +279,16 @@ class GeoImport(BaseModel):
     created_by: UserEmail
     meta: ObjectMeta
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.GeoImport):
+    def from_attributes(cls, obj: models.GeoImport):
         return cls(
             uuid=str(obj.uuid),
             namespace=obj.namespace.path,
             created_at=obj.created_at,
             created_by=obj.user.email,
-            meta=obj.meta,
+            meta=ObjectMeta.from_attributes(obj.meta),
         )
 
 
@@ -243,14 +296,16 @@ class GeographyBase(BaseModel):
     """Base model for a geographic unit."""
 
     path: GeoNameStr
-    geography: Optional[bytes]
-    internal_point: Optional[bytes]
+    geography: Optional[bytes] = None
+    internal_point: Optional[bytes] = None
 
-    @validator("geography", "internal_point", pre=True, each_item=False)
-    def check_bytes_type(cls, v, field):
+    @field_validator("geography", "internal_point", mode="before")
+    @classmethod
+    def check_bytes_type(cls, v, info):
         if v is not None and not isinstance(v, bytes):
+            field_name = info.field_name
             raise ValueError(
-                f"The {field.name} must be of type bytes, got type {type(v).__name__}"
+                f"The {field_name} must be of type bytes, got type {type(v).__name__}"
             )
         return v
 
@@ -274,11 +329,10 @@ class Geography(GeographyBase):
     namespace: NameStr
     valid_from: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.GeoVersion):  # pragma: no cover
+    def from_attributes(cls, obj: models.GeoVersion):  # pragma: no cover
         return cls(
             namespace=obj.parent.namespace.path,
             geography=None if obj.geography is None else bytes(obj.geography.data),
@@ -286,7 +340,7 @@ class Geography(GeographyBase):
                 None if obj.internal_point is None else bytes(obj.internal_point.data)
             ),
             path=obj.parent.path,
-            meta=obj.parent.meta,
+            meta=ObjectMeta.from_attributes(obj.parent.meta),
             valid_from=obj.valid_from,
         )
 
@@ -298,12 +352,15 @@ class GeographyMeta(BaseModel):
     path: GeoNameStr
     meta: ObjectMeta
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.Geography):
-        return cls(namespace=obj.namespace.path, path=obj.path, meta=obj.meta)
+    def from_attributes(cls, obj: models.Geography):
+        return cls(
+            namespace=obj.namespace.path,
+            path=obj.path,
+            meta=ObjectMeta.from_attributes(obj.meta),
+        )
 
 
 class GeoSetCreate(BaseModel):
@@ -316,7 +373,7 @@ class ColumnSetBase(BaseModel):
     """Base model for a logical column grouping."""
 
     path: NameStr
-    description: Description
+    description: Description = None
 
 
 class ColumnSetCreate(ColumnSetBase):
@@ -336,19 +393,18 @@ class ColumnSet(ColumnSetBase):
     columns: list[Column]
     refs: list[NameStr]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
-    def from_orm(cls, obj: models.ColumnSet):
+    def from_attributes(cls, obj: models.ColumnSet):
         ordered_cols = sorted(obj.columns, key=lambda v: v.order)
         return cls(
             path=obj.path,
             description=obj.description,
             namespace=obj.namespace.path,
-            columns=[col.ref.column for col in ordered_cols],
+            columns=[Column.from_attributes(col.ref.column) for col in ordered_cols],
             refs=[col.ref.path for col in ordered_cols],
-            meta=obj.meta,
+            meta=ObjectMeta.from_attributes(obj.meta),
         )
 
 
@@ -356,7 +412,7 @@ class ViewTemplateBase(BaseModel):
     """Base model for a view template."""
 
     path: NameStr
-    description: Description
+    description: Description = None
 
 
 class ViewTemplateCreate(ViewTemplateBase):
@@ -375,21 +431,21 @@ class ViewTemplate(ViewTemplateBase):
     """View template returned by the database."""
 
     namespace: NameStr
-    members: list[dict]
+    members: list[Column | ColumnSet]
     valid_from: datetime
     meta: ObjectMeta
 
     @classmethod
-    def from_orm(cls, obj: models.ViewTemplateVersion):
+    def from_attributes(cls, obj: models.ViewTemplateVersion):
         members = sorted(obj.columns + obj.column_sets, key=lambda obj: obj.order)
 
         new_members = []
 
         for member in members:
             if isinstance(member.member, models.ColumnRef):
-                new_members.append(Column.from_orm(member.member.column))
+                new_members.append(Column.from_attributes(member.member.column))
             else:
-                new_members.append(ColumnSet.from_orm(member.member))
+                new_members.append(ColumnSet.from_attributes(member.member))
 
         return cls(
             path=obj.parent.path,
@@ -397,7 +453,7 @@ class ViewTemplate(ViewTemplateBase):
             description=obj.parent.description,
             members=new_members,
             valid_from=obj.valid_from,
-            meta=obj.meta,
+            meta=ObjectMeta.from_attributes(obj.meta),
         )
 
 
@@ -405,7 +461,7 @@ class GraphBase(BaseModel):
     """Base model for a dual graph."""
 
     path: NameStr
-    description: Description
+    description: Description = None
     proj: ShortStr = None
 
 
@@ -429,15 +485,17 @@ class GraphMeta(GraphBase):
     meta: ObjectMeta
     created_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
     @classmethod
-    def from_orm(cls, obj: models.Graph):
+    def from_attributes(cls, obj: models.Graph):
         return cls(
             path=obj.path,
             namespace=obj.namespace.path,
             description=obj.description,
-            locality=obj.set_version.loc,
-            layer=obj.set_version.layer,
-            meta=obj.meta,
+            locality=Locality.from_attributes(obj.set_version.loc),
+            layer=GeoLayer.from_attributes(obj.set_version.layer),
+            meta=ObjectMeta.from_attributes(obj.meta),
             created_at=obj.created_at,
         )
 
@@ -447,15 +505,17 @@ class Graph(GraphMeta):
 
     edges: list[WeightedEdge]
 
+    model_config = ConfigDict(from_attributes=True)
+
     @classmethod
-    def from_orm(cls, obj: models.Graph):
+    def from_attributes(cls, obj: models.Graph):
         return cls(
             path=obj.path,
             namespace=obj.namespace.path,
             description=obj.description,
-            locality=obj.set_version.loc,
-            layer=obj.set_version.layer,
-            meta=obj.meta,
+            locality=Locality.from_attributes(obj.set_version.loc),
+            layer=GeoLayer.from_attributes(obj.set_version.layer),
+            meta=ObjectMeta.from_attributes(obj.meta),
             created_at=obj.created_at,
             edges=[
                 (edge.geo_1.full_path, edge.geo_2.full_path, edge.weights)
@@ -468,7 +528,7 @@ class PlanBase(BaseModel):
     """Base model for a districting plan."""
 
     path: NameStr
-    description: Description
+    description: Description = None
     source_url: Optional[AnyUrl] = None
     districtr_id: ShortStr = None
     daves_id: ShortStr = None
@@ -480,6 +540,17 @@ class PlanCreate(PlanBase):
     locality: GerryPath
     layer: NamespacedGerryPath
     assignments: dict[NamespacedGerryGeoPath, str]
+
+    @field_validator("assignments", mode="before")
+    @classmethod
+    def _coerce_ints_to_str(cls, v: Any) -> Any:
+        """
+        If we receive {"23001": 1, "23003": 0, …}, turn each integer into a string.
+        Otherwise, leave it as-is (Pydantic will still enforce that it ends up as str).
+        """
+        if isinstance(v, Mapping):
+            return {k: str(val) for k, val in v.items()}
+        return v
 
 
 class PlanMeta(PlanBase):
@@ -494,17 +565,17 @@ class PlanMeta(PlanBase):
     complete: bool
 
     @classmethod
-    def from_orm(cls, obj: models.Plan):  # pragma: no cover
+    def from_attributes(cls, obj: models.Plan):  # pragma: no cover
         return cls(
             path=obj.path,
             namespace=obj.namespace.path,
             description=obj.description,
-            source_url=obj.source_url,
+            source_url=str(obj.source_url) if obj.source_url is not None else None,
             districtr_id=obj.districtr_id,
             daves_id=obj.daves_id,
             locality=obj.set_version.loc,
             layer=obj.set_version.layer,
-            meta=obj.meta,
+            meta=ObjectMeta.from_attributes(obj.meta),
             created_at=obj.created_at,
             num_districts=obj.num_districts,
             complete=obj.complete,
@@ -517,7 +588,7 @@ class Plan(PlanMeta):
     assignments: dict[NamespacedGerryGeoPath, Optional[str]]
 
     @classmethod
-    def from_orm(cls, obj: models.Plan):
+    def from_attributes(cls, obj: models.Plan):
         # TODO: there's probably a performance bottleneck around the resolution
         # of geography names for assignments with a lot of geographies.
         base_geos = {member.geo.full_path: None for member in obj.set_version.members}
@@ -529,12 +600,12 @@ class Plan(PlanMeta):
             path=obj.path,
             namespace=obj.namespace.path,
             description=obj.description,
-            source_url=obj.source_url,
+            source_url=str(obj.source_url) if obj.source_url is not None else None,
             districtr_id=obj.districtr_id,
             daves_id=obj.daves_id,
-            locality=obj.set_version.loc,
-            layer=obj.set_version.layer,
-            meta=obj.meta,
+            locality=Locality.from_attributes(obj.set_version.loc),
+            layer=GeoLayer.from_attributes(obj.set_version.layer),
+            meta=ObjectMeta.from_attributes(obj.meta),
             created_at=obj.created_at,
             num_districts=obj.num_districts,
             complete=obj.complete,
@@ -569,20 +640,20 @@ class ViewMeta(ViewBase):
     layer: GeoLayer
     meta: ObjectMeta
     valid_at: datetime
-    proj: Optional[ShortStr]
+    proj: ShortStr = None
     graph: Optional[GraphMeta]
     # TODO: add plans and geography paths?
 
     @classmethod
-    def from_orm(cls, obj: models.View):
+    def from_attributes(cls, obj: models.View):
         return cls(
             path=obj.path,
             namespace=obj.namespace.path,
-            template=ViewTemplate.from_orm(obj.template_version),
-            locality=obj.loc,
-            layer=obj.layer,
-            meta=obj.meta,
+            template=ViewTemplate.from_attributes(obj.template_version),
+            locality=Locality.from_attributes(obj.loc),
+            layer=GeoLayer.from_attributes(obj.layer),
+            meta=ObjectMeta.from_attributes(obj.meta),
             valid_at=obj.at,
             proj=obj.proj,
-            graph=None if obj.graph is None else GraphMeta.from_orm(obj.graph),
+            graph=None if obj.graph is None else GraphMeta.from_attributes(obj.graph),
         )

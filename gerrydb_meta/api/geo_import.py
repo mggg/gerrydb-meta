@@ -30,7 +30,7 @@ class GeoImportApi(NamespacedObjectApi):
                 status_code=HTTPStatus.NOT_FOUND,
                 detail=f"{self.obj_name_singular} not found in namespace.",
             )
-        return obj
+        return self.get_schema.from_attributes(obj)
 
     def _get(self, router: APIRouter) -> Callable:
         @router.get(
@@ -70,7 +70,7 @@ class GeoImportApi(NamespacedObjectApi):
             import_obj, _ = self.crud.create(
                 db=db, namespace=namespace_obj, obj_meta=obj_meta
             )
-            return import_obj
+            return self.get_schema.from_attributes(import_obj)
 
         return create_route
 

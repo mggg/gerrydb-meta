@@ -460,7 +460,11 @@ def __update_geo_attrs_gpkg(
     for db_id, meta in context.geo_meta.items():
         cur = conn.execute(
             "INSERT INTO gerrydb_geo_meta (value) VALUES (?)",
-            (json.dumps(ObjectMeta.from_orm(meta).dict()).decode("utf-8"),),
+            (
+                json.dumps(ObjectMeta.from_attributes(meta).model_dump()).decode(
+                    "utf-8"
+                ),
+            ),
         )
         db_meta_id_to_gpkg_meta_id[db_id] = cur.lastrowid
 
@@ -500,11 +504,16 @@ def __update_view_metadata_gpkg(
     # Add extended (non-geographic) data.
     _init_base_gpkg_extensions(conn, geo_layer_name)
 
+    pyd_meta = ViewMeta.from_attributes(context.view)
+    meta_dict = pyd_meta.model_dump()
+
     conn.executemany(
-        f"INSERT INTO gerrydb_view_meta (key, value) VALUES (?, ?)",
+        "INSERT OR REPLACE INTO gerrydb_view_meta (key, value) VALUES (?, ?)",
         (
-            (key, json.dumps(value).decode("utf-8"))
-            for key, value in ViewMeta.from_orm(context.view).dict().items()
+            # json.dumps(val, default=str) turns nested dicts/UUIDs/datetimes into
+            # valid JSON text with DOUBLE quotes
+            (key, json.dumps(val, default=str))
+            for key, val in meta_dict.items()
         ),
     )
 
@@ -621,11 +630,16 @@ def __update_graph_metadata_gpkg(
 
     _init_base_graph_gpkg_extensions(conn, geo_layer_name)
 
+    pyd_meta = GraphMeta.from_attributes(context.graph)
+    meta_dict = pyd_meta.model_dump()
+
     conn.executemany(
-        "INSERT INTO gerrydb_graph_meta (key, value) VALUES (?, ?)",
+        "INSERT OR REPLACE INTO gerrydb_graph_meta (key, value) VALUES (?, ?)",
         (
-            (key, json.dumps(value).decode("utf-8"))
-            for key, value in GraphMeta.from_orm(context.graph).dict().items()
+            # json.dumps(val, default=str) turns nested dicts/UUIDs/datetimes into
+            # valid JSON text with DOUBLE quotes
+            (key, json.dumps(val, default=str))
+            for key, val in meta_dict.items()
         ),
     )
 

@@ -19,7 +19,7 @@ def test_api_column_create_read(ctx_public_namespace_read_write, pop_column_meta
     create_body = schemas.Column(**create_response.json())
     assert create_body.canonical_path == pop_column_meta["canonical_path"]
     assert create_body.description == pop_column_meta["description"]
-    assert create_body.source_url == pop_column_meta["source_url"]
+    assert str(create_body.source_url) == pop_column_meta["source_url"]
     assert create_body.kind == ColumnKind.COUNT
     assert create_body.type == ColumnType.INT
     assert set(create_body.aliases) == set(pop_column_meta["aliases"])

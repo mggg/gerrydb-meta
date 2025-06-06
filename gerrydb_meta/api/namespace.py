@@ -23,9 +23,9 @@ def read_namespaces(
     *,
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
-) -> list[models.Namespace]:
+) -> list[schemas.Namespace]:
     return [
-        namespace
+        schemas.Namespace.from_attributes(namespace)
         for namespace in crud.namespace.all(db=db)
         if scopes.can_read_in_namespace(namespace)
     ]
@@ -39,7 +39,7 @@ def read_namespace(
     db: Session = Depends(get_db),
     scopes: ScopeManager = Depends(get_scopes),
     if_none_match: str | None = Header(default=None),
-) -> models.Namespace:
+) -> schemas.Namespace:
     etag = crud.locality.etag(db=db)
     namespace_obj = crud.namespace.get(db=db, path=namespace)
 
@@ -54,7 +54,7 @@ def read_namespace(
 
     check_etag(db=db, crud_obj=crud.namespace, header=if_none_match)
     add_etag(response, etag)
-    return namespace_obj
+    return schemas.Namespace.from_attributes(namespace_obj)
 
 
 @router.post(
@@ -69,8 +69,8 @@ def create_namespace(
     loc_in: schemas.NamespaceCreate,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-) -> models.Namespace:
+) -> schemas.Namespace:
     namespace, etag = crud.namespace.create(db=db, obj_in=loc_in, obj_meta=obj_meta)
     add_etag(response, etag)
 
-    return namespace
+    return schemas.Namespace.from_attributes(namespace)

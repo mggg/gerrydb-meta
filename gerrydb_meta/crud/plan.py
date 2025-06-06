@@ -107,7 +107,9 @@ class CRPlan(NamespacedCRBase[models.Plan, schemas.PlanCreate]):
                 num_districts=len(set(assignments.values())),
                 complete=(len(unassigned_geo_ids) == 0),
                 description=obj_in.description,
-                source_url=obj_in.source_url,
+                source_url=(
+                    str(obj_in.source_url) if obj_in.source_url is not None else None
+                ),
                 districtr_id=obj_in.districtr_id,
                 daves_id=obj_in.daves_id,
                 meta_id=obj_meta.meta_id,

@@ -62,9 +62,9 @@ class GeographyApi(NamespacedObjectApi):
                         else bytes(geo_version.internal_point.data)
                     ),
                     namespace=namespace,
-                    meta=obj_meta,
+                    meta=schemas.ObjectMeta.from_attributes(obj_meta),
                     valid_from=geo_version.valid_from,
-                ).dict()
+                ).model_dump()
                 for geo, geo_version in geos
             ]
             return MsgpackResponse(response_geos, status_code=HTTPStatus.CREATED)
@@ -114,9 +114,9 @@ class GeographyApi(NamespacedObjectApi):
                         else bytes(geo_version.internal_point.data)
                     ),
                     namespace=namespace,
-                    meta=obj_meta,
+                    meta=schemas.ObjectMeta.from_attributes(obj_meta),
                     valid_from=geo_version.valid_from,
-                ).dict()
+                ).model_dump()
                 for geo, geo_version in geos
             ]
             return MsgpackResponse(response_geos)
@@ -146,7 +146,7 @@ class GeographyApi(NamespacedObjectApi):
             etag = self.crud.etag(db, namespace_obj)
             obj = self._obj(db=db, namespace=namespace_obj, path=path)
             add_etag(response, etag)
-            return self.get_schema.from_orm(obj)
+            return self.get_schema.from_attributes(obj)
 
         return get_route
 

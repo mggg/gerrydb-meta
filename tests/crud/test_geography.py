@@ -178,10 +178,8 @@ def test_crud_geography_create_bulk_not_wkb_converted_fail(db_with_meta):
             namespace=ns,
             obj_meta=meta,
         )
-    assert str(e.value) == (
-        "1 validation error for GeographyCreate\n"
-        "geography\n"
-        "  The geography must be of type bytes, got type Polygon (type=value_error)"
+    assert "Value error, The geography must be of type bytes, got type Polygon" in str(
+        e.value
     )
 
 

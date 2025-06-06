@@ -65,7 +65,7 @@ class PlanApi(NamespacedObjectApi):
                 namespace=plan_namespace_obj,
             )
             add_etag(response, etag)
-            return schemas.Plan.from_orm(plan)
+            return schemas.Plan.from_attributes(plan)
 
         return create_route
 

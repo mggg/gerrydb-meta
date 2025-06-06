@@ -145,7 +145,10 @@ async def log_400_errors(request: Request, call_next):
 
     # If it was a 422 (Unprocessable Entity) and the decoded body contains "regex",
     # print out a more user-friendly error message to tell the user what went wrong.
-    if response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY and "regex" in text:
+    if (
+        response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+        and "String should match pattern" in text
+    ):
         # This is the detail dictionary format that is normally returned by a regex
         text_dict = {
             "loc": ["unknown", "unknown"],
@@ -159,18 +162,17 @@ async def log_400_errors(request: Request, call_next):
         if len(text_dict["loc"]) > 2:
             position_str = f"at position '{text_dict['loc'][2]}' "
         location_str = f"Found unexpected expression in field '{text_dict['loc'][1]}' {position_str}of the request. "
-        if "regex" in text:
-            response = JSONResponse(
-                status_code=HTTPStatus.BAD_REQUEST,
-                content={
-                    "detail": (
-                        location_str
-                        + "Please refer to the documentation for more information on the expected "
-                        "string formats for each field you are trying to set."
-                    ),
-                },
-                headers=response.headers,
-            )
+        response = JSONResponse(
+            status_code=HTTPStatus.BAD_REQUEST,
+            content={
+                "detail": (
+                    location_str
+                    + "Please refer to the documentation for more information on the expected "
+                    "string formats for each field you are trying to set."
+                ),
+            },
+            headers=response.headers,
+        )
 
     return response
 

@@ -68,7 +68,9 @@ class CRColumn(NamespacedCRBase[models.DataColumn, schemas.ColumnCreate]):
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
                 description=obj_in.description,
-                source_url=obj_in.source_url,
+                source_url=(
+                    str(obj_in.source_url) if obj_in.source_url is not None else None
+                ),
                 kind=obj_in.kind,
                 type=obj_in.type,
             )

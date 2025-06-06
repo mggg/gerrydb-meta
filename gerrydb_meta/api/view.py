@@ -130,7 +130,7 @@ def create_view(
             )
         raise e
     add_etag(response, etag)
-    return schemas.ViewMeta.from_orm(view_obj)
+    return schemas.ViewMeta.from_attributes(view_obj)
 
 
 @router.get(
@@ -171,7 +171,7 @@ def get_view(
 
     etag = crud.view.etag(db, view_namespace_obj)
     add_etag(response, etag)
-    return schemas.ViewMeta.from_orm(view_obj)
+    return schemas.ViewMeta.from_attributes(view_obj)
 
 
 @router.get(
@@ -201,7 +201,7 @@ def all_views(
     view_objs = crud.view.all(db=db, namespace=view_namespace_obj)
     etag = crud.view.etag(db, view_namespace_obj)
     add_etag(response, etag)
-    return [schemas.ViewMeta.from_orm(view_obj) for view_obj in view_objs]
+    return [schemas.ViewMeta.from_attributes(view_obj) for view_obj in view_objs]
 
 
 @router.post(

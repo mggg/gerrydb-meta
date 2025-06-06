@@ -28,11 +28,11 @@ def read_localities(
     response: Response,
     db: Session = Depends(get_db),
     if_none_match: str | None = Header(default=None),
-) -> list[models.Locality]:
+) -> list[schemas.Locality]:
     check_etag(db=db, crud_obj=crud.locality, header=if_none_match)
     add_etag(response, crud.locality.etag(db=db))
     objs = crud.locality.all(db=db)
-    return objs
+    return [schemas.Locality.from_attributes(obj) for obj in objs]
 
 
 @router.get(
@@ -47,7 +47,7 @@ def read_locality(
     response: Response,
     db: Session = Depends(get_db),
     if_none_match: str | None = Header(default=None),
-) -> models.Locality:
+) -> schemas.Locality:
     etag = crud.locality.etag(db=db)
     loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
@@ -66,7 +66,7 @@ def read_locality(
         )
 
     add_etag(response, etag)
-    return loc
+    return schemas.Locality.from_attributes(loc)
 
 
 @router.patch(
@@ -81,7 +81,7 @@ def patch_locality(
     loc_patch: schemas.LocalityPatch,
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-) -> models.Locality:
+) -> schemas.Locality:
     loc = crud.locality.get_by_ref(db=db, path=path)
     if loc is None:
         raise HTTPException(
@@ -91,7 +91,7 @@ def patch_locality(
         db=db, obj=loc, obj_meta=obj_meta, patch=loc_patch
     )
     add_etag(response, etag)
-    return patched
+    return schemas.Locality.from_attributes(patched)
 
 
 @router.post(
@@ -106,7 +106,7 @@ def create_localities(
     locs_in: list[schemas.LocalityCreate],
     db: Session = Depends(get_db),
     obj_meta: models.ObjectMeta = Depends(get_obj_meta),
-) -> models.Locality:
+) -> list[schemas.Locality]:
     locs, etag = crud.locality.create_bulk(db=db, objs_in=locs_in, obj_meta=obj_meta)
     add_etag(response, etag)
-    return locs
+    return [schemas.Locality.from_attributes(loc) for loc in locs]

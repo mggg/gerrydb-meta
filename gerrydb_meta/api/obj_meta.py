@@ -21,7 +21,7 @@ def get_obj_meta(
     db: Session = Depends(get_db),
     user: Session = Depends(get_user),
     scopes: ScopeManager = Depends(get_scopes),
-) -> models.ObjectMeta:
+) -> schemas.ObjectMeta:
     try:
         parsed_uuid = UUID(uuid)
     except ValueError:
@@ -41,7 +41,7 @@ def get_obj_meta(
             status_code=HTTPStatus.FORBIDDEN,
             detail="You do not have sufficient permissions to read metadata.",
         )
-    return obj_meta
+    return schemas.ObjectMeta.from_attributes(obj_meta)
 
 
 @router.post(
@@ -56,6 +56,7 @@ def create_obj_meta(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_user),
     meta_in: schemas.ObjectMetaCreate,
-) -> models.ObjectMeta:
+) -> schemas.ObjectMeta:
     log.debug("Creating object metadata: %s", meta_in)
-    return crud.obj_meta.create(db=db, obj_in=meta_in, user=user)
+    meta = crud.obj_meta.create(db=db, obj_in=meta_in, user=user)
+    return schemas.ObjectMeta.from_attributes(meta)

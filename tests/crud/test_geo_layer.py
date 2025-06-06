@@ -36,7 +36,7 @@ def test_crud_geo_layer_create(db_with_meta):
     assert geo_layer.path == "atlantis"
     assert geo_layer.namespace_id == ns.namespace_id
     assert geo_layer.meta_id == meta.meta_id
-    assert geo_layer.source_url == "https://en.wikipedia.org/wiki/Atlantis"
+    assert str(geo_layer.source_url) == "https://en.wikipedia.org/wiki/Atlantis"
 
 
 def test_crud_geo_layer_get(db_with_meta):

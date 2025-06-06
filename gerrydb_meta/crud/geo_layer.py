@@ -34,7 +34,9 @@ class CRGeoLayer(NamespacedCRBase[models.GeoLayer, schemas.GeoLayerCreate]):
                 description=obj_in.description,
                 namespace_id=namespace.namespace_id,
                 meta_id=obj_meta.meta_id,
-                source_url=obj_in.source_url,
+                source_url=(
+                    str(obj_in.source_url) if obj_in.source_url is not None else None
+                ),
             )
             db.add(geo_layer)
 
