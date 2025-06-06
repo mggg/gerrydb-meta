@@ -31,7 +31,7 @@ NamespacedGerryGeoPath = constr(
 NameStr = constr(regex=r"^[a-z0-9][a-z0-9-_.]+$", max_length=100)
 # Capital letters allowed because some vtds suck
 GeoNameStr = constr(regex=r"^[a-z0-9][a-zA-Z0-9-_.]+$", max_length=100)
-Description = Optional[constr(max_length=2000)]
+Description = Optional[constr(max_length=5000)]
 ShortStr = Optional[constr(max_length=100)]
 
 
@@ -415,8 +415,8 @@ WeightedEdge = tuple[NamespacedGerryPath, NamespacedGerryPath, Optional[dict]]
 class GraphCreate(GraphBase):
     """Dual graph definition received on creation."""
 
-    locality: NameStr
-    layer: NameStr
+    locality: GerryPath
+    layer: NamespacedGerryPath
     edges: list[WeightedEdge]
 
 
@@ -477,8 +477,8 @@ class PlanBase(BaseModel):
 class PlanCreate(PlanBase):
     """Districting plan definition received on creation."""
 
-    locality: NameStr
-    layer: NameStr
+    locality: GerryPath
+    layer: NamespacedGerryPath
     assignments: dict[NamespacedGerryGeoPath, str]
 
 
@@ -551,7 +551,7 @@ class ViewBase(BaseModel):
 class ViewCreate(ViewBase):
     """View definition received on creation."""
 
-    template: NameStr
+    template: NamespacedGerryPath
     locality: NamespacedGerryPath
     layer: NamespacedGerryPath
     graph: Optional[NamespacedGerryPath] = None
